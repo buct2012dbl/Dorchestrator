@@ -1,0 +1,74 @@
+.agent-node {
+  background: #2d2d2d;
+  border: 2px solid #555;
+  border-radius: 8px;
+  min-width: 180px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s;
+}
+
+.agent-node:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.agent-node.selected {
+  box-shadow: 0 0 0 2px #007acc, 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.agent-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px 6px 0 0;
+}
+
+.agent-role {
+  font-weight: 600;
+  color: #fff;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agent-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.agent-node-body {
+  padding: 8px 10px;
+}
+
+.agent-name {
+  font-weight: 500;
+  color: #e0e0e0;
+  margin-bottom: 4px;
+}
+
+.agent-desc {
+  color: #999;
+  font-size: 10px;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.agent-model {
+  color: #666;
+  font-size: 9px;
+  font-family: monospace;
+}
+
+.agent-handle {
+  width: 8px;
+  height: 8px;
+  background: #555;
+  border: 2px solid #333;
+}
+
+.agent-handle:hover {
+  background: #007acc;
+}
