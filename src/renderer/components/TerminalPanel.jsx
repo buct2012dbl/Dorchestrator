@@ -22,6 +22,7 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
   }));
 
   useEffect(() => {
+    console.log('[TerminalPanel] Mounting for agent:', agent.id, agent.data);
     const el = containerRef.current;
     if (!el) return;
 
@@ -56,6 +57,7 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
 
     function spawnSession() {
       ptyAlive.current = true;
+      console.log('[Renderer] Spawning agent:', agent.id, 'with data:', agent.data);
       window.electronAPI?.spawnAgent({
         agentId: agent.id,
         agentData: agent.data,
@@ -117,7 +119,7 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
       ptyAlive.current = false;
       window.electronAPI?.killAgent({ agentId: agent.id });
     };
-  }, [agent.id]);
+  }, [agent.id, agent.data]);
 
   return (
     <div className={`terminal-panel ${isSelected ? 'terminal-selected' : ''}`}>

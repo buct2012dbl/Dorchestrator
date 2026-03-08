@@ -21,6 +21,8 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
+  const [showGraph, setShowGraph] = useState(true);
+  const [showTerminal, setShowTerminal] = useState(true);
   const [isConfigured, setIsConfigured] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [authTokenInput, setAuthTokenInput] = useState('');
@@ -108,11 +110,11 @@ function App() {
   const handleMouseDown = useCallback(() => setIsDragging(true), []);
   const handleMouseMove = useCallback(
     (e) => {
-      if (!isDragging) return;
+      if (!isDragging || !showGraph || !showTerminal) return;
       const rect = e.currentTarget.getBoundingClientRect();
       setSplitRatio(Math.max(20, Math.min(80, ((e.clientY - rect.top) / rect.height) * 100)));
     },
-    [isDragging]
+    [isDragging, showGraph, showTerminal]
   );
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
@@ -146,6 +148,20 @@ function App() {
           </button>
           <span className="header-info-text">{agents.length} agents</span>
           <span className="header-info-text">{edges.length} connections</span>
+          <button
+            className="view-toggle-btn"
+            onClick={() => setShowGraph(!showGraph)}
+            title={showGraph ? 'Hide Graph' : 'Show Graph'}
+          >
+            {showGraph ? '📊 Graph' : '📊'}
+          </button>
+          <button
+            className="view-toggle-btn"
+            onClick={() => setShowTerminal(!showTerminal)}
+            title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
+          >
+            {showTerminal ? '💻 Terminal' : '💻'}
+          </button>
           <button
             className={`api-key-btn ${isConfigured ? 'has-key' : 'no-key'}`}
             onClick={() => setShowSettings(!showSettings)}
@@ -187,7 +203,13 @@ function App() {
 
       <div className="main-layout">
         <div className="center-panel">
-          <div className="graph-section" style={{ height: `${splitRatio}%` }}>
+          <div
+            className="graph-section"
+            style={{
+              height: showTerminal ? `${splitRatio}%` : '100%',
+              display: showGraph ? 'block' : 'none'
+            }}
+          >
             <GraphView
               agents={agents}
               edges={edges}
@@ -198,11 +220,19 @@ function App() {
               onRemoveAgent={removeAgent}
             />
           </div>
+          {showGraph && showTerminal && (
+            <div
+              className={`split-handle ${isDragging ? 'dragging' : ''}`}
+              onMouseDown={handleMouseDown}
+            />
+          )}
           <div
-            className={`split-handle ${isDragging ? 'dragging' : ''}`}
-            onMouseDown={handleMouseDown}
-          />
-          <div className="terminal-section" style={{ height: `${100 - splitRatio}%` }}>
+            className="terminal-section"
+            style={{
+              height: showGraph ? `${100 - splitRatio}%` : '100%',
+              display: showTerminal ? 'block' : 'none'
+            }}
+          >
             <TerminalGrid
               key={terminalKey}
               ref={termGridRef}

@@ -308,6 +308,8 @@ ipcMain.handle('clear-history', async (event, { agentId }) => {
 // ---- PTY Handlers ----
 
 function spawnPty(agentId, agentData, cols = 80, rows = 24) {
+  console.log(`[PTY] spawnPty called for ${agentId}, agentData:`, JSON.stringify(agentData, null, 2));
+
   // Kill existing session if any
   if (ptys.has(agentId)) {
     try { ptys.get(agentId).kill(); } catch {}
@@ -325,34 +327,48 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
 
   const args = ['--dangerously-skip-permissions'];
   if (agentData?.model) args.push('--model', agentData.model);
-  if (agentData?.systemPrompt) args.push('--append-system-prompt', agentData.systemPrompt);
+  if (agentData?.systemPrompt) {
+    args.push('--append-system-prompt', agentData.systemPrompt);
+    console.log(`[PTY] Setting system prompt for ${agentId}: "${agentData.systemPrompt}"`);
+  }
+  if (agentData?.name) {
+    console.log(`[PTY] Agent name: ${agentData.name}`);
+  }
 
   // Write MCP config for inter-agent messaging if bridge is ready
+  const tmpDir = os.tmpdir();
   if (bridgePort > 0) {
     const connectedAgents = getConnectedAgents(agentId);
-    const mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
-    const tmpDir = os.tmpdir();
+    if (connectedAgents.length > 0) {
+      const mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
 
-    // Write bridge config (avoids env var passing issues with claude CLI)
-    const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
-    const bridgeConfig = { agentId, bridgePort, connectedAgents };
-    fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
+      // Write bridge config (avoids env var passing issues with claude CLI)
+      const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
+      const bridgeConfig = { agentId, bridgePort, connectedAgents };
+      try {
+        fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
+        console.log(`[PTY] Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
+      } catch (err) {
+        console.error('[PTY] Failed to write bridge config:', err.message);
+      }
 
-    // Write MCP server config pointing to the bridge script
-    const mcpConfig = {
-      mcpServers: {
-        'agent-bridge': {
-          command: NODE_PATH,
-          args: [mcpBridgePath, bridgeConfigPath],
+      // Write MCP server config pointing to the bridge script
+      const mcpConfig = {
+        mcpServers: {
+          'agent-bridge': {
+            command: NODE_PATH,
+            args: [mcpBridgePath, bridgeConfigPath],
+          },
         },
-      },
-    };
-    const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
-    try {
-      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
-      args.push('--mcp-config', mcpConfigPath);
-    } catch (err) {
-      console.error('[PTY] Failed to write MCP config:', err.message);
+      };
+      const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
+      try {
+        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+        args.push('--mcp-config', mcpConfigPath);
+        console.log(`[PTY] Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
+      } catch (err) {
+        console.error('[PTY] Failed to write MCP config:', err.message);
+      }
     }
   }
 
@@ -377,10 +393,6 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     ptyProcess.onExit(({ exitCode }) => {
       ptys.delete(agentId);
       ptyDims.delete(agentId);
-      // Clean up temp files
-      const tmpDir = os.tmpdir();
-      try { fs.unlinkSync(path.join(tmpDir, `ao-mcp-${agentId}.json`)); } catch {}
-      try { fs.unlinkSync(path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`)); } catch {}
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('pty-exit', { agentId, exitCode });
       }
@@ -396,6 +408,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
 }
 
 ipcMain.handle('pty-spawn', async (event, { agentId, agentData, cols, rows }) => {
+  console.log(`[IPC] pty-spawn received for ${agentId}`, { agentData, cols, rows });
   return spawnPty(agentId, agentData, cols, rows);
 });
 

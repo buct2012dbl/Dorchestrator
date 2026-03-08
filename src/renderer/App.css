@@ -240,3 +240,20 @@
   font-family: 'Menlo', 'Monaco', monospace;
   color: #9cdcfe;
 }
+
+.view-toggle-btn {
+  background: #2d2d2d;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  color: #ccc;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.view-toggle-btn:hover {
+  background: #3a3a3a;
+  border-color: #007acc;
+}
+
