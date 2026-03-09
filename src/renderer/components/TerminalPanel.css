@@ -1,52 +1,96 @@
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 4px;
+  background: var(--card);
+  border: 2px solid var(--border);
   overflow: hidden;
   min-height: 0;
+  transition: all 200ms;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
 }
 
 .terminal-panel.terminal-selected {
-  border-color: #007acc;
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon);
 }
 
 .terminal-panel-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Terminal traffic lights */
+.terminal-panel-header::before {
+  content: '';
+  display: flex;
+  gap: 6px;
+  margin-right: 4px;
 }
 
 .terminal-panel-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .terminal-panel-title {
   font-size: 11px;
-  font-weight: 600;
-  color: #ccc;
+  font-weight: 700;
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.5px;
 }
 
 .terminal-panel-role {
   font-size: 9px;
-  color: #888;
+  color: var(--accent);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  font-family: 'Share Tech Mono', monospace;
 }
 
 .terminal-panel-status {
   margin-left: auto;
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--muted-foreground);
+}
+
+.terminal-panel-content {
+  flex: 1;
+  padding: 6px;
+  overflow: hidden;
+  min-height: 0;
+  background: var(--background);
+}
+
+/* XTerm customization */
+.terminal-panel-content .xterm {
+  font-family: 'Share Tech Mono', 'Consolas', monospace !important;
+}
+
+.terminal-panel-content .xterm-viewport {
+  background: var(--background) !important;
+}
+
+.terminal-panel-content .xterm-screen {
+  background: var(--background) !important;
 }
 
 .terminal-panel-content {

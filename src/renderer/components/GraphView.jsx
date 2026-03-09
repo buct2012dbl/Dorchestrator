@@ -23,9 +23,18 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
-  // Sync external changes
-  React.useEffect(() => { setNodes(agents); }, [agents, setNodes]);
-  React.useEffect(() => { setEdges(edges); }, [edges, setEdges]);
+  // Sync external changes (but avoid resetting during drag operations)
+  const isDraggingRef = useRef(false);
+
+  React.useEffect(() => {
+    if (!isDraggingRef.current) {
+      setNodes(agents);
+    }
+  }, [agents, setNodes]);
+
+  React.useEffect(() => {
+    setEdges(edges);
+  }, [edges, setEdges]);
 
   const onConnect = useCallback(
     (params) => {
@@ -45,9 +54,20 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
 
   const handleNodesChange = useCallback(
     (changes) => {
+      // Track drag state
+      const isDragging = changes.some((c) => c.type === 'position' && c.dragging);
+      const dragEnded = changes.some((c) => c.type === 'position' && c.dragging === false);
+
+      if (isDragging) {
+        isDraggingRef.current = true;
+      } else if (dragEnded) {
+        isDraggingRef.current = false;
+      }
+
       onNodesChange(changes);
-      // Sync position changes back
-      const posChanges = changes.filter((c) => c.type === 'position' && c.position);
+
+      // Sync position changes back only when drag ends
+      const posChanges = changes.filter((c) => c.type === 'position' && c.position && c.dragging === false);
       if (posChanges.length > 0) {
         onAgentsChange((prev) =>
           prev.map((a) => {

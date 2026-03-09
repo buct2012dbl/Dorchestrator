@@ -140,10 +140,10 @@ function App() {
   return (
     <div className="app" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
       <div className="header">
-        <h1>Agent Orchestrator</h1>
+        <h1>Dorchestrator</h1>
         <div className="header-controls">
           <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
-            <span className="workspace-icon">&#128193;</span>
+            <span className="workspace-icon">▸</span>
             <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
           </button>
           <span className="header-info-text">{agents.length} agents</span>
@@ -153,14 +153,14 @@ function App() {
             onClick={() => setShowGraph(!showGraph)}
             title={showGraph ? 'Hide Graph' : 'Show Graph'}
           >
-            {showGraph ? '📊 Graph' : '📊'}
+            {showGraph ? '◈ GRAPH' : '◈'}
           </button>
           <button
             className="view-toggle-btn"
             onClick={() => setShowTerminal(!showTerminal)}
             title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
           >
-            {showTerminal ? '💻 Terminal' : '💻'}
+            {showTerminal ? '▣ TERM' : '▣'}
           </button>
           <button
             className={`api-key-btn ${isConfigured ? 'has-key' : 'no-key'}`}

@@ -1,99 +1,152 @@
 .graph-view {
   width: 100%;
   height: 100%;
-  background: #1e1e1e;
+  background: var(--background);
   position: relative;
 }
 
 .graph-toolbar {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .toolbar-btn {
-  background: #2d2d2d;
-  color: #ccc;
-  border: 1px solid #3e3e42;
-  border-radius: 4px;
-  padding: 4px 10px;
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
   font-size: 11px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 150ms;
+  font-family: 'Share Tech Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .toolbar-btn:hover {
-  background: #3c3c3c;
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
 }
 
 .context-menu {
   position: absolute;
   z-index: 1000;
-  background: #252526;
-  border: 1px solid #3e3e42;
-  border-radius: 6px;
-  padding: 4px 0;
-  min-width: 160px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  background: var(--card);
+  border: 2px solid var(--accent);
+  padding: 8px 0;
+  min-width: 180px;
+  box-shadow: var(--box-shadow-neon-lg);
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
 }
 
 .context-menu-title {
-  padding: 4px 12px;
+  padding: 6px 16px;
   font-size: 10px;
-  color: #888;
+  color: var(--accent);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1.5px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
 }
 
 .context-menu button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 8px 16px;
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--foreground);
   font-size: 12px;
   cursor: pointer;
   text-align: left;
+  font-family: 'Share Tech Mono', monospace;
+  transition: all 150ms;
+  position: relative;
+}
+
+.context-menu button::before {
+  content: '>';
+  position: absolute;
+  left: 6px;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.context-menu button:hover::before {
+  opacity: 1;
 }
 
 .context-menu button:hover {
-  background: #094771;
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--accent);
+  padding-left: 20px;
 }
 
 .ctx-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
   flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
 }
 
 /* React Flow theme overrides */
 .react-flow__controls {
-  background: #252526;
-  border: 1px solid #3e3e42;
-  border-radius: 4px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .react-flow__controls-button {
-  background: #3c3c3c;
-  border-bottom: 1px solid #3e3e42;
-  fill: #ccc;
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
+  fill: var(--foreground);
+  transition: all 150ms;
 }
 
 .react-flow__controls-button:hover {
-  background: #505050;
+  background: var(--accent);
+  fill: var(--background);
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
 }
 
 .react-flow__edge-path {
-  stroke: #4a4a4a;
+  stroke: var(--border);
   stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--border));
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--accent));
 }
 
 .react-flow__minimap {
-  background: #252526;
-  border: 1px solid #3e3e42;
-  border-radius: 4px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.react-flow__minimap-mask {
+  fill: var(--accent);
+  fill-opacity: 0.1;
+}
+
+.react-flow__minimap-node {
+  fill: var(--muted);
+  stroke: var(--border);
 }
