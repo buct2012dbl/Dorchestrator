@@ -1,4 +1,4 @@
-# Agent Orchestrator
+# Dorchestrator
 
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Electron](https://img.shields.io/badge/electron-28.0.0-blue)
