@@ -1,0 +1,314 @@
+.voice-assistant {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.voice-orb {
+  width: 64px;
+  height: 64px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: all 200ms;
+}
+
+.voice-orb:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.voice-orb:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.orb-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 150ms;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.voice-assistant.listening .orb-inner {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-lg);
+  animation: orbPulse 2s ease-in-out infinite;
+}
+
+@keyframes orbPulse {
+  0%, 100% {
+    box-shadow: var(--box-shadow-neon-lg);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--accent), 0 0 40px rgba(0, 255, 136, 0.6), 0 0 60px rgba(0, 255, 136, 0.3);
+  }
+}
+
+.orb-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  transition: opacity 100ms;
+}
+
+.voice-assistant.listening .orb-pulse {
+  animation: pulseRing 1.5s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.orb-icon {
+  font-size: 28px;
+  color: var(--muted-foreground);
+  transition: all 150ms;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.voice-assistant.listening .orb-icon {
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent);
+}
+
+.voice-transcript {
+  background: var(--card);
+  border: 2px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 8px;
+  max-width: 320px;
+  box-shadow: var(--box-shadow-neon);
+  animation: slideIn 200ms ease-out;
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transcript-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--foreground);
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  min-height: 20px;
+}
+
+.transcript-text::before {
+  content: '> ';
+  color: var(--accent);
+}
+
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  animation: slideIn 200ms ease-out;
+}
+
+.wave-bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: height 50ms ease-out;
+  box-shadow: 0 0 4px var(--accent);
+  animation: waveFloat 1s ease-in-out infinite;
+}
+
+.wave-bar:nth-child(1) { animation-delay: 0s; }
+.wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes waveFloat {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.2);
+  }
+}
+
+/* Download prompt */
+.voice-download-prompt {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9998;
+}
+
+.download-prompt-content {
+  background: var(--card);
+  border: 2px solid var(--accent);
+  padding: 24px;
+  max-width: 400px;
+  box-shadow: var(--box-shadow-neon-lg);
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+
+.download-prompt-content h3 {
+  font-family: 'Orbitron', monospace;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--accent);
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.download-prompt-content p {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.model-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-btn {
+  background: transparent;
+  border: 2px solid var(--border);
+  color: var(--foreground);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  text-align: left;
+  transition: all 150ms;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.model-btn:hover {
+  border-color: var(--accent);
+  background: rgba(0, 255, 136, 0.05);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.model-btn.model-recommended {
+  border-color: var(--accent);
+}
+
+.model-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 13px;
+}
+
+.model-size {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.model-badge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: var(--accent);
+  color: var(--background);
+  padding: 2px 8px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.download-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+.download-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  transition: width 200ms ease-out;
+}
+
+.installing-spinner {
+  font-size: 32px;
+  color: var(--accent);
+  text-align: center;
+  margin: 20px 0;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb,
+  .orb-inner,
+  .voice-transcript,
+  .waveform {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .wave-bar {
+    animation: none !important;
+  }
+}

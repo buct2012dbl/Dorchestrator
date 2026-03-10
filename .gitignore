@@ -6,3 +6,5 @@ build/
 .env
 *.md
 !README.md
+models/
+whisper.cpp/

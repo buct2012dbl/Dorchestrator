@@ -6,10 +6,12 @@ const os = require('os');
 const { spawn } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { AgentOrchestrator } = require('./orchestrator');
+const WhisperManager = require('./whisperManager');
 const pty = require('node-pty');
 
 let mainWindow;
 let orchestrator;
+let whisperManager;
 
 // ---- Find node executable (needed for MCP bridge) ----
 const { execSync } = require('child_process');
@@ -211,6 +213,11 @@ app.whenReady().then(async () => {
   authConfig.authToken = settings.authToken || authConfig.authToken;
   authConfig.baseURL = settings.baseURL || authConfig.baseURL;
   await startBridgeServer(); // wait for port to be assigned before any PTY spawning
+
+  // Initialize Whisper manager
+  whisperManager = new WhisperManager();
+  whisperManager.initialize();
+
   createWindow();
 });
 

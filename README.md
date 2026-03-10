@@ -24,6 +24,13 @@ A visual desktop application for orchestrating multiple Claude AI agents with re
 - **Flexible layouts** (auto, 1-col, 2-col, 3-col grid)
 - **Toggle views** to focus on graph or terminals
 
+### 🎤 Voice Assistant
+- **Offline voice recognition** using Whisper.cpp
+- **Real-time waveform visualization** while recording
+- **Automatic transcription** to focused terminal
+- **Keyboard shortcut** (Cmd+Shift+V / Ctrl+Shift+V)
+- **Cyberpunk-styled UI** with neon effects
+
 ### 🤝 Inter-Agent Communication
 - **MCP-based messaging** between connected agents
 - **TCP bridge server** for reliable message routing
@@ -51,6 +58,7 @@ A visual desktop application for orchestrating multiple Claude AI agents with re
 - Node.js 16+
 - `claude` CLI installed and in PATH ([get it here](https://github.com/anthropics/claude-code))
 - Anthropic API key
+- **ffmpeg** (required for voice assistant): `brew install ffmpeg`
 
 ### Installation
 
@@ -175,6 +183,67 @@ The agent will use the `send_message` MCP tool automatically if connected.
 - **📊 Graph** - Toggle graph view on/off
 - **💻 Terminal** - Toggle terminal view on/off
 - **Split handle** - Drag to resize graph/terminal ratio (when both visible)
+
+### Using Voice Assistant
+
+The voice assistant allows you to dictate commands directly to your focused terminal using offline speech recognition.
+
+#### First-Time Setup
+
+1. **Install ffmpeg** (if not already installed):
+   ```bash
+   brew install ffmpeg
+   ```
+
+2. **Launch the app** and look for the voice orb in the bottom-right corner
+
+3. **Install Whisper.cpp** (one-time setup, ~5 minutes):
+   - Click the voice orb
+   - Click "Install Whisper.cpp"
+   - Wait for compilation to complete
+   - Requires: git, make, and C++ compiler (install with `xcode-select --install`)
+
+4. **Download a model** (choose one):
+   - **Tiny** (~75MB) - Fast, decent accuracy
+   - **Base** (~150MB) - Recommended, good balance
+   - **Small** (~500MB) - Better accuracy, slower
+
+#### Recording Voice Commands
+
+1. Click the voice orb or press **Cmd+Shift+V** (Mac) / **Ctrl+Shift+V** (Windows)
+2. Speak your command clearly
+3. Click again or press the shortcut to stop recording
+4. Wait 2-5 seconds for processing
+5. The transcribed text will be automatically sent to your focused terminal
+
+#### Features
+
+- ✅ **Fully offline** - No internet required after setup
+- ✅ **Real-time waveform** - Visual feedback while recording
+- ✅ **Auto-injection** - Text sent directly to focused terminal
+- ✅ **Keyboard shortcut** - Quick access with Cmd+Shift+V
+
+#### Troubleshooting
+
+**"Audio conversion failed. Please install ffmpeg"**
+- Install ffmpeg: `brew install ffmpeg`
+
+**"Whisper binary not found"**
+- Click the voice orb and install Whisper.cpp
+- Ensure you have development tools: `xcode-select --install`
+
+**"Model not found"**
+- After installing Whisper.cpp, download a model (Base recommended)
+
+**Transcription is slow**
+- First transcription takes longer due to model loading
+- Use a smaller model (Tiny or Base) for faster processing
+- Processing typically takes 2-5 seconds
+
+**Poor transcription accuracy**
+- Speak clearly and closer to the microphone
+- Reduce background noise
+- Try the Small model for better accuracy
 
 ## 🛠️ Troubleshooting
 

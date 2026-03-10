@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect, useRef } from 'react';
 import GraphView from './components/GraphView';
 import TerminalGrid from './components/TerminalGrid';
 import AgentConfigPanel from './components/AgentConfigPanel';
+import VoiceAssistant from './components/VoiceAssistant';
 import { useAgents } from './hooks/useAgents';
 import './App.css';
 
@@ -117,6 +118,13 @@ function App() {
     [isDragging, showGraph, showTerminal]
   );
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
+
+  const handleVoiceTranscript = useCallback((text) => {
+    // Send transcribed text to the focused terminal
+    if (termGridRef.current) {
+      termGridRef.current.sendTextToFocused(text);
+    }
+  }, []);
 
   const selectedAgentData = agents.find((a) => a.id === selectedAgent);
 
@@ -252,6 +260,7 @@ function App() {
           </div>
         )}
       </div>
+      <VoiceAssistant onTranscript={handleVoiceTranscript} />
     </div>
   );
 }

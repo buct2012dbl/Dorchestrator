@@ -15,6 +15,12 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
     write: (text) => termRef.current?.write(text),
     writeln: (text) => termRef.current?.writeln(text),
     clear: () => termRef.current?.clear(),
+    writeText: (text) => {
+      // Write text as if user typed it
+      if (termRef.current && ptyAlive.current) {
+        window.electronAPI?.ptyInput({ agentId: agent.id, data: text });
+      }
+    },
     notifyExit: () => {
       ptyAlive.current = false;
       termRef.current?.writeln('\r\n\x1b[33m[Session ended — press any key to restart]\x1b[0m');

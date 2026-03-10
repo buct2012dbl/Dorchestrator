@@ -61,4 +61,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pty-exit', listener);
     return () => ipcRenderer.removeListener('pty-exit', listener);
   },
+
+  // Whisper voice recognition
+  whisperCheckModel: () => ipcRenderer.invoke('whisper:checkModel'),
+  whisperDownloadModel: (modelSize) => ipcRenderer.invoke('whisper:downloadModel', modelSize),
+  whisperTranscribe: (audioPath) => ipcRenderer.invoke('whisper:transcribe', audioPath),
+  whisperTranscribeBlob: (audioBuffer) => ipcRenderer.invoke('whisper:transcribeBlob', audioBuffer),
+  whisperInstallWhisper: () => ipcRenderer.invoke('whisper:installWhisper'),
+  onWhisperDownloadProgress: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('whisper:downloadProgress', listener);
+    return () => ipcRenderer.removeListener('whisper:downloadProgress', listener);
+  },
 });

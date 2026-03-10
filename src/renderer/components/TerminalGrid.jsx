@@ -17,6 +17,13 @@ const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent },
   useImperativeHandle(ref, () => ({
     getTerminal: (agentId) => termRefs.current[agentId],
     getAllTerminals: () => termRefs.current,
+    sendTextToFocused: (text) => {
+      // Send to selected terminal or first available
+      const targetId = selectedAgent || agents[0]?.id;
+      if (targetId && termRefs.current[targetId]) {
+        termRefs.current[targetId].writeText(text);
+      }
+    },
   }));
 
   const getGridClass = () => {
