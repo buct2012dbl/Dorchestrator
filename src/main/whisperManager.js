@@ -11,6 +11,8 @@ class WhisperManager {
     this.isDownloading = false;
     this.downloadProgress = 0;
     this.whisperBinary = null;
+    this.whisperProcess = null; // Keep process alive for reuse
+    this.isProcessing = false;
   }
 
   initialize() {
@@ -246,8 +248,9 @@ class WhisperManager {
       // First convert to WAV format (16kHz, mono, 16-bit PCM)
       // -y: overwrite output file
       // -loglevel error: only show errors
-      // -af "volume=8.0": boost volume significantly without filters that might distort speech
-      const ffmpegCmd = `ffmpeg -y -loglevel error -i "${audioPath}" -ar 16000 -ac 1 -c:a pcm_s16le -af "volume=8.0" "${wavPath}"`;
+      // -af "volume=8.0": boost volume significantly
+      // Use faster preset for quicker conversion
+      const ffmpegCmd = `ffmpeg -y -loglevel error -i "${audioPath}" -ar 16000 -ac 1 -c:a pcm_s16le -af "volume=8.0" -preset ultrafast "${wavPath}"`;
 
       console.log('[Whisper] Converting audio:', ffmpegCmd);
 
@@ -291,10 +294,11 @@ class WhisperManager {
         console.log('[Whisper] You can play these files to verify audio was captured');
 
         // Now transcribe with whisper.cpp
+        // Use faster settings: fewer threads, single beam for speed
         const args = [
           '-m', this.modelPath,
           '-f', wavPath,
-          '-t', '4',              // 4 threads
+          '-t', '2',              // 2 threads (faster startup)
           '-l', 'en',             // language
           '-otxt',                // output as text
           '--no-speech-thold', '0.01',  // Extremely low threshold
@@ -302,6 +306,8 @@ class WhisperManager {
           '--logprob-thold', '-1.0',    // More permissive log probability
           '--max-len', '0',             // No max length limit
           '--word-thold', '0.01',       // Lower word probability threshold
+          '-bs', '1',                   // Beam size 1 (greedy decoding, faster)
+          '-bo', '1',                   // Best of 1 (no sampling, faster)
         ];
 
         console.log('[Whisper] Running:', this.whisperBinary, args.join(' '));
