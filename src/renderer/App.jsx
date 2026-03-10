@@ -4,6 +4,7 @@ import TerminalGrid from './components/TerminalGrid';
 import AgentConfigPanel from './components/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
 import { useAgents } from './hooks/useAgents';
+import { NODE_STATUS } from './store/agentStore';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
     addAgent,
     removeAgent,
     updateAgent,
+    updateAgentStatus,
   } = useAgents();
 
   const [showConfig, setShowConfig] = useState(false);
@@ -58,19 +60,42 @@ function App() {
     if (!window.electronAPI) return;
 
     const unsubs = [];
+    const statusUpdateTimers = {};
 
     unsubs.push(window.electronAPI.onPtyData(({ agentId, data }) => {
       const term = termGridRef.current?.getTerminal(agentId);
       term?.write(data);
+
+      // Debounce status updates to avoid rapid re-renders during initial load
+      if (statusUpdateTimers[agentId]) {
+        clearTimeout(statusUpdateTimers[agentId]);
+      }
+      statusUpdateTimers[agentId] = setTimeout(() => {
+        updateAgentStatus(agentId, NODE_STATUS.SUCCESS);
+        delete statusUpdateTimers[agentId];
+      }, 500);
     }));
 
     unsubs.push(window.electronAPI.onPtyExit(({ agentId }) => {
       const term = termGridRef.current?.getTerminal(agentId);
       term?.notifyExit();
+
+      // Clear any pending status update
+      if (statusUpdateTimers[agentId]) {
+        clearTimeout(statusUpdateTimers[agentId]);
+        delete statusUpdateTimers[agentId];
+      }
+
+      // Update status to idle when PTY exits (disconnected)
+      updateAgentStatus(agentId, NODE_STATUS.IDLE);
     }));
 
-    return () => unsubs.forEach((unsub) => unsub());
-  }, []);
+    return () => {
+      // Clear all timers on cleanup
+      Object.values(statusUpdateTimers).forEach(clearTimeout);
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [updateAgentStatus]);
 
   const handleSelectFolder = useCallback(async () => {
     const folderPath = await window.electronAPI.selectFolder();

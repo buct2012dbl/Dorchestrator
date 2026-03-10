@@ -27,7 +27,16 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   const isDraggingRef = useRef(false);
 
   React.useEffect(() => {
-    if (!isDraggingRef.current) {
+    if (isDraggingRef.current) {
+      // During drag, only update node data (status, etc), not positions
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const updatedAgent = agents.find((a) => a.id === node.id);
+          return updatedAgent ? { ...node, data: updatedAgent.data } : node;
+        })
+      );
+    } else {
+      // When not dragging, sync everything
       setNodes(agents);
     }
   }, [agents, setNodes]);

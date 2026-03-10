@@ -80,9 +80,13 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
         terminal.open(el);
 
         setTimeout(() => {
-          try { fitAddon.fit(); } catch {}
+          try {
+            if (fitAddon && terminal && terminal.element) {
+              fitAddon.fit();
+            }
+          } catch {}
           spawnSession();
-        }, 50);
+        }, 100);
 
         // Forward all raw input directly to the PTY
         terminal.onData((data) => {
@@ -103,8 +107,15 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
         tryOpen();
         return;
       }
-      try { fitAddon.fit(); } catch {}
-      if (ptyAlive.current) {
+      try {
+        // Only fit if terminal is properly initialized and has element
+        if (terminal && fitAddon && terminal.element && !terminal.isDisposed) {
+          fitAddon.fit();
+        }
+      } catch (e) {
+        console.warn('[TerminalPanel] Fit error:', e);
+      }
+      if (ptyAlive.current && terminal && terminal.cols && terminal.rows) {
         window.electronAPI?.ptyResize({
           agentId: agent.id,
           cols: terminal.cols,
@@ -118,14 +129,17 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
 
     return () => {
       resizeObserver.disconnect();
-      terminal.dispose();
+      // Dispose terminal safely
+      if (terminal && !terminal.isDisposed) {
+        terminal.dispose();
+      }
       termRef.current = null;
       fitAddonRef.current = null;
       initialized.current = false;
       ptyAlive.current = false;
       window.electronAPI?.killAgent({ agentId: agent.id });
     };
-  }, [agent.id, agent.data]);
+  }, [agent.id, agent.data.restartKey]); // Restart when restartKey changes
 
   return (
     <div className={`terminal-panel ${isSelected ? 'terminal-selected' : ''}`}>

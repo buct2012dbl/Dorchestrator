@@ -9,6 +9,8 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [model, setModel] = useState('');
   const [color, setColor] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (agent) {
@@ -18,13 +20,42 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
       setSystemPrompt(agent.data.systemPrompt || '');
       setModel(agent.data.model || '');
       setColor(agent.data.color || '#6b6b6b');
+      setHasChanges(false);
     }
   }, [agent]);
+
+  // Track changes
+  useEffect(() => {
+    if (!agent) return;
+    const changed =
+      name !== agent.data.name ||
+      role !== agent.data.role ||
+      description !== agent.data.description ||
+      systemPrompt !== agent.data.systemPrompt ||
+      model !== agent.data.model ||
+      color !== agent.data.color;
+    setHasChanges(changed);
+  }, [agent, name, role, description, systemPrompt, model, color]);
 
   if (!agent) return null;
 
   const handleSave = () => {
-    onUpdate(agent.id, { name, role, description, systemPrompt, model, color });
+    if (!hasChanges) {
+      onClose();
+      return;
+    }
+    setShowConfirm(true);
+  };
+
+  const confirmSave = () => {
+    onUpdate(agent.id, { name, role, description, systemPrompt, model, color, restartKey: Date.now() });
+    setShowConfirm(false);
+    setHasChanges(false);
+    onClose();
+  };
+
+  const cancelSave = () => {
+    setShowConfirm(false);
   };
 
   const handleApplyTemplate = (key) => {
@@ -48,6 +79,19 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
         <h3>Configure Agent</h3>
         <button className="config-close" onClick={onClose}>x</button>
       </div>
+
+      {showConfirm && (
+        <div className="config-confirm-overlay">
+          <div className="config-confirm-dialog">
+            <h4>Save Changes?</h4>
+            <p>Do you want to save the changes to this agent?</p>
+            <div className="config-confirm-actions">
+              <button className="btn-confirm" onClick={confirmSave}>Save</button>
+              <button className="btn-cancel" onClick={cancelSave}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="config-body">
         <div className="config-templates">
@@ -117,7 +161,9 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
         </div>
 
         <div className="config-actions">
-          <button className="btn-save" onClick={handleSave}>Save</button>
+          <button className="btn-save" onClick={handleSave} disabled={!hasChanges}>
+            {hasChanges ? 'Save' : 'No Changes'}
+          </button>
           <button className="btn-delete" onClick={() => onRemove(agent.id)}>Delete Agent</button>
         </div>
       </div>
