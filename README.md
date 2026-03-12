@@ -9,59 +9,59 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 
 ![Agent Orchestrator](https://img.shields.io/badge/status-active-success)
 
-## ✨ Features
+![Dorchestrator Preview](./image/preview.png)
 
-### 🎨 Visual Agent Graph
-- **Drag-and-drop interface** powered by React Flow
-- **Real-time node connections** for defining agent relationships
-- **Color-coded agents** with customizable roles and templates
-- **Interactive canvas** with zoom, pan, and selection controls
+## Features
 
-### 💻 Integrated Terminals
-- **Live PTY sessions** for each agent — choose between `claude` CLI or `codex` CLI per agent
-- **xterm.js terminals** with full ANSI color support
-- **Auto-restart** on session end
-- **Flexible layouts** (auto, 1-col, 2-col, 3-col grid)
-- **Toggle views** to focus on graph or terminals
+### Visual Agent Graph
+- Drag-and-drop interface powered by React Flow
+- Real-time node connections for defining agent relationships
+- Color-coded agents with customizable roles and templates
+- Interactive canvas with zoom, pan, and selection controls
 
-### 🤖 Multi-CLI Support
-- **Claude Code** (`claude` CLI) — Anthropic's agentic terminal with full MCP support
-- **Codex** (`codex` CLI) — OpenAI's agentic coding assistant running in full-auto mode
+### Integrated Terminals
+- Live PTY sessions for each agent — choose between `claude` CLI or `codex` CLI per agent
+- xterm.js terminals with full ANSI color support
+- Auto-restart on session end
+- Flexible layouts (auto, 1-col, 2-col, 3-col grid)
+- Toggle views to focus on graph or terminals
+
+### Multi-CLI Support
+- Claude Code (`claude` CLI) — Anthropic's agentic terminal with full MCP support
+- Codex (`codex` CLI) — OpenAI's agentic coding assistant running in full-auto mode
 - Each agent independently chooses its CLI and model
 - Mix Claude and Codex agents in the same workspace
 
-### 🎤 Voice Assistant
-- **Offline voice recognition** using Whisper.cpp
-- **Real-time waveform visualization** while recording
-- **Automatic transcription** to focused terminal
-- **Keyboard shortcut** (Cmd+Shift+V / Ctrl+Shift+V)
-- **Cyberpunk-styled UI** with neon effects
+### Voice Assistant
+- Offline voice recognition using Whisper.cpp
+- Real-time waveform visualization while recording
+- Automatic transcription to focused terminal
+- Keyboard shortcut (Cmd+Shift+V / Ctrl+Shift+V)
+- Cyberpunk-styled UI with neon effects
 
-### 🤝 Inter-Agent Communication
-- **MCP-based messaging** between connected Claude Code agents
-- **TCP bridge server** for reliable message routing
-- **Two-way communication** with response capture
-- **Real-time streaming** of agent responses
-- **Edge-aware tool discovery** (agents only see connected peers)
+### Inter-Agent Communication
+- MCP-based messaging between connected agents (both Claude Code and Codex)
+- TCP bridge server for reliable message routing
+- Two-way communication with response capture
+- Real-time streaming of agent responses
+- Edge-aware tool discovery (agents only see connected peers)
 
-> **Note:** Inter-agent MCP messaging is currently supported for Claude Code agents only. Codex agents run standalone sessions.
-
-### ⚙️ Agent Configuration
-- **Pre-built templates**: CEO, Programmer, Tester, Researcher, Custom
-- **Terminal type selection**: Claude Code or Codex per agent
-- **Model selection**:
+### Agent Configuration
+- Pre-built templates: CEO, Programmer, Tester, Researcher, Custom
+- Terminal type selection: Claude Code or Codex per agent
+- Model selection:
   - Claude: Opus 4.6, Sonnet 4.6, Haiku 4.5
-  - Codex: o4-mini, o3, gpt-4.1, gpt-4o
-- **System prompts** for role-specific instructions
-- **Persistent settings** across sessions
+  - Codex: gpt-5, o4-mini, o3, gpt-4.1, gpt-4o
+- System prompts for role-specific instructions
+- Persistent settings across sessions
 
-### 📁 Workspace Management
-- **Folder-based workspaces** for agent file access
-- **Launch-time workspace picker** (blocks until set)
-- **Change workspace** on-the-fly from header
-- **Shared working directory** for all agents
+### Workspace Management
+- Folder-based workspaces for agent file access
+- Launch-time workspace picker (blocks until set)
+- Change workspace on-the-fly from header
+- Shared working directory for all agents
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - macOS (Darwin)
@@ -122,7 +122,7 @@ npm run build
 
 The packaged app will be in the `dist/` directory.
 
-## 🏗️ Architecture
+## Architecture
 
 ### Tech Stack
 - **Electron** - Desktop app framework
@@ -144,7 +144,7 @@ The packaged app will be in the `dist/` directory.
 
 #### MCP Bridge (`src/main/mcp-bridge.js`)
 - Stdio MCP server (newline-delimited JSON)
-- Exposes `send_message` tool to connected Claude Code agents
+- Exposes `send_message` tool to connected agents (both Claude Code and Codex)
 - Handles `initialize`, `tools/list`, `tools/call`
 - Forwards messages via TCP to bridge server
 
@@ -155,7 +155,7 @@ The packaged app will be in the `dist/` directory.
 - **TerminalPanel** - Individual xterm.js terminal + PTY integration
 - **AgentConfigPanel** - Agent settings sidebar (terminal type, model, etc.)
 
-### Inter-Agent Communication Flow (Claude Code agents)
+### Inter-Agent Communication Flow
 
 ```
 CEO Terminal (PTY)
@@ -163,15 +163,15 @@ CEO Terminal (PTY)
 MCP Bridge (stdio)
   ↓ TCP socket
 Bridge Server (main process)
-  ↓ writes to target PTY stdin
-Programmer Terminal (PTY)
+  ↓ writes to target PTY stdin (Claude Code) or spawns exec (Codex)
+Target Agent Terminal (PTY)
   ↓ captures output
 Bridge Server
   ↓ returns response
 CEO Terminal (receives reply)
 ```
 
-## 📖 Usage
+## Usage
 
 ### Creating Agents
 1. Click "Add Agent" in the graph view
@@ -185,18 +185,18 @@ In the **Configure Agent** panel, select the **Terminal** field:
 
 | Terminal | CLI | Models | MCP Support |
 |----------|-----|--------|-------------|
-| **Claude Code** | `claude` | Opus 4.6, Sonnet 4.6, Haiku 4.5 | ✅ Yes |
-| **Codex (OpenAI)** | `codex` | o4-mini, o3, gpt-4.1, gpt-4o | ❌ No |
+| **Claude Code** | `claude` | Opus 4.6, Sonnet 4.6, Haiku 4.5 | Yes |
+| **Codex (OpenAI)** | `codex` | gpt-5, o4-mini, o3, gpt-4.1, gpt-4o | Yes |
 
 You can mix agent types in the same workspace — for example, use a Claude Code CEO to orchestrate other Claude agents while running a Codex agent for parallel tasks.
 
 ### Connecting Agents
 1. Drag from one agent's handle to another
-2. Connected Claude Code agents can message each other via MCP tools
+2. Connected agents can message each other via MCP tools
 3. Edges are bidirectional (both agents see each other)
 
 ### Messaging Between Agents
-In any Claude Code agent's terminal:
+In any agent's terminal:
 ```
 > Send a message to the Programmer asking them to create a snake game
 ```
@@ -209,8 +209,8 @@ The agent will use the `send_message` MCP tool automatically if connected.
 - Change workspace anytime via the folder button in the header
 
 ### View Controls
-- **📊 Graph** - Toggle graph view on/off
-- **💻 Terminal** - Toggle terminal view on/off
+- **Graph Graph** - Toggle graph view on/off
+- **Terminal Terminal** - Toggle terminal view on/off
 - **Split handle** - Drag to resize graph/terminal ratio (when both visible)
 
 ### Using Voice Assistant
@@ -247,10 +247,10 @@ The voice assistant allows you to dictate commands directly to your focused term
 
 #### Features
 
-- ✅ **Fully offline** - No internet required after setup
-- ✅ **Real-time waveform** - Visual feedback while recording
-- ✅ **Auto-injection** - Text sent directly to focused terminal
-- ✅ **Keyboard shortcut** - Quick access with Cmd+Shift+V
+- Fully offline - No internet required after setup
+- Real-time waveform - Visual feedback while recording
+- Auto-injection - Text sent directly to focused terminal
+- Keyboard shortcut - Quick access with Cmd+Shift+V
 
 #### Troubleshooting
 
@@ -274,7 +274,7 @@ The voice assistant allows you to dictate commands directly to your focused term
 - Reduce background noise
 - Try the Small model for better accuracy
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### "agent-bridge failed" error
 - Ensure `claude` CLI is installed and in PATH
@@ -303,19 +303,16 @@ npx @electron/rebuild -f -w node-pty
 - Increase idle timeout in `getAgentResponse()` if responses are slow
 - Check bridge server logs: `[Bridge] Response captured...`
 
-## 📝 License
+## License
 
 MIT
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Anthropic](https://anthropic.com) for Claude API and CLI
 - [OpenAI](https://openai.com) for Codex CLI
 - [React Flow](https://reactflow.dev) for graph visualization
 - [xterm.js](https://xtermjs.org) for terminal emulation
-
-
-![Agent Orchestrator](https://img.shields.io/badge/status-active-success)
 
 ## ✨ Features
 
@@ -325,7 +322,7 @@ MIT
 - **Color-coded agents** with customizable roles and templates
 - **Interactive canvas** with zoom, pan, and selection controls
 
-### 💻 Integrated Terminals
+### Terminal Integrated Terminals
 - **Live PTY sessions** for each agent using `claude` CLI
 - **xterm.js terminals** with full ANSI color support
 - **Auto-restart** on session end
@@ -413,7 +410,7 @@ npm run build
 
 The packaged app will be in the `dist/` directory.
 
-## 🏗️ Architecture
+## Architecture
 
 ### Tech Stack
 - **Electron** - Desktop app framework
@@ -488,8 +485,8 @@ The agent will use the `send_message` MCP tool automatically if connected.
 - Change workspace anytime via the folder button in the header
 
 ### View Controls
-- **📊 Graph** - Toggle graph view on/off
-- **💻 Terminal** - Toggle terminal view on/off
+- **Graph Graph** - Toggle graph view on/off
+- **Terminal Terminal** - Toggle terminal view on/off
 - **Split handle** - Drag to resize graph/terminal ratio (when both visible)
 
 ### Using Voice Assistant
@@ -526,10 +523,10 @@ The voice assistant allows you to dictate commands directly to your focused term
 
 #### Features
 
-- ✅ **Fully offline** - No internet required after setup
-- ✅ **Real-time waveform** - Visual feedback while recording
-- ✅ **Auto-injection** - Text sent directly to focused terminal
-- ✅ **Keyboard shortcut** - Quick access with Cmd+Shift+V
+- Fully offline - No internet required after setup
+- Real-time waveform - Visual feedback while recording
+- Auto-injection - Text sent directly to focused terminal
+- Keyboard shortcut - Quick access with Cmd+Shift+V
 
 #### Troubleshooting
 
@@ -553,7 +550,7 @@ The voice assistant allows you to dictate commands directly to your focused term
 - Reduce background noise
 - Try the Small model for better accuracy
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### "agent-bridge failed" error
 - Ensure `claude` CLI is installed and in PATH
@@ -576,11 +573,11 @@ npx @electron/rebuild -f -w node-pty
 - Increase idle timeout in `getAgentResponse()` if responses are slow
 - Check bridge server logs: `[Bridge] Response captured...`
 
-## 📝 License
+## License License
 
 MIT
 
-## 🙏 Acknowledgments
+## Acknowledgments Acknowledgments
 
 - [Anthropic](https://anthropic.com) for Claude API and CLI
 - [React Flow](https://reactflow.dev) for graph visualization
