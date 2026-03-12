@@ -9,6 +9,7 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [model, setModel] = useState('');
   const [color, setColor] = useState('');
+  const [terminalType, setTerminalType] = useState('claude-code');
   const [showConfirm, setShowConfirm] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -20,6 +21,7 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
       setSystemPrompt(agent.data.systemPrompt || '');
       setModel(agent.data.model || '');
       setColor(agent.data.color || '#6b6b6b');
+      setTerminalType(agent.data.terminalType || 'claude-code');
       setHasChanges(false);
     }
   }, [agent]);
@@ -33,9 +35,10 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
       description !== agent.data.description ||
       systemPrompt !== agent.data.systemPrompt ||
       model !== agent.data.model ||
-      color !== agent.data.color;
+      color !== agent.data.color ||
+      terminalType !== (agent.data.terminalType || 'claude-code');
     setHasChanges(changed);
-  }, [agent, name, role, description, systemPrompt, model, color]);
+  }, [agent, name, role, description, systemPrompt, model, color, terminalType]);
 
   if (!agent) return null;
 
@@ -48,7 +51,7 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
   };
 
   const confirmSave = () => {
-    onUpdate(agent.id, { name, role, description, systemPrompt, model, color, restartKey: Date.now() });
+    onUpdate(agent.id, { name, role, description, systemPrompt, model, color, terminalType, restartKey: Date.now() });
     setShowConfirm(false);
     setHasChanges(false);
     onClose();
@@ -65,12 +68,21 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
     setSystemPrompt(tmpl.systemPrompt);
     setModel(tmpl.model);
     setColor(tmpl.color);
+    setTerminalType(tmpl.terminalType || 'claude-code');
   };
 
-  const MODELS = [
+  const CLAUDE_MODELS = [
     'claude-opus-4-6',
     'claude-sonnet-4-6',
     'claude-haiku-4-5-20251001',
+  ];
+
+  const CODEX_MODELS = [
+    'gpt-5',
+    'o4-mini',
+    'o3',
+    'gpt-4.1',
+    'gpt-4o',
   ];
 
   return (
@@ -134,9 +146,23 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
         </div>
 
         <div className="config-field">
+          <label>Terminal</label>
+          <select value={terminalType} onChange={(e) => {
+            const next = e.target.value;
+            setTerminalType(next);
+            // Reset model to a sensible default when switching terminal type
+            if (next === 'codex') setModel('o4-mini');
+            else setModel('claude-sonnet-4-6');
+          }}>
+            <option value="claude-code">Claude Code</option>
+            <option value="codex">Codex (OpenAI)</option>
+          </select>
+        </div>
+
+        <div className="config-field">
           <label>Model</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {MODELS.map((m) => (
+            {(terminalType === 'codex' ? CODEX_MODELS : CLAUDE_MODELS).map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>

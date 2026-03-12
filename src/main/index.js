@@ -108,6 +108,65 @@ function getAgentResponse(agentId, message) {
       return;
     }
 
+    // Find the target agent to check its terminal type
+    const targetAgent = agentGraph.agents.find((a) => a.id === agentId);
+    const terminalType = targetAgent?.data?.terminalType || 'claude-code';
+
+    // For Codex agents, use exec command to process the message
+    if (terminalType === 'codex') {
+      console.log(`[Bridge] Codex agent detected - spawning exec command for: ${message}`);
+
+      // Show incoming message in terminal
+      ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
+
+      const codexPath = process.env.CODEX_PATH || 'codex';
+      const args = ['exec', '--full-auto', '--skip-git-repo-check'];
+      if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
+      if (targetAgent?.data?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(targetAgent.data.systemPrompt)}`);
+      args.push(message);
+
+      const { spawn } = require('child_process');
+      const execProcess = spawn(codexPath, args, {
+        cwd: workspace || process.env.HOME || '/',
+        env: process.env,
+      });
+
+      let output = '';
+      execProcess.stdout.on('data', (data) => {
+        output += data.toString();
+        // Show exec output in terminal in real-time
+        const lines = data.toString().split('\n');
+        for (const line of lines) {
+          if (line.trim()) {
+            ptyProcess.write(`\x1b[90m${line}\x1b[0m\r\n`);
+          }
+        }
+      });
+      execProcess.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+
+      execProcess.on('close', (code) => {
+        ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
+
+        const clean = output
+          .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+          .replace(/\x1b[()][0-9A-Za-z]/g, '')
+          .trim();
+        console.log(`[Bridge] Codex exec completed with code ${code}, output: ${clean.slice(0, 200)}...`);
+        resolve(clean || '(no response)');
+      });
+
+      // Safety timeout
+      setTimeout(() => {
+        execProcess.kill();
+        resolve('(timeout)');
+      }, 180000);
+
+      return;
+    }
+
+    // Claude Code: use PTY stdin approach
     let captured = '';
     let idleTimer = null;
     let done = false;
@@ -117,7 +176,7 @@ function getAgentResponse(agentId, message) {
       done = true;
       if (idleTimer) clearTimeout(idleTimer);
       if (disposable) disposable.dispose();
-      // Strip ANSI escape codes for clean text back to CEO
+      // Strip ANSI escape codes for clean text back to sender
       const clean = captured
         .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
         .replace(/\x1b[()][0-9A-Za-z]/g, '')
@@ -133,13 +192,14 @@ function getAgentResponse(agentId, message) {
       idleTimer = setTimeout(finish, 6000); // 6s idle = response complete
     };
 
-    // Attach a secondary onData listener to capture Programmer's response
+    // Attach a secondary onData listener to capture response
     const disposable = ptyProcess.onData((data) => {
       captured += data;
       resetIdle();
     });
 
-    // Write message to PTY stdin — appears naturally at the > prompt
+    // Write message to PTY stdin (works for Claude Code with MCP)
+    console.log(`[Bridge] Sending message to Claude Code agent ${agentId}: ${message}`);
     ptyProcess.write(message + '\r');
     resetIdle();
 
@@ -332,24 +392,41 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
   if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
 
-  const args = ['--dangerously-skip-permissions'];
-  if (agentData?.model) args.push('--model', agentData.model);
-  if (agentData?.systemPrompt) {
-    args.push('--append-system-prompt', agentData.systemPrompt);
-    console.log(`[PTY] Setting system prompt for ${agentId}: "${agentData.systemPrompt}"`);
-  }
-  if (agentData?.name) {
-    console.log(`[PTY] Agent name: ${agentData.name}`);
+  const terminalType = agentData?.terminalType || 'claude-code';
+
+  let command, args;
+
+  if (terminalType === 'codex') {
+    // OpenAI Codex CLI
+    command = process.env.CODEX_PATH || 'codex';
+    args = ['--full-auto'];
+    if (agentData?.model) args.push('--model', agentData.model);
+    if (agentData?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(agentData.systemPrompt)}`);
+    if (agentData?.name) {
+      console.log(`[PTY] Codex agent name: ${agentData.name}`);
+    }
+  } else {
+    // Claude Code CLI (default)
+    command = process.env.CLAUDE_PATH || 'claude';
+    args = ['--dangerously-skip-permissions'];
+    if (agentData?.model) args.push('--model', agentData.model);
+    if (agentData?.systemPrompt) {
+      args.push('--append-system-prompt', agentData.systemPrompt);
+      console.log(`[PTY] Setting system prompt for ${agentId}: "${agentData.systemPrompt}"`);
+    }
+    if (agentData?.name) {
+      console.log(`[PTY] Agent name: ${agentData.name}`);
+    }
   }
 
-  // Write MCP config for inter-agent messaging if bridge is ready
+  // Write MCP config for inter-agent messaging if bridge is ready (both Claude Code and Codex)
   const tmpDir = os.tmpdir();
   if (bridgePort > 0) {
     const connectedAgents = getConnectedAgents(agentId);
     if (connectedAgents.length > 0) {
       const mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
 
-      // Write bridge config (avoids env var passing issues with claude CLI)
+      // Write bridge config (avoids env var passing issues)
       const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
       const bridgeConfig = { agentId, bridgePort, connectedAgents };
       try {
@@ -359,31 +436,48 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         console.error('[PTY] Failed to write bridge config:', err.message);
       }
 
-      // Write MCP server config pointing to the bridge script
-      const mcpConfig = {
-        mcpServers: {
-          'agent-bridge': {
-            command: NODE_PATH,
-            args: [mcpBridgePath, bridgeConfigPath],
+      if (terminalType === 'codex') {
+        // Codex: dynamically add MCP server before spawning
+        // We'll use a unique name per agent to avoid conflicts
+        const mcpServerName = `agent-bridge-${agentId}`;
+
+        // First, remove any existing server with this name (cleanup from previous runs)
+        try {
+          execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
+        } catch {}
+
+        // Add the MCP bridge server
+        try {
+          const addCmd = `${command} mcp add ${mcpServerName} -- ${NODE_PATH} ${mcpBridgePath} ${bridgeConfigPath}`;
+          execSync(addCmd, { stdio: 'pipe', timeout: 5000 });
+          console.log(`[PTY] Added MCP server for Codex ${agentId}: ${mcpServerName}`);
+        } catch (err) {
+          console.error('[PTY] Failed to add MCP server for Codex:', err.message);
+        }
+      } else {
+        // Claude Code: use --mcp-config flag
+        const mcpConfig = {
+          mcpServers: {
+            'agent-bridge': {
+              command: NODE_PATH,
+              args: [mcpBridgePath, bridgeConfigPath],
+            },
           },
-        },
-      };
-      const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
-      try {
-        fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
-        args.push('--mcp-config', mcpConfigPath);
-        console.log(`[PTY] Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
-      } catch (err) {
-        console.error('[PTY] Failed to write MCP config:', err.message);
+        };
+        const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
+        try {
+          fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+          args.push('--mcp-config', mcpConfigPath);
+          console.log(`[PTY] Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
+        } catch (err) {
+          console.error('[PTY] Failed to write MCP config:', err.message);
+        }
       }
     }
   }
 
-  // Find claude: prefer the one in PATH, fall back to known locations
-  const claudePath = process.env.CLAUDE_PATH || 'claude';
-
   try {
-    const ptyProcess = pty.spawn(claudePath, args, {
+    const ptyProcess = pty.spawn(command, args, {
       name: 'xterm-256color',
       cols,
       rows,
@@ -398,6 +492,18 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
+      // Cleanup MCP server for Codex agents
+      if (terminalType === 'codex') {
+        const mcpServerName = `agent-bridge-${agentId}`;
+        try {
+          const codexPath = process.env.CODEX_PATH || 'codex';
+          execSync(`${codexPath} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
+          console.log(`[PTY] Removed MCP server for Codex ${agentId}: ${mcpServerName}`);
+        } catch (err) {
+          console.log(`[PTY] MCP server cleanup skipped (may not exist): ${err.message}`);
+        }
+      }
+
       ptys.delete(agentId);
       ptyDims.delete(agentId);
       if (mainWindow && !mainWindow.isDestroyed()) {

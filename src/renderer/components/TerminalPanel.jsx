@@ -10,9 +10,23 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
   const fitAddonRef = useRef(null);
   const initialized = useRef(false);
   const ptyAlive = useRef(false);
+  const justSpawned = useRef(false);
 
   useImperativeHandle(ref, () => ({
-    write: (text) => termRef.current?.write(text),
+    write: (text) => {
+      // Filter initialization sequences only in the first 500ms after spawn
+      if (justSpawned.current) {
+        const filtered = text
+          .replace(/\x1b\[\?1;\d+c/g, '')  // Device attributes response
+          .replace(/\x1b\[\?1049[hl]/g, '') // Alternate screen buffer
+          .replace(/\x1b\[>\d+;\d+;\d+c/g, '') // Secondary device attributes
+          .replace(/\x1b\]0;.*?\x07/g, ''); // Window title sequences
+
+        if (filtered) termRef.current?.write(filtered);
+      } else {
+        termRef.current?.write(text);
+      }
+    },
     writeln: (text) => termRef.current?.writeln(text),
     clear: () => termRef.current?.clear(),
     writeText: (text) => {
@@ -51,6 +65,7 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       cursorBlink: true,
       scrollback: 5000,
+      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
@@ -63,6 +78,13 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
 
     function spawnSession() {
       ptyAlive.current = true;
+      justSpawned.current = true;
+
+      // Disable filtering after 500ms
+      setTimeout(() => {
+        justSpawned.current = false;
+      }, 500);
+
       console.log('[Renderer] Spawning agent:', agent.id, 'with data:', agent.data);
       window.electronAPI?.spawnAgent({
         agentId: agent.id,
@@ -91,9 +113,14 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
         // Forward all raw input directly to the PTY
         terminal.onData((data) => {
           if (!ptyAlive.current) {
-            // Restart on any keypress after session ends
+            // Restart on any keypress after session ends (consume the keypress)
+            terminal.clear();
             spawnSession();
             return;
+          }
+          // Filter out device attribute responses that xterm sends automatically
+          if (data.match(/^\x1b\[\?1;/)) {
+            return; // Don't send these to PTY
           }
           window.electronAPI?.ptyInput({ agentId: agent.id, data });
         });

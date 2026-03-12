@@ -8,6 +8,7 @@ export const AGENT_TEMPLATES = {
     description: 'Coordinates tasks, delegates work, reviews outcomes',
     systemPrompt: 'You are a CEO agent. You coordinate tasks between team members, make high-level decisions, delegate work to the programmer and tester, and review final outcomes.',
     model: 'claude-sonnet-4-6',
+    terminalType: 'claude-code',
   },
   programmer: {
     role: 'Programmer',
@@ -15,6 +16,7 @@ export const AGENT_TEMPLATES = {
     description: 'Writes code, implements features, fixes bugs',
     systemPrompt: 'You are a Programmer agent. You write code, implement features, fix bugs, and follow instructions from the CEO agent.',
     model: 'claude-sonnet-4-6',
+    terminalType: 'claude-code',
   },
   tester: {
     role: 'Tester',
@@ -22,6 +24,7 @@ export const AGENT_TEMPLATES = {
     description: 'Tests code, reports bugs, validates functionality',
     systemPrompt: 'You are a Tester agent. You write and run tests, report bugs, validate functionality, and provide feedback to the programmer.',
     model: 'claude-sonnet-4-6',
+    terminalType: 'claude-code',
   },
   researcher: {
     role: 'Researcher',
@@ -29,6 +32,7 @@ export const AGENT_TEMPLATES = {
     description: 'Researches topics, gathers information, provides context',
     systemPrompt: 'You are a Researcher agent. You research topics, gather information, analyze data, and provide context for decision making.',
     model: 'claude-sonnet-4-6',
+    terminalType: 'claude-code',
   },
   custom: {
     role: 'Custom Agent',
@@ -36,6 +40,7 @@ export const AGENT_TEMPLATES = {
     description: 'A custom agent with user-defined behavior',
     systemPrompt: 'You are a helpful assistant.',
     model: 'claude-sonnet-4-6',
+    terminalType: 'claude-code',
   },
 };
 
