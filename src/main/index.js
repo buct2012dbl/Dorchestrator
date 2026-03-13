@@ -37,7 +37,29 @@ function findNode() {
   return 'node';
 }
 
+function findClaude() {
+  try {
+    const r = execSync('which claude', { encoding: 'utf8', timeout: 2000 }).trim();
+    if (r && fs.existsSync(r)) return r;
+  } catch {}
+  const nvmNode = path.join(os.homedir(), '.nvm', 'versions', 'node');
+  if (fs.existsSync(nvmNode)) {
+    try {
+      const versions = fs.readdirSync(nvmNode).sort().reverse();
+      for (const v of versions) {
+        const p = path.join(nvmNode, v, 'bin', 'claude');
+        if (fs.existsSync(p)) return p;
+      }
+    } catch {}
+  }
+  for (const p of ['/usr/local/bin/claude', '/opt/homebrew/bin/claude']) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'claude';
+}
+
 const NODE_PATH = findNode();
+const CLAUDE_PATH = findClaude();
 
 // ---- Agent graph (kept in sync for PTY spawning) ----
 let agentGraph = { agents: [], edges: [] };
@@ -237,13 +259,20 @@ let authConfig = {
 };
 
 function createWindow() {
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+  // Fix preload path for production
+  const preloadPath = isDev
+    ? path.join(__dirname, 'preload.js')
+    : path.join(process.resourcesPath, 'app.asar', 'src', 'main', 'preload.js');
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: preloadPath,
     },
   });
 
@@ -257,13 +286,16 @@ function createWindow() {
     });
   }
 
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
+    // In production, dist is at the app root level
+    const indexPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'app.asar', 'dist', 'index.html')
+      : path.join(__dirname, '../../dist/index.html');
+    mainWindow.loadFile(indexPath);
+
   }
 }
 
@@ -388,6 +420,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     LANG: process.env.LANG || 'en_US.UTF-8',
+    PATH: `${path.dirname(NODE_PATH)}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
   };
   if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
   if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
@@ -407,7 +440,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     }
   } else {
     // Claude Code CLI (default)
-    command = process.env.CLAUDE_PATH || 'claude';
+    command = process.env.CLAUDE_PATH || CLAUDE_PATH;
     args = ['--dangerously-skip-permissions'];
     if (agentData?.model) args.push('--model', agentData.model);
     if (agentData?.systemPrompt) {
@@ -424,7 +457,26 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   if (bridgePort > 0) {
     const connectedAgents = getConnectedAgents(agentId);
     if (connectedAgents.length > 0) {
-      const mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
+      let mcpBridgePath;
+
+      if (app.isPackaged) {
+        // In production, copy mcp-bridge.js to temp directory since .asar files can't be executed
+        const sourcePath = path.join(process.resourcesPath, 'app.asar', 'src', 'main', 'mcp-bridge.js');
+        mcpBridgePath = path.join(tmpDir, 'ao-mcp-bridge.js');
+
+        // Copy if not exists or source is newer
+        try {
+          if (!fs.existsSync(mcpBridgePath)) {
+            const bridgeContent = fs.readFileSync(sourcePath, 'utf8');
+            fs.writeFileSync(mcpBridgePath, bridgeContent);
+            console.log(`[PTY] Copied MCP bridge to: ${mcpBridgePath}`);
+          }
+        } catch (err) {
+          console.error('[PTY] Failed to copy MCP bridge:', err.message);
+        }
+      } else {
+        mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
+      }
 
       // Write bridge config (avoids env var passing issues)
       const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
@@ -477,6 +529,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   }
 
   try {
+    console.log(`[PTY] Spawning: ${command} ${args.join(' ')}`);
+    console.log(`[PTY] CWD: ${workspace || process.env.HOME || '/'}`);
+
     const ptyProcess = pty.spawn(command, args, {
       name: 'xterm-256color',
       cols,
@@ -492,6 +547,8 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
+      console.log(`[PTY] Process exited with code ${exitCode} for agent ${agentId}`);
+
       // Cleanup MCP server for Codex agents
       if (terminalType === 'codex') {
         const mcpServerName = `agent-bridge-${agentId}`;
@@ -516,6 +573,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     return { success: true };
   } catch (err) {
     console.error('[PTY] Failed to spawn:', err.message);
+    console.error('[PTY] Command:', command, args);
     return { success: false, error: err.message };
   }
 }

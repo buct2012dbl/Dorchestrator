@@ -1,4 +1,4 @@
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -13,6 +13,13 @@ class WhisperManager {
     this.whisperBinary = null;
     this.whisperProcess = null; // Keep process alive for reuse
     this.isProcessing = false;
+
+    // Use project directory in dev, userData in production
+    const isDev = !app.isPackaged;
+    const baseDir = isDev ? process.cwd() : app.getPath('userData');
+
+    this.whisperDir = path.join(baseDir, 'whisper.cpp');
+    this.modelsDir = path.join(baseDir, 'models');
   }
 
   initialize() {
@@ -30,8 +37,8 @@ class WhisperManager {
   findWhisperBinary() {
     // Check if whisper.cpp is installed
     const possiblePaths = [
-      path.join(process.cwd(), 'whisper.cpp', 'build', 'bin', 'whisper-cli'),
-      path.join(process.cwd(), 'whisper.cpp', 'build', 'bin', 'main'),
+      path.join(this.whisperDir, 'build', 'bin', 'whisper-cli'),
+      path.join(this.whisperDir, 'build', 'bin', 'main'),
       '/opt/homebrew/bin/whisper-cpp',
       '/usr/local/bin/whisper-cpp',
       path.join(os.homedir(), '.local/bin/whisper-cpp'),
@@ -50,8 +57,7 @@ class WhisperManager {
   }
 
   async installWhisper() {
-    const whisperDir = path.join(process.cwd(), 'whisper.cpp');
-    const mainBinary = path.join(whisperDir, 'build', 'bin', 'main');
+    const mainBinary = path.join(this.whisperDir, 'build', 'bin', 'main');
 
     // Check if already installed
     if (fs.existsSync(mainBinary)) {
@@ -64,21 +70,28 @@ class WhisperManager {
       console.log('[Whisper] Installing whisper.cpp...');
 
       // If directory exists but binary doesn't, remove it first
-      if (fs.existsSync(whisperDir)) {
+      if (fs.existsSync(this.whisperDir)) {
         console.log('[Whisper] Removing incomplete installation...');
-        exec(`rm -rf "${whisperDir}"`, (err) => {
+        exec(`rm -rf "${this.whisperDir}"`, (err) => {
           if (err) console.error('[Whisper] Failed to remove old directory:', err);
-          this.doInstall(whisperDir, mainBinary, resolve);
+          this.doInstall(mainBinary, resolve);
         });
       } else {
-        this.doInstall(whisperDir, mainBinary, resolve);
+        this.doInstall(mainBinary, resolve);
       }
     });
   }
 
-  doInstall(whisperDir, mainBinary, resolve) {
+  doInstall(mainBinary, resolve) {
+    const parentDir = path.dirname(this.whisperDir);
+
+    // Ensure parent directory exists
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
     const commands = [
-      `cd "${process.cwd()}"`,
+      `cd "${parentDir}"`,
       'git clone https://github.com/ggerganov/whisper.cpp.git',
       'cd whisper.cpp',
       'git checkout v1.7.6',
@@ -95,7 +108,7 @@ class WhisperManager {
       }
 
       // Check for whisper-cli first (new binary name), then fall back to main
-      const whisperCli = path.join(whisperDir, 'build', 'bin', 'whisper-cli');
+      const whisperCli = path.join(this.whisperDir, 'build', 'bin', 'whisper-cli');
       const binaryPath = fs.existsSync(whisperCli) ? whisperCli : mainBinary;
 
       // Verify the binary was created
@@ -113,8 +126,7 @@ class WhisperManager {
   }
 
   getModelPath(modelSize = 'base') {
-    const appPath = process.cwd();
-    return path.join(appPath, 'models', `ggml-${modelSize}.bin`);
+    return path.join(this.modelsDir, `ggml-${modelSize}.bin`);
   }
 
   checkModel(modelSize = 'base') {
@@ -140,6 +152,11 @@ class WhisperManager {
 
     const modelPath = this.getModelPath(modelSize);
     const modelDir = path.dirname(modelPath);
+
+    // Ensure models directory exists
+    if (!fs.existsSync(modelDir)) {
+      fs.mkdirSync(modelDir, { recursive: true });
+    }
 
     // Create models directory if it doesn't exist
     if (!fs.existsSync(modelDir)) {
