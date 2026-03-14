@@ -8,6 +8,32 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { AgentOrchestrator } = require('./orchestrator');
 const WhisperManager = require('./whisperManager');
 const pty = require('node-pty');
+const commConfig = require('./communication-config');
+
+// Setup logging to file in production
+const logFile = path.join(app.getPath('userData'), 'app.log');
+const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+function log(...args) {
+  const message = `[${new Date().toISOString()}] ${args.join(' ')}`;
+  console.log(...args);
+  if (!app.isPackaged) return;
+  logStream.write(message + '\n');
+}
+
+// Override console methods
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+console.log = (...args) => {
+  originalConsoleLog(...args);
+  if (app.isPackaged) logStream.write(`[${new Date().toISOString()}] ${args.join(' ')}\n`);
+};
+console.error = (...args) => {
+  originalConsoleError(...args);
+  if (app.isPackaged) logStream.write(`[${new Date().toISOString()}] ERROR: ${args.join(' ')}\n`);
+};
+
+log('App starting...');
 
 let mainWindow;
 let orchestrator;
@@ -93,20 +119,43 @@ function startBridgeServer() {
       try { msg = JSON.parse(line); } catch { socket.write(JSON.stringify({ success: false, error: 'Bad JSON' }) + '\n'); return; }
 
       const { fromAgentId, targetAgentId, message } = msg;
-      console.log(`[Bridge] ${fromAgentId} → ${targetAgentId}: ${message.slice(0, 80)}`);
+      console.log(`[Bridge] ${fromAgentId} → ${targetAgentId}: ${message ? message.slice(0, 80) : '(empty message)'}`);
 
       const fromAgent = agentGraph.agents.find((a) => a.id === fromAgentId);
       const fromName = fromAgent?.data?.name || fromAgentId;
 
-      try {
-        // Write message to Programmer's active PTY — appears naturally at the > prompt
-        const fullMessage = `[Message from ${fromName}]: ${message}`;
-        const response = await getAgentResponse(targetAgentId, fullMessage);
+      // Check target agent's terminal type
+      const targetAgent = agentGraph.agents.find((a) => a.id === targetAgentId);
+      const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
-        console.log(`[Bridge] Response captured (${response.length} chars), returning to ${fromAgentId}`);
-        socket.write(JSON.stringify({ success: true, response }) + '\n');
+      try {
+        // Use orchestrator API for Claude Code agents (clean Anthropic API responses)
+        if (terminalType === 'claude-code' && orchestrator && orchestrator.isConfigured()) {
+          console.log(`[Bridge] Using orchestrator API for Claude Code agent: ${fromAgentId} → ${targetAgentId}`);
+          const response = await orchestrator.sendToAgentAndCollect(targetAgentId, message, fromAgentId);
+
+          if (response) {
+            console.log(`[Bridge] Response from orchestrator (${response.length} chars), returning to ${fromAgentId}`);
+            socket.write(JSON.stringify({ success: true, response }) + '\n');
+          } else {
+            socket.write(JSON.stringify({ success: false, error: 'No response from agent' }) + '\n');
+          }
+        } else {
+          // Fallback to PTY capture for Codex agents or if orchestrator not configured
+          if (terminalType === 'codex') {
+            console.log(`[Bridge] Using PTY capture for Codex agent: ${fromAgentId} → ${targetAgentId}`);
+          } else {
+            console.log(`[Bridge] Fallback to PTY capture (orchestrator not configured): ${fromAgentId} → ${targetAgentId}`);
+          }
+
+          const fullMessage = `[Message from ${fromName}]: ${message}`;
+          const response = await getAgentResponse(targetAgentId, fullMessage);
+
+          console.log(`[Bridge] Response captured (${response.length} chars), returning to ${fromAgentId}`);
+          socket.write(JSON.stringify({ success: true, response }) + '\n');
+        }
       } catch (err) {
-        console.error('[Bridge] getAgentResponse threw:', err.message);
+        console.error('[Bridge] Error:', err.message);
         socket.write(JSON.stringify({ success: false, error: err.message }) + '\n');
       }
     });
@@ -205,14 +254,35 @@ function getAgentResponse(agentId, message) {
         .replace(/\r/g, '\n')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
-      console.log(`[Bridge] PTY capture done, ${clean.length} chars`);
-      resolve(clean || '(no response)');
+
+      // Log full output for debugging
+      console.log(`[Bridge] Full response from ${agentId}: ${clean.length} chars`);
+
+      // Extract final response (look for ⏺ marker or text after "thought for Xs")
+      const finalResponse = extractFinalResponse(clean);
+      console.log(`[Bridge] Extracted final response: ${finalResponse.slice(0, 200)}...`);
+
+      resolve(finalResponse || '(no response)');
     };
 
     const resetIdle = () => {
       if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(finish, 6000); // 6s idle = response complete
+
+      if (commConfig.timeout.adaptive) {
+        outputCount++;
+
+        // Adaptive timeout: if agent is actively outputting, use longer timeout
+        if (outputCount > 10) {
+          idleTimeout = Math.min(4000, maxIdleTimeout); // Increase to 4s for active agents
+        }
+      }
+
+      idleTimer = setTimeout(finish, idleTimeout);
     };
+
+    let idleTimeout = commConfig.timeout.idleStart;
+    const maxIdleTimeout = commConfig.timeout.idleMax;
+    let outputCount = 0;
 
     // Attach a secondary onData listener to capture response
     const disposable = ptyProcess.onData((data) => {
@@ -226,8 +296,76 @@ function getAgentResponse(agentId, message) {
     resetIdle();
 
     // Safety timeout: 3 minutes
-    setTimeout(finish, 180000);
+    setTimeout(finish, commConfig.timeout.safety);
   });
+}
+
+function extractFinalResponse(rawOutput) {
+  // Look for the ⏺ marker which indicates the final response
+  // Capture everything after it until we hit UI noise or end
+  const recordMarkerIndex = rawOutput.indexOf('⏺');
+  if (recordMarkerIndex !== -1) {
+    // Get everything after the marker
+    let response = rawOutput.slice(recordMarkerIndex + 1);
+
+    // Find where the response ends (next prompt or UI noise)
+    const endMarkers = [
+      /\n\s*❯\s*$/m,
+      /\n\s*⏵⏵/m,
+      /\n\s*─{10,}/m,
+      /\n\s*bypass permissions/mi,
+    ];
+
+    let endIndex = response.length;
+    for (const marker of endMarkers) {
+      const match = response.match(marker);
+      if (match && match.index < endIndex) {
+        endIndex = match.index;
+      }
+    }
+
+    response = response.slice(0, endIndex).trim();
+
+    if (response.length > 0) {
+      return response;
+    }
+  }
+
+  // Alternative: look for text after "(thought for Xs)" marker
+  const lines = rawOutput.split('\n');
+  let foundThought = false;
+  const responseLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Mark when we see the thought completion
+    if (line.match(/\(thought for \d+s\)/)) {
+      foundThought = true;
+      continue;
+    }
+
+    // After thought marker, collect non-empty, non-UI lines
+    if (foundThought && line.length > 0) {
+      // Skip UI noise
+      if (line.match(/^[❯⏵·✢✳✶✻✽─═]+$/) ||
+          line.match(/^bypass|shift|tab|esc to|Nucleating|Cogitating|Choreographing/i)) {
+        continue;
+      }
+
+      // This looks like actual content
+      if (line.length > 10) {
+        responseLines.push(line);
+      }
+    }
+  }
+
+  if (responseLines.length > 0) {
+    return responseLines.join(' ').trim();
+  }
+
+  // Fallback: return the original
+  return rawOutput;
 }
 
 // ---- Persistent settings ----
@@ -295,7 +433,6 @@ function createWindow() {
       ? path.join(process.resourcesPath, 'app.asar', 'dist', 'index.html')
       : path.join(__dirname, '../../dist/index.html');
     mainWindow.loadFile(indexPath);
-
   }
 }
 
@@ -310,6 +447,7 @@ app.whenReady().then(async () => {
   whisperManager = new WhisperManager();
   whisperManager.initialize();
 
+  log(`Log file location: ${logFile}`);
   createWindow();
 });
 
@@ -605,4 +743,10 @@ ipcMain.handle('pty-kill', async (event, { agentId }) => {
     ptyDims.delete(agentId);
   }
   return { success: true };
+});
+
+ipcMain.handle('open-log-file', async () => {
+  const { shell } = require('electron');
+  shell.openPath(logFile);
+  return { success: true, path: logFile };
 });

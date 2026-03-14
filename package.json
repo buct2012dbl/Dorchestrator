@@ -64,7 +64,12 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "image/icon.png"
+      "icon": "image/icon.png",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone for voice input to agents."
+      }
     },
     "win": {
       "target": [

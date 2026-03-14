@@ -99,7 +99,13 @@ class WhisperManager {
       'cmake --build build --config Release',
     ].join(' && ');
 
-    exec(commands, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // Add common binary paths to PATH for cmake, git, etc.
+    const env = {
+      ...process.env,
+      PATH: `/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || '/usr/bin:/bin'}`,
+    };
+
+    exec(commands, { maxBuffer: 10 * 1024 * 1024, env }, (error, stdout, stderr) => {
       if (error) {
         console.error('[Whisper] Installation failed:', error);
         console.error('[Whisper] stderr:', stderr);
@@ -271,7 +277,13 @@ class WhisperManager {
 
       console.log('[Whisper] Converting audio:', ffmpegCmd);
 
-      exec(ffmpegCmd, (error, stdout, stderr) => {
+      // Add common binary paths to PATH for ffmpeg
+      const env = {
+        ...process.env,
+        PATH: `/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || '/usr/bin:/bin'}`,
+      };
+
+      exec(ffmpegCmd, { env }, (error, stdout, stderr) => {
         if (error) {
           console.error('[Whisper] FFmpeg conversion error:', error);
           console.error('[Whisper] FFmpeg stderr:', stderr);

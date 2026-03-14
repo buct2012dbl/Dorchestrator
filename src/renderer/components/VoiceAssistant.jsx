@@ -145,6 +145,7 @@ const VoiceAssistant = ({ onTranscript }) => {
     }
 
     try {
+      console.log('[VoiceAssistant] Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -153,6 +154,7 @@ const VoiceAssistant = ({ onTranscript }) => {
           sampleRate: 48000,
         }
       });
+      console.log('[VoiceAssistant] Microphone access granted, stream:', stream);
       mediaStreamRef.current = stream;
 
       // Try different codecs - prefer PCM if available, fallback to opus
@@ -181,8 +183,27 @@ const VoiceAssistant = ({ onTranscript }) => {
       };
 
       mediaRecorder.onstop = async () => {
+        console.log('[VoiceAssistant] Recording stopped, chunks:', audioChunksRef.current.length);
+
+        if (audioChunksRef.current.length === 0) {
+          console.error('[VoiceAssistant] No audio chunks recorded');
+          setStatus('idle');
+          setTranscript('No audio recorded');
+          setTimeout(() => setTranscript(''), 2000);
+          return;
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: options.mimeType });
         console.log('[VoiceAssistant] Audio blob size:', audioBlob.size, 'bytes, type:', audioBlob.type);
+
+        if (audioBlob.size < 1000) {
+          console.error('[VoiceAssistant] Audio blob too small');
+          setStatus('idle');
+          setTranscript('Recording too short');
+          setTimeout(() => setTranscript(''), 2000);
+          return;
+        }
+
         await processAudio(audioBlob);
       };
 
@@ -192,15 +213,22 @@ const VoiceAssistant = ({ onTranscript }) => {
       setTranscript('');
       startAudioVisualization();
     } catch (error) {
-      console.error('Error starting recording:', error);
-      setTranscript('Failed to start recording');
-      setTimeout(() => setTranscript(''), 2000);
+      console.error('[VoiceAssistant] Error starting recording:', error);
+      console.error('[VoiceAssistant] Error name:', error.name);
+      console.error('[VoiceAssistant] Error message:', error.message);
+      setTranscript(`Failed to start recording: ${error.message}`);
+      setTimeout(() => setTranscript(''), 3000);
     }
   }, [modelStatus, startAudioVisualization]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      // Small delay to ensure final chunks are captured
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      }, 100);
     }
     setIsRecording(false);
     setStatus('processing');

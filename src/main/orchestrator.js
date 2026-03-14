@@ -1,4 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const commConfig = require('./communication-config');
 
 class AgentOrchestrator {
   constructor(mainWindow) {
@@ -141,7 +142,7 @@ class AgentOrchestrator {
         model: config.model || 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: systemPrompt,
-        messages: history.slice(-20), // Keep last 20 messages for context
+        messages: this.compressHistory(history, 5),
       };
       if (tools.length > 0) {
         requestParams.tools = tools;
@@ -176,8 +177,13 @@ class AgentOrchestrator {
 
       // Handle tool calls (send_message to other agents)
       if (toolUses.length > 0) {
-        for (const toolUse of toolUses) {
-          if (toolUse.name === 'send_message') {
+        // Separate send_message tools from others
+        const messageTools = toolUses.filter(t => t.name === 'send_message');
+        const otherTools = toolUses.filter(t => t.name !== 'send_message');
+
+        if (messageTools.length > 0) {
+          // Execute all send_message calls in parallel
+          const messagePromises = messageTools.map(async (toolUse) => {
             const { target_agent_id, message } = toolUse.input;
 
             // Notify the UI about the message routing
@@ -187,38 +193,46 @@ class AgentOrchestrator {
               message,
             });
 
-            // Add tool result to history
+            // Actually send to the target agent
+            const response = await this.sendToAgentAndCollect(target_agent_id, message, agentId);
+
+            return {
+              toolUse,
+              target_agent_id,
+              response
+            };
+          });
+
+          // Wait for all messages to complete
+          const results = await Promise.all(messagePromises);
+
+          // Add all tool results to history at once
+          for (const { toolUse, target_agent_id, response } of results) {
             history.push({
               role: 'user',
               content: [
                 {
                   type: 'tool_result',
                   tool_use_id: toolUse.id,
-                  content: `Message sent to ${target_agent_id}. Waiting for their response...`,
+                  content: `Response from ${target_agent_id}:\n${response}`,
                 },
               ],
             });
-            this.histories.set(agentId, history);
-
-            // Actually send to the target agent
-            const response = await this.sendToAgentAndCollect(target_agent_id, message, agentId);
-
-            if (response) {
-              // Feed the response back to the original agent
-              history.push({
-                role: 'user',
-                content: `[Response from ${this.agents.get(target_agent_id)?.role || target_agent_id}]: ${response}`,
-              });
-              this.histories.set(agentId, history);
-
-              // Let the original agent continue with the response
-              this.emit('agent-stream', { agentId, text: '\n' });
-              console.log('[Orchestrator] Calling continueAgent for', agentId);
-              await this.continueAgent(agentId);
-              console.log('[Orchestrator] continueAgent completed for', agentId);
-            }
           }
+          this.histories.set(agentId, history);
+
+          // Let the original agent continue with all responses
+          this.emit('agent-stream', { agentId, text: '\n' });
+          console.log('[Orchestrator] Calling continueAgent for', agentId);
+          await this.continueAgent(agentId);
+          console.log('[Orchestrator] continueAgent completed for', agentId);
         }
+
+        // Handle other tools if any (future expansion)
+        if (otherTools.length > 0) {
+          // Process non-message tools
+        }
+
         // Don't emit agent-done here - continueAgent will handle it
       } else {
         // No tool calls, we're done
@@ -257,7 +271,7 @@ class AgentOrchestrator {
         model: config.model || 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: systemPrompt,
-        messages: history.slice(-20),
+        messages: this.compressHistory(history, 5),
       };
 
       const stream = this.client.messages.stream(requestParams);
@@ -302,7 +316,7 @@ class AgentOrchestrator {
         model: config.model || 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: systemPrompt,
-        messages: history.slice(-20),
+        messages: this.compressHistory(history, 5),
       };
 
       const stream = this.client.messages.stream(requestParams);
@@ -335,6 +349,44 @@ class AgentOrchestrator {
     for (const id of this.histories.keys()) {
       this.histories.set(id, []);
     }
+  }
+
+  compressHistory(history, recentCount = commConfig.history.recentCount) {
+    if (!commConfig.history.enabled || history.length <= recentCount) {
+      return history;
+    }
+
+    // Keep recent messages in full
+    const recent = history.slice(-recentCount);
+
+    // Compress older messages
+    const older = history.slice(0, -recentCount);
+    const maxLength = commConfig.history.maxMessageLength;
+    const compressed = older.map(msg => {
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        // Check if it's a tool result
+        const toolResult = msg.content.find(c => c.type === 'tool_result');
+        if (toolResult && toolResult.content.length > maxLength) {
+          // Truncate long tool results
+          return {
+            ...msg,
+            content: [{
+              ...toolResult,
+              content: toolResult.content.slice(0, maxLength) + '\n[...truncated]'
+            }]
+          };
+        }
+      } else if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.length > maxLength) {
+        // Truncate long user messages
+        return {
+          ...msg,
+          content: msg.content.slice(0, maxLength) + '\n[...truncated]'
+        };
+      }
+      return msg;
+    });
+
+    return [...compressed, ...recent];
   }
 }
 
