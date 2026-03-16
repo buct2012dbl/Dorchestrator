@@ -1,0 +1,106 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { ConfigSchema, type Config } from './schema.js';
+import { defaultConfig } from './defaults.js';
+import dotenv from 'dotenv';
+
+export class ConfigLoader {
+  private config: Config | null = null;
+
+  async load(configPath?: string): Promise<Config> {
+    // Load environment variables
+    dotenv.config();
+
+    // Try to load config file
+    if (configPath) {
+      try {
+        const content = await readFile(configPath, 'utf-8');
+        const parsed = JSON.parse(content);
+        // Substitute environment variables in provider configs
+        this.substituteEnvVars(parsed);
+        this.config = ConfigSchema.parse(parsed);
+        return this.config;
+      } catch (error) {
+        console.warn(`Failed to load config from ${configPath}, using defaults`);
+      }
+    }
+
+    // Try default locations
+    const defaultPaths = [
+      './config/agents.json',
+      './.coding-agent/config.json',
+      './coding-agent.json'
+    ];
+
+    for (const path of defaultPaths) {
+      try {
+        const content = await readFile(resolve(path), 'utf-8');
+        const parsed = JSON.parse(content);
+        // Substitute environment variables in provider configs
+        this.substituteEnvVars(parsed);
+        this.config = ConfigSchema.parse(parsed);
+        return this.config;
+      } catch {
+        continue;
+      }
+    }
+
+    // Use default config
+    this.config = defaultConfig;
+    return this.config;
+  }
+
+  private substituteEnvVars(obj: any): void {
+    if (typeof obj !== 'object' || obj === null) return;
+
+    for (const key in obj) {
+      if (typeof obj[key] === 'string' && obj[key].startsWith('${') && obj[key].endsWith('}')) {
+        const envVar = obj[key].slice(2, -1);
+        obj[key] = process.env[envVar] || obj[key];
+      } else if (typeof obj[key] === 'object') {
+        this.substituteEnvVars(obj[key]);
+      }
+    }
+  }
+
+  get(): Config {
+    if (!this.config) {
+      throw new Error('Config not loaded. Call load() first.');
+    }
+    return this.config;
+  }
+
+  getAgent(id: string) {
+    const config = this.get();
+    return config.agents.find(a => a.id === id);
+  }
+
+  getProviderConfig(provider: string) {
+    const config = this.get();
+    return config.llm?.providers[provider];
+  }
+
+  resolveModelAlias(model: string): string {
+    const config = this.get();
+    return config.llm?.modelAliases?.[model] || model;
+  }
+
+  getFallbackChain(): string[] {
+    const config = this.get();
+    return config.llm?.fallbackChain || [];
+  }
+
+  getApiKey(provider: string): string | undefined {
+    const envVars: Record<string, string> = {
+      anthropic: 'ANTHROPIC_API_KEY',
+      openai: 'OPENAI_API_KEY',
+      google: 'GOOGLE_API_KEY',
+      openrouter: 'OPENROUTER_API_KEY'
+    };
+
+    const envVar = envVars[provider];
+    return envVar ? process.env[envVar] : undefined;
+  }
+}
+
+export const configLoader = new ConfigLoader();

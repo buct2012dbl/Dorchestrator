@@ -1,0 +1,99 @@
+{
+  "agents": [
+    {
+      "id": "main-coder",
+      "type": "coding",
+      "name": "Main Coding Agent",
+      "description": "Primary agent for implementation tasks",
+      "systemPrompt": "You are an expert coding agent with access to a large codebase context.",
+      "model": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "temperature": 0.7,
+      "maxTokens": 8000,
+      "contextWindow": 180000,
+      "tools": ["read", "write", "edit", "bash", "grep", "glob", "search_code", "get_dependencies", "find_symbol", "index_codebase", "send_message", "spawn_agent"],
+      "permissions": {
+        "fileWrite": true,
+        "shellExec": true,
+        "networkAccess": false
+      }
+    },
+    {
+      "id": "cheap-coder",
+      "type": "coding",
+      "name": "Budget Coding Agent",
+      "description": "Cost-effective agent using DeepSeek",
+      "systemPrompt": "You are an expert coding agent with access to a large codebase context.",
+      "model": "deepseek-chat",
+      "provider": "deeprouter",
+      "temperature": 0.7,
+      "maxTokens": 8000,
+      "contextWindow": 64000,
+      "tools": ["read", "write", "edit", "bash", "grep", "glob"],
+      "permissions": {
+        "fileWrite": true,
+        "shellExec": true,
+        "networkAccess": false
+      }
+    }
+  ],
+  "defaults": {
+    "model": "claude-sonnet-4-6",
+    "provider": "anthropic"
+  },
+  "llm": {
+    "providers": {
+      "anthropic": {
+        "type": "anthropic",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "baseUrl": "https://api.anthropic.com"
+      },
+      "openai": {
+        "type": "openai",
+        "apiKey": "${OPENAI_API_KEY}",
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "deeprouter": {
+        "type": "openai-compatible",
+        "apiKey": "${DEEPROUTER_API_KEY}",
+        "baseUrl": "https://api.deeprouter.ai/v1",
+        "models": ["deepseek-chat", "qwen-plus", "gpt-4o", "claude-3-5-sonnet"],
+        "headers": {
+          "X-Title": "Coding Agent"
+        },
+        "defaultParams": {
+          "temperature": 0.7,
+          "maxTokens": 4096
+        }
+      },
+      "openrouter": {
+        "type": "openai-compatible",
+        "apiKey": "${OPENROUTER_API_KEY}",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "models": ["anthropic/claude-3.5-sonnet", "google/gemini-pro", "meta-llama/llama-3-70b"],
+        "headers": {
+          "HTTP-Referer": "https://github.com/your-repo",
+          "X-Title": "Coding Agent"
+        }
+      },
+      "azure": {
+        "type": "openai-compatible",
+        "apiKey": "${AZURE_API_KEY}",
+        "baseUrl": "https://your-resource.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-15-preview",
+        "models": ["gpt-4", "gpt-35-turbo"]
+      },
+      "ollama": {
+        "type": "ollama",
+        "baseUrl": "http://localhost:11434",
+        "models": ["codellama:13b", "deepseek-coder:6.7b", "mistral:latest"]
+      }
+    },
+    "fallbackChain": ["anthropic", "openai", "deeprouter"],
+    "modelAliases": {
+      "fast": "claude-sonnet-4-6",
+      "smart": "claude-opus-4-6",
+      "cheap": "deepseek-chat",
+      "local": "codellama:13b"
+    }
+  }
+}

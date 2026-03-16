@@ -1,0 +1,94 @@
+{
+  "agents": [
+    {
+      "id": "main-coder",
+      "type": "coding",
+      "name": "Main Coding Agent",
+      "description": "Primary agent for implementation tasks",
+      "systemPrompt": "You are an expert coding agent with access to a large codebase context. You can read, write, and edit files, execute shell commands, and communicate with other agents for help.\n\nIMPORTANT: After using tools to complete a task, you MUST respond with a text message explaining what you did. Do not keep calling tools indefinitely. Once you've completed the user's request, provide a brief summary of what was accomplished.",
+      "model": "gpt-5",
+      "temperature": 0.7,
+      "maxTokens": 8000,
+      "contextWindow": 180000,
+      "tools": ["read", "write", "edit", "bash", "grep", "glob", "search_code", "get_dependencies", "find_symbol", "index_codebase", "send_message", "spawn_agent", "broadcast", "set_shared_context", "get_shared_context", "list_shared_context"],
+      "permissions": {
+        "fileWrite": true,
+        "shellExec": true,
+        "networkAccess": false
+      }
+    },
+    {
+      "id": "explorer",
+      "type": "explorer",
+      "name": "Codebase Explorer",
+      "description": "Fast codebase analysis and search",
+      "systemPrompt": "You are a codebase exploration specialist. Your job is to analyze code structure, find relevant files, and provide insights about the codebase organization.",
+      "model": "gpt-5",
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "contextWindow": 100000,
+      "tools": ["read", "grep", "glob", "search_code", "get_dependencies", "find_symbol", "set_shared_context", "get_shared_context", "list_shared_context"],
+      "permissions": {
+        "fileWrite": false,
+        "shellExec": false,
+        "networkAccess": false
+      }
+    },
+    {
+      "id": "planner",
+      "type": "planner",
+      "name": "Task Planner",
+      "description": "Breaks down complex tasks into steps",
+      "systemPrompt": "You are a task planning specialist. Break down complex tasks into actionable steps with clear dependencies.",
+      "model": "gpt-5",
+      "temperature": 0.5,
+      "maxTokens": 4000,
+      "contextWindow": 100000,
+      "tools": ["read", "grep", "glob", "search_code", "set_shared_context", "get_shared_context", "list_shared_context"],
+      "permissions": {
+        "fileWrite": false,
+        "shellExec": false,
+        "networkAccess": false
+      }
+    },
+    {
+      "id": "reviewer",
+      "type": "reviewer",
+      "name": "Code Reviewer",
+      "description": "Reviews code for quality and security",
+      "systemPrompt": "You are a code review specialist. Check for bugs, security issues, performance problems, and suggest improvements.",
+      "model": "gpt-5",
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "contextWindow": 100000,
+      "tools": ["read", "grep", "glob", "search_code", "find_symbol", "set_shared_context", "get_shared_context", "list_shared_context"],
+      "permissions": {
+        "fileWrite": false,
+        "shellExec": false,
+        "networkAccess": false
+      }
+    }
+  ],
+  "defaults": {
+    "model": "gpt-5",
+    "provider": "deeprouter"
+  },
+  "llm": {
+    "providers": {
+      "deeprouter": {
+        "type": "openai-compatible",
+        "apiKey": "sk-TLQDgchefgzTn3WdloC0jzqftPVqKftwiMhsxxkEP0fuS3EX",
+        "baseUrl": "https://deeprouter.top/v1",
+        "models": ["gpt-5", "gpt-5.1"],
+        "headers": {
+          "X-Title": "Coding Agent"
+        },
+        "defaultParams": {
+          "temperature": 0.7,
+          "maxTokens": 4096
+        }
+      }
+    },
+    "fallbackChain": ["deeprouter"]
+  }
+}
