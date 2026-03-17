@@ -132,16 +132,15 @@ export class GenericProvider implements LLMProvider {
 
         if (delta?.tool_calls) {
           for (const toolCall of delta.tool_calls) {
-            if (toolCall.function?.name) {
-              yield {
-                type: 'tool_call',
-                toolCall: {
-                  id: toolCall.id || '',
-                  name: toolCall.function.name,
-                  arguments: toolCall.function.arguments || ''
-                }
-              };
-            }
+            // Yield tool call chunks - the agent will accumulate them
+            yield {
+              type: 'tool_call',
+              toolCall: {
+                id: toolCall.id || '',
+                name: toolCall.function?.name || '',
+                arguments: toolCall.function?.arguments || ''
+              }
+            };
           }
         }
 

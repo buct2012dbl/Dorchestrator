@@ -40,7 +40,7 @@ export class Orchestrator {
     return agentRegistry.get(id);
   }
 
-  async executeTask(agentId: string, task: string): Promise<string> {
+  async executeTask(agentId: string, task: string, onFirstText?: () => void): Promise<string> {
     const agent = agentRegistry.get(agentId);
     if (!agent) {
       throw new Error(`Agent ${agentId} not found`);
@@ -62,7 +62,7 @@ export class Orchestrator {
         agentRegistry.setStatus(agentId, 'busy');
 
         try {
-          const response = await agent.process(task);
+          const response = await agent.process(task, onFirstText);
           return response;
         } finally {
           agentRegistry.setStatus(agentId, 'idle');

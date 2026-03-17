@@ -7,7 +7,7 @@ import { sharedContext } from '../context/shared-store.js';
 export abstract class BaseAgent {
   constructor(public config: AgentConfig) {}
 
-  abstract process(message: string): Promise<string>;
+  abstract process(message: string, onFirstText?: () => void): Promise<string>;
 
   protected async executeToolCall(toolId: string, args: any): Promise<any> {
     const session = sessionManager.current();

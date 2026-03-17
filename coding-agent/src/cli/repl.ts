@@ -1,10 +1,33 @@
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import chalk from 'chalk';
+import ora from 'ora';
 import type { Orchestrator } from '../core/orchestrator.js';
 
 export async function startRepl(orchestrator: Orchestrator, agentId: string): Promise<void> {
-  const rl = readline.createInterface({ input, output });
+  const rl = readline.createInterface({
+    input,
+    output,
+    terminal: true
+  });
+
+  // Track if we're intentionally closing
+  let intentionalClose = false;
+
+  // Handle unexpected close
+  rl.on('close', () => {
+    if (!intentionalClose) {
+      console.log(chalk.red('\n⚠️  Readline closed unexpectedly!'));
+      console.log(chalk.gray('This usually happens when stdin is not a TTY or gets closed.'));
+    }
+    orchestrator.shutdown();
+    process.exit(0);
+  });
+
+  // Prevent SIGINT from closing readline during agent work
+  process.on('SIGINT', () => {
+    console.log(chalk.yellow('\n\nUse "exit" or "quit" to exit'));
+  });
 
   // Get agent info
   const agent = orchestrator.getAgent(agentId);
@@ -27,6 +50,7 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
 
       if (message.toLowerCase() === 'exit' || message.toLowerCase() === 'quit') {
         console.log(chalk.yellow('\n👋 Goodbye!'));
+        intentionalClose = true;
         rl.close();
         orchestrator.shutdown();
         process.exit(0);
@@ -53,16 +77,39 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
         continue;
       }
 
-      console.log(chalk.blue('\nAgent: '));
+      process.stdout.write(chalk.blue('\nAgent: \n'));
+
+      // Pause readline to prevent interference during agent response
+      rl.pause();
+
+      // Show thinking spinner inline
+      const spinner = ora({
+        text: chalk.dim('Thinking...'),
+        color: 'cyan',
+        stream: process.stdout,
+        discardStdin: false
+      }).start();
 
       try {
-        await orchestrator.executeTask(agentId, message);
-      } catch (error) {
-        console.error(chalk.red('❌ Error occurred'));
-        throw error;
-      }
+        await orchestrator.executeTask(agentId, message, () => {
+          spinner.stop();
+        });
 
-      console.log('\n');
+        // Force a newline and ensure clean state for next prompt
+        process.stdout.write('\n');
+      } catch (error) {
+        spinner.stop();
+        console.error(chalk.red('Error'));
+        throw error;
+      } finally {
+        // Always resume readline, even if there was an error
+        rl.resume();
+        // Force terminal back to proper state after resume
+        if (input.isTTY && input.setRawMode) {
+          input.setRawMode(false);
+          input.setRawMode(true);
+        }
+      }
     } catch (error) {
       console.error(chalk.red('\n❌ Error:'), error);
       console.log();

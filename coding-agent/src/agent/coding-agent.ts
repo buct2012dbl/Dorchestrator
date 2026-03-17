@@ -13,7 +13,7 @@ export class CodingAgent extends BaseAgent {
     super(config);
   }
 
-  async process(message: string): Promise<string> {
+  async process(message: string, onFirstText?: () => void): Promise<string> {
     const session = sessionManager.current();
 
     // Add user message to session
@@ -46,6 +46,7 @@ export class CodingAgent extends BaseAgent {
     let continueLoop = true;
     let loopCount = 0;
     const maxLoops = 5; // Prevent infinite loops
+    let firstTextReceived = false;
 
     while (continueLoop && loopCount < maxLoops) {
       loopCount++;
@@ -65,11 +66,28 @@ export class CodingAgent extends BaseAgent {
 
         for await (const chunk of stream) {
           if (chunk.type === 'text' && chunk.content) {
+            // On first text, clear spinner and keep "Agent:" label
+            if (!firstTextReceived) {
+              firstTextReceived = true;
+              // Invoke callback to stop spinner FIRST
+              onFirstText?.();
+              // Small delay to ensure spinner is fully stopped
+              await new Promise(resolve => setTimeout(resolve, 50));
+              // Move cursor to beginning of line, clear from cursor to end, then newline
+              process.stdout.write('\r\x1b[0K\n');
+            }
             fullResponse += chunk.content;
             process.stdout.write(chunk.content);
           } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+            // Stop spinner on first tool call too
+            if (!firstTextReceived) {
+              firstTextReceived = true;
+              onFirstText?.();
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
             // Accumulate tool call data
-            if (!currentToolCall || currentToolCall.id !== chunk.toolCall.id) {
+            // If chunk has an ID, it's a new tool call or the start of one
+            if (chunk.toolCall.id && (!currentToolCall || currentToolCall.id !== chunk.toolCall.id)) {
               if (currentToolCall) {
                 toolCalls.push(currentToolCall);
               }
@@ -78,8 +96,14 @@ export class CodingAgent extends BaseAgent {
                 name: chunk.toolCall.name,
                 arguments: chunk.toolCall.arguments
               };
-            } else {
-              currentToolCall.arguments += chunk.toolCall.arguments;
+            } else if (currentToolCall) {
+              // No ID means this is a continuation of the current tool call
+              if (chunk.toolCall.name) {
+                currentToolCall.name = chunk.toolCall.name;
+              }
+              if (chunk.toolCall.arguments) {
+                currentToolCall.arguments += chunk.toolCall.arguments;
+              }
             }
           }
         }
@@ -119,9 +143,21 @@ export class CodingAgent extends BaseAgent {
           }).start();
 
           try {
+            // Validate arguments before parsing
+            if (!toolCall.arguments || toolCall.arguments.trim() === '') {
+              throw new Error('Tool call arguments are empty');
+            }
+
+            let parsedArgs;
+            try {
+              parsedArgs = JSON.parse(toolCall.arguments);
+            } catch (parseError) {
+              throw new Error(`Invalid JSON in tool arguments: ${toolCall.arguments.substring(0, 100)}`);
+            }
+
             const result = await this.executeToolCall(
               toolCall.name,
-              JSON.parse(toolCall.arguments)
+              parsedArgs
             );
 
             spinner.succeed(chalk.dim(`${chalk.bold(toolCall.name)} completed`));
