@@ -195,17 +195,17 @@ function App() {
           >
             {showTerminal ? '▣ TERM' : '▣'}
           </button>
-          <button
+          {/* <button
             className={`api-key-btn ${isConfigured ? 'has-key' : 'no-key'}`}
             onClick={() => setShowSettings(!showSettings)}
             title={isConfigured ? 'Configured' : 'Set Auth Token & Base URL'}
           >
             {isConfigured ? 'Configured' : 'Settings'}
-          </button>
+          </button> */}
         </div>
       </div>
 
-      {showSettings && (
+      {/* {showSettings && (
         <div className="settings-bar">
           <div className="settings-field">
             <label>Auth Token</label>
@@ -232,7 +232,7 @@ function App() {
             <button onClick={() => setShowSettings(false)}>Cancel</button>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="main-layout">
         <div className="center-panel">

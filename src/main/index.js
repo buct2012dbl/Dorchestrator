@@ -34,6 +34,12 @@ console.error = (...args) => {
 };
 
 log('App starting...');
+log('Log file location:', logFile);
+log('App version:', app.getVersion());
+log('Electron version:', process.versions.electron);
+log('Node version:', process.versions.node);
+log('Platform:', process.platform);
+log('Architecture:', process.arch);
 
 let mainWindow;
 let orchestrator;

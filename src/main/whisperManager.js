@@ -23,6 +23,10 @@ class WhisperManager {
   }
 
   initialize() {
+    console.log('[Whisper] Initializing WhisperManager...');
+    console.log('[Whisper] Whisper directory:', this.whisperDir);
+    console.log('[Whisper] Models directory:', this.modelsDir);
+
     // Register IPC handlers
     ipcMain.handle('whisper:checkModel', () => this.checkModel());
     ipcMain.handle('whisper:downloadModel', (event, modelSize) => this.downloadModel(event, modelSize));
@@ -31,7 +35,8 @@ class WhisperManager {
     ipcMain.handle('whisper:installWhisper', () => this.installWhisper());
 
     // Check for whisper.cpp binary
-    this.findWhisperBinary();
+    const found = this.findWhisperBinary();
+    console.log('[Whisper] Binary found:', found);
   }
 
   findWhisperBinary() {
@@ -106,6 +111,9 @@ class WhisperManager {
     };
 
     exec(commands, { maxBuffer: 10 * 1024 * 1024, env }, (error, stdout, stderr) => {
+      console.log('[Whisper] Installation stdout:', stdout);
+      console.log('[Whisper] Installation stderr:', stderr);
+
       if (error) {
         console.error('[Whisper] Installation failed:', error);
         console.error('[Whisper] stderr:', stderr);
@@ -256,16 +264,34 @@ class WhisperManager {
   }
 
   async transcribe(audioPath) {
+    console.log('[Whisper] Starting transcription for:', audioPath);
+    console.log('[Whisper] Model path:', this.modelPath);
+    console.log('[Whisper] Binary path:', this.whisperBinary);
+
     if (!this.modelPath || !fs.existsSync(this.modelPath)) {
+      console.error('[Whisper] Model not found at:', this.modelPath);
       return { success: false, error: 'Model not found. Please download a model first.' };
     }
 
     if (!this.whisperBinary || !fs.existsSync(this.whisperBinary)) {
+      console.error('[Whisper] Binary not found at:', this.whisperBinary);
       return { success: false, error: 'Whisper binary not found. Please install whisper.cpp first.' };
     }
 
     // Convert webm to wav using ffmpeg
     const wavPath = audioPath.replace('.webm', '.wav');
+    console.log('[Whisper] Converting audio to WAV format...');
+    console.log('[Whisper] Input file:', audioPath);
+    console.log('[Whisper] Output file:', wavPath);
+
+    // Check if input file exists
+    if (!fs.existsSync(audioPath)) {
+      console.error('[Whisper] Input audio file not found:', audioPath);
+      return { success: false, error: 'Input audio file not found' };
+    }
+
+    const audioStats = fs.statSync(audioPath);
+    console.log('[Whisper] Input file size:', audioStats.size, 'bytes');
 
     return new Promise((resolve) => {
       // First convert to WAV format (16kHz, mono, 16-bit PCM)
@@ -284,9 +310,14 @@ class WhisperManager {
       };
 
       exec(ffmpegCmd, { env }, (error, stdout, stderr) => {
+        console.log('[Whisper] FFmpeg completed');
+        if (stdout) console.log('[Whisper] FFmpeg stdout:', stdout);
+        if (stderr) console.log('[Whisper] FFmpeg stderr:', stderr);
+
         if (error) {
           console.error('[Whisper] FFmpeg conversion error:', error);
           console.error('[Whisper] FFmpeg stderr:', stderr);
+          console.error('[Whisper] FFmpeg stdout:', stdout);
 
           // Clean up
           try { fs.unlinkSync(audioPath); } catch (e) {}
@@ -346,15 +377,21 @@ class WhisperManager {
         let errorOutput = '';
 
         whisper.stdout.on('data', (data) => {
-          output += data.toString();
+          const text = data.toString();
+          output += text;
+          console.log('[Whisper stdout]', text);
         });
 
         whisper.stderr.on('data', (data) => {
-          errorOutput += data.toString();
+          const text = data.toString();
+          errorOutput += text;
+          console.log('[Whisper stderr]', text);
         });
 
         whisper.on('close', (code) => {
           console.log('[Whisper] Process exited with code:', code);
+          console.log('[Whisper] Full stdout:', output);
+          console.log('[Whisper] Full stderr:', errorOutput);
 
           // Clean up temp files
           try {
@@ -430,7 +467,10 @@ class WhisperManager {
   }
 
   async transcribeBlob(audioBuffer) {
+    console.log('[Whisper] transcribeBlob called with buffer size:', audioBuffer.byteLength || audioBuffer.length);
+
     if (!this.modelPath || !fs.existsSync(this.modelPath)) {
+      console.error('[Whisper] Model not found at:', this.modelPath);
       return { success: false, error: 'Model not found. Please download a model first.' };
     }
 
@@ -438,9 +478,15 @@ class WhisperManager {
     const tempPath = path.join(os.tmpdir(), `whisper-${Date.now()}.webm`);
     const buffer = Buffer.from(audioBuffer);
 
+    console.log('[Whisper] Saving audio buffer to temp file:', tempPath);
+    console.log('[Whisper] Buffer size:', buffer.length, 'bytes');
+
     try {
       fs.writeFileSync(tempPath, buffer);
+      console.log('[Whisper] Audio buffer saved successfully');
+
       const result = await this.transcribe(tempPath);
+      console.log('[Whisper] Transcription result:', result);
       return result;
     } catch (error) {
       console.error('[Whisper] Error saving audio buffer:', error);
