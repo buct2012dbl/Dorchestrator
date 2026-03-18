@@ -9,6 +9,7 @@ const { AgentOrchestrator } = require('./orchestrator');
 const WhisperManager = require('./whisperManager');
 const pty = require('node-pty');
 const commConfig = require('./communication-config');
+const graphConfigManager = require('./graphConfigManager');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -447,6 +448,12 @@ app.whenReady().then(async () => {
   workspace = settings.workspace || null;
   authConfig.authToken = settings.authToken || authConfig.authToken;
   authConfig.baseURL = settings.baseURL || authConfig.baseURL;
+
+  // Initialize graph config manager with workspace
+  if (workspace) {
+    graphConfigManager.setWorkspace(workspace);
+  }
+
   await startBridgeServer(); // wait for port to be assigned before any PTY spawning
 
   // Initialize Whisper manager
@@ -495,6 +502,7 @@ ipcMain.handle('set-workspace', (event, { workspacePath }) => {
   workspace = workspacePath;
   settings.workspace = workspacePath;
   saveSettings(settings);
+  graphConfigManager.setWorkspace(workspacePath);
   return { success: true };
 });
 
@@ -512,12 +520,20 @@ ipcMain.handle('is-configured', async () => {
   return orchestrator.isConfigured();
 });
 
+// Load graph config from workspace
+ipcMain.handle('load-graph-config', async () => {
+  return graphConfigManager.loadGraphConfig();
+});
+
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges }) => {
   const prevEdges = JSON.stringify(agentGraph.edges);
   agentGraph = { agents, edges };
   orchestrator.syncAgents(agents);
   orchestrator.syncEdges(edges);
+
+  // Save to workspace config
+  graphConfigManager.saveGraphConfig(agents, edges);
 
   // If edges changed, respawn affected PTYs so they get the updated MCP tool list
   if (JSON.stringify(edges) !== prevEdges) {

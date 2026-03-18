@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWorkspace: () => ipcRenderer.invoke('get-workspace'),
   setWorkspace: (data) => ipcRenderer.invoke('set-workspace', data),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  loadGraphConfig: () => ipcRenderer.invoke('load-graph-config'),
 
   // PTY (claude CLI sessions)
   spawnAgent: (data) => ipcRenderer.invoke('pty-spawn', data),

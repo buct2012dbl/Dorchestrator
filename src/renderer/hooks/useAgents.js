@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { AGENT_TEMPLATES, NODE_STATUS, STATUS_COLORS, generateId } from '../store/agentStore';
 
 const DEFAULT_AGENTS = [
@@ -47,7 +47,27 @@ export function useAgents() {
   const [agents, setAgents] = useState(DEFAULT_AGENTS);
   const [edges, setEdges] = useState(DEFAULT_EDGES);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   const terminalLogs = useRef({});
+
+  // Load saved graph config on mount
+  useEffect(() => {
+    if (!window.electronAPI || isLoaded) return;
+
+    window.electronAPI.loadGraphConfig().then((config) => {
+      if (config && config.agents && config.edges) {
+        console.log('[useAgents] Loaded saved graph config:', config);
+        setAgents(config.agents);
+        setEdges(config.edges);
+      } else {
+        console.log('[useAgents] No saved config, using defaults');
+      }
+      setIsLoaded(true);
+    }).catch((err) => {
+      console.error('[useAgents] Failed to load config:', err);
+      setIsLoaded(true);
+    });
+  }, [isLoaded]);
 
   const addAgent = useCallback((template, position) => {
     const id = generateId();

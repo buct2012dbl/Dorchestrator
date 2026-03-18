@@ -103,7 +103,15 @@ function App() {
     await window.electronAPI.setWorkspace({ workspacePath: folderPath });
     setWorkspace(folderPath);
     setTerminalKey((k) => k + 1); // remount all terminals with new cwd
-  }, []);
+
+    // Load graph config for the new workspace
+    const config = await window.electronAPI.loadGraphConfig();
+    if (config && config.agents && config.edges) {
+      console.log('[App] Loaded graph config for new workspace');
+      setAgents(config.agents);
+      setEdges(config.edges);
+    }
+  }, [setAgents, setEdges]);
 
   const handleNodeSelect = useCallback((id) => {
     setSelectedAgent(id);

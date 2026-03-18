@@ -10,3 +10,4 @@ models/
 whisper.cpp/
 release/
 test-*
+.dorchestrator
