@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPanel.css';
 
-const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, ref) {
+const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onDragStart }, ref) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -170,7 +170,7 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected }, r
 
   return (
     <div className={`terminal-panel ${isSelected ? 'terminal-selected' : ''}`}>
-      <div className="terminal-panel-header" style={{ borderTop: `2px solid ${agent.data.color}` }}>
+      <div className="terminal-panel-header" draggable={!!onDragStart} onDragStart={onDragStart} style={{ borderTop: `2px solid ${agent.data.color}`, cursor: onDragStart ? 'grab' : 'default' }}>
         <span className="terminal-panel-dot" style={{ background: agent.data.color }} />
         <span className="terminal-panel-title">{agent.data.name}</span>
         <span className="terminal-panel-role">{agent.data.role}</span>
