@@ -22,12 +22,16 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onD
           .replace(/\x1b\[>\d+;\d+;\d+c/g, '') // Secondary device attributes
           .replace(/\x1b\]0;.*?\x07/g, ''); // Window title sequences
 
-        if (filtered) termRef.current?.write(filtered);
+        if (filtered) {
+          termRef.current?.write(filtered, () => termRef.current?.scrollToBottom());
+        }
       } else {
-        termRef.current?.write(text);
+        termRef.current?.write(text, () => termRef.current?.scrollToBottom());
       }
     },
-    writeln: (text) => termRef.current?.writeln(text),
+    writeln: (text) => {
+      termRef.current?.writeln(text, () => termRef.current?.scrollToBottom());
+    },
     clear: () => termRef.current?.clear(),
     writeText: (text) => {
       // Write text as if user typed it
