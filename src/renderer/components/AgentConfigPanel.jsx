@@ -85,6 +85,10 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
     'gpt-4o',
   ];
 
+  const CODING_AGENT_MODELS = [
+    'gpt-5'
+  ];
+
   return (
     <div className="config-panel">
       <div className="config-header">
@@ -152,17 +156,21 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
             setTerminalType(next);
             // Reset model to a sensible default when switching terminal type
             if (next === 'codex') setModel('o4-mini');
+            else if (next === 'coding-agent') setModel('gpt-5');
             else setModel('claude-sonnet-4-6');
           }}>
             <option value="claude-code">Claude Code</option>
             <option value="codex">Codex (OpenAI)</option>
+            <option value="coding-agent">Built-in</option>
           </select>
         </div>
 
         <div className="config-field">
           <label>Model</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(terminalType === 'codex' ? CODEX_MODELS : CLAUDE_MODELS).map((m) => (
+            {(terminalType === 'codex' ? CODEX_MODELS :
+              terminalType === 'coding-agent' ? CODING_AGENT_MODELS :
+              CLAUDE_MODELS).map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>

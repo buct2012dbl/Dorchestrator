@@ -5,9 +5,9 @@ import { configLoader } from '../config/loader.js';
 import { Orchestrator } from '../core/orchestrator.js';
 import { agentRegistry } from '../core/agent-registry.js';
 import { CodingAgent } from '../agent/coding-agent.js';
-import { ExplorerAgent } from '../agent/explorer-agent.js';
-import { PlannerAgent } from '../agent/planner-agent.js';
-import { ReviewerAgent } from '../agent/reviewer-agent.js';
+//import { ExplorerAgent } from '../agent/explorer-agent.js';
+//import { PlannerAgent } from '../agent/planner-agent.js';
+//import { ReviewerAgent } from '../agent/reviewer-agent.js';
 import { providerRegistry } from '../llm/provider.js';
 import { toolRegistry } from '../tools/tool-registry.js';
 import { readTool, writeTool, editTool, globTool, grepTool } from '../tools/file-tools.js';
@@ -31,6 +31,7 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .option('-a, --agent <id>', 'Agent ID to use', 'main-coder')
   .option('-m, --model <name>', 'Model to use (overrides config)')
+  .option('-s, --system-prompt <text>', 'System prompt to append')
   .action(async (options) => {
     try {
       console.log(chalk.blue('🤖 Coding Agent System'));
@@ -64,9 +65,9 @@ program
 
       // Register agent factories
       agentRegistry.registerFactory('coding', (config) => new CodingAgent(config));
-      agentRegistry.registerFactory('explorer', (config) => new ExplorerAgent(config));
-      agentRegistry.registerFactory('planner', (config) => new PlannerAgent(config));
-      agentRegistry.registerFactory('reviewer', (config) => new ReviewerAgent(config));
+      agentRegistry.registerFactory('explorer', (config) => new CodingAgent(config));
+      agentRegistry.registerFactory('planner', (config) => new CodingAgent(config));
+      agentRegistry.registerFactory('reviewer', (config) => new CodingAgent(config));
 
       // Initialize orchestrator
       const orchestrator = new Orchestrator({
@@ -81,6 +82,24 @@ program
       // Create agents from config
       for (const agentConfig of config.agents) {
         orchestrator.createAgent(agentConfig);
+      }
+
+      // If agent ID doesn't exist, create a dynamic agent
+      if (!orchestrator.getAgent(options.agent)) {
+        const dynamicAgent = {
+          id: options.agent,
+          name: options.agent,
+          type: 'coding',
+          description: 'Dynamic coding agent',
+          systemPrompt: options.systemPrompt || '',
+          model: options.model || config.defaults.model,
+          temperature: 0.7,
+          maxTokens: 4096,
+          contextWindow: 200000,
+          tools: ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'searchCode', 'getDependencies', 'findSymbol'],
+          permissions: { fileWrite: true, shellExec: true, networkAccess: true, allowAll: true }
+        };
+        orchestrator.createAgent(dynamicAgent);
       }
 
       console.log(chalk.green('✓ Configuration loaded'));

@@ -147,6 +147,13 @@ function startBridgeServer() {
           } else {
             socket.write(JSON.stringify({ success: false, error: 'No response from agent' }) + '\n');
           }
+        } else if (terminalType === 'coding-agent') {
+          // Coding Agent: use PTY capture for now
+          console.log(`[Bridge] Using PTY capture for Coding Agent: ${fromAgentId} → ${targetAgentId}`);
+          const fullMessage = `[Message from ${fromName}]: ${message}`;
+          const response = await getAgentResponse(targetAgentId, fullMessage);
+          console.log(`[Bridge] Response captured (${response.length} chars), returning to ${fromAgentId}`);
+          socket.write(JSON.stringify({ success: true, response }) + '\n');
         } else {
           // Fallback to PTY capture for Codex agents or if orchestrator not configured
           if (terminalType === 'codex') {
@@ -598,6 +605,18 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     if (agentData?.name) {
       console.log(`[PTY] Codex agent name: ${agentData.name}`);
     }
+  } else if (terminalType === 'coding-agent') {
+    // Coding Agent CLI
+    command = 'node';
+    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
+    const configPath = path.join(__dirname, '../../coding-agent/config/agents.json');
+    args = [codingAgentPath, 'start', '--config', configPath];
+    if (agentData?.model) args.push('--model', agentData.model);
+    if (agentData?.id) args.push('--agent', agentData.id);
+    if (agentData?.systemPrompt) args.push('--system-prompt', agentData.systemPrompt);
+    if (agentData?.name) {
+      console.log(`[PTY] Coding agent name: ${agentData.name}`);
+    }
   } else {
     // Claude Code CLI (default)
     command = process.env.CLAUDE_PATH || CLAUDE_PATH;
@@ -666,6 +685,10 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         } catch (err) {
           console.error('[PTY] Failed to add MCP server for Codex:', err.message);
         }
+      } else if (terminalType === 'coding-agent') {
+        // Coding Agent: MCP support to be added later
+        // For now, skip MCP bridge configuration
+        console.log(`[PTY] MCP bridge not yet implemented for coding-agent`);
       } else {
         // Claude Code: use --mcp-config flag
         const mcpConfig = {

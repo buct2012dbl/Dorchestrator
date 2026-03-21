@@ -26,6 +26,16 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   // Sync external changes (but avoid resetting during drag operations)
   const isDraggingRef = useRef(false);
 
+  // Force ReactFlow to recalculate viewport when container resizes
+  React.useEffect(() => {
+    if (!reactFlowInstance) return;
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(() => reactFlowInstance.fitView({ duration: 0 }));
+    });
+    if (reactFlowWrapper.current) observer.observe(reactFlowWrapper.current);
+    return () => observer.disconnect();
+  }, [reactFlowInstance]);
+
   React.useEffect(() => {
     if (isDraggingRef.current) {
       // During drag, only update node data (status, etc), not positions
@@ -156,6 +166,7 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   return (
     <div className="graph-view" ref={reactFlowWrapper}>
       <ReactFlow
+        key={`flow-${nodes.length}-${edgesState.length}`}
         nodes={nodes}
         edges={edgesState}
         onNodesChange={handleNodesChange}

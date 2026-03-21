@@ -42,6 +42,7 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
   console.log(chalk.cyan('━'.repeat(60)));
   console.log(chalk.dim('  Commands: exit, stats, clear\n'));
 
+
   while (true) {
     try {
       const message = await rl.question(chalk.green('You: '));

@@ -226,6 +226,7 @@
 
 .graph-section {
   overflow: hidden;
+  min-height: 200px;
 }
 
 .split-handle {
