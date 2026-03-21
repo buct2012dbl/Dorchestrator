@@ -11,3 +11,4 @@ whisper.cpp/
 release/
 test-*
 .dorchestrator
+coding-agent/config/agents.json
