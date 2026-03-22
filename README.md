@@ -20,7 +20,7 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 - Interactive canvas with zoom, pan, and selection controls
 
 ### Integrated Terminals
-- Live PTY sessions for each agent — choose between `claude` CLI or `codex` CLI per agent
+- Live PTY sessions for each agent — choose between `claude` CLI, `codex` CLI, or built-in agent per agent
 - xterm.js terminals with full ANSI color support
 - Auto-restart on session end
 - Flexible layouts (auto, 1-col, 2-col, 3-col grid)
@@ -29,8 +29,9 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 ### Multi-CLI Support
 - Claude Code (`claude` CLI) — Anthropic's agentic terminal with full MCP support
 - Codex (`codex` CLI) — OpenAI's agentic coding assistant running in full-auto mode
+- Built-in Agent (`/coding-agent`) — Integrated coding agent without external CLI dependency
 - Each agent independently chooses its CLI and model
-- Mix Claude and Codex agents in the same workspace
+- Mix Claude, Codex, and built-in agents in the same workspace
 
 ### Voice Assistant
 - Offline voice recognition using Whisper.cpp
@@ -48,10 +49,11 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 
 ### Agent Configuration
 - Pre-built templates: CEO, Programmer, Tester, Researcher, Custom
-- Terminal type selection: Claude Code or Codex per agent
+- Terminal type selection: Claude Code, Codex, or Built-in Agent per agent
 - Model selection:
   - Claude: Opus 4.6, Sonnet 4.6, Haiku 4.5
   - Codex: gpt-5, o4-mini, o3, gpt-4.1, gpt-4o
+  - Built-in: Uses integrated coding agent
 - System prompts for role-specific instructions
 - Persistent settings across sessions
 
@@ -68,6 +70,7 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 - Node.js 16+
 - **For Claude Code agents:** `claude` CLI installed and in PATH ([get it here](https://github.com/anthropics/claude-code))
 - **For Codex agents:** `codex` CLI installed and in PATH ([get it here](https://github.com/openai/codex))
+- **For Built-in agents:** No additional CLI required
 - Anthropic API key (for Claude Code agents)
 - OpenAI API key (for Codex agents)
 - **ffmpeg** (required for voice assistant): `brew install ffmpeg`
