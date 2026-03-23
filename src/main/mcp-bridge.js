@@ -95,24 +95,42 @@ async function handleMessage(msg) {
   if (method === 'ping') { send({ jsonrpc: '2.0', id, result: {} }); return; }
 
   if (method === 'tools/list') {
-    const tools = connectedAgents.length > 0 ? [{
-      name: 'send_message',
-      description:
-        'Send a message to a connected agent. ' +
-        'Connected: ' + connectedAgents.map((a) => a.id + ' (' + a.role + ')').join(', ') + '. ' +
-        'Use this to delegate tasks and collaborate.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          target_agent_id: {
-            type: 'string',
-            description: 'Agent to message. One of: ' + connectedAgents.map((a) => a.id).join(', '),
+    const tools = connectedAgents.length > 0 ? [
+      {
+        name: 'send_message',
+        description:
+          'Send a message to a connected agent. Returns immediately without waiting for response. ' +
+          'Connected: ' + connectedAgents.map((a) => a.name + ' [' + a.id + '] (' + a.role + ')').join(', ') + '. ' +
+          'Use this to delegate tasks and collaborate.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            target_agent_id: {
+              type: 'string',
+              description: 'Agent to message. One of: ' + connectedAgents.map((a) => a.name + ' [' + a.id + ']').join(', '),
+            },
+            message: { type: 'string', description: 'The message to send.' },
           },
-          message: { type: 'string', description: 'The message to send.' },
+          required: ['target_agent_id', 'message'],
         },
-        required: ['target_agent_id', 'message'],
       },
-    }] : [];
+      {
+        name: 'send_response',
+        description:
+          'Send a response back to an agent who messaged you. Use this after receiving a message via send_message.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            target_agent_id: {
+              type: 'string',
+              description: 'Agent to respond to. One of: ' + connectedAgents.map((a) => a.name + ' [' + a.id + ']').join(', '),
+            },
+            response: { type: 'string', description: 'Your response message.' },
+          },
+          required: ['target_agent_id', 'response'],
+        },
+      }
+    ] : [];
     send({ jsonrpc: '2.0', id, result: { tools } });
     return;
   }
@@ -128,8 +146,24 @@ async function handleMessage(msg) {
           content: [{
             type: 'text',
             text: result.success
-              ? 'Response from ' + target_agent_id + ':\n\n' + result.response
+              ? 'Message delivered to ' + target_agent_id + '. They will respond via send_response when ready.'
               : 'Failed to reach ' + target_agent_id + ': ' + result.error,
+          }],
+        },
+      });
+      return;
+    }
+    if (name === 'send_response') {
+      const { target_agent_id, response } = args || {};
+      const result = await callBridge({ fromAgentId: agentId, targetAgentId: target_agent_id, message: response });
+      send({
+        jsonrpc: '2.0', id,
+        result: {
+          content: [{
+            type: 'text',
+            text: result.success
+              ? 'Response sent to ' + target_agent_id
+              : 'Failed to send response to ' + target_agent_id + ': ' + result.error,
           }],
         },
       });

@@ -136,38 +136,19 @@ function startBridgeServer() {
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
       try {
-        // Use orchestrator API for Claude Code agents (clean Anthropic API responses)
-        if (terminalType === 'claude-code' && orchestrator && orchestrator.isConfigured()) {
-          console.log(`[Bridge] Using orchestrator API for Claude Code agent: ${fromAgentId} → ${targetAgentId}`);
-          const response = await orchestrator.sendToAgentAndCollect(targetAgentId, message, fromAgentId);
-
-          if (response) {
-            console.log(`[Bridge] Response from orchestrator (${response.length} chars), returning to ${fromAgentId}`);
-            socket.write(JSON.stringify({ success: true, response }) + '\n');
-          } else {
-            socket.write(JSON.stringify({ success: false, error: 'No response from agent' }) + '\n');
-          }
-        } else if (terminalType === 'coding-agent') {
-          // Coding Agent: use PTY capture for now
-          console.log(`[Bridge] Using PTY capture for Coding Agent: ${fromAgentId} → ${targetAgentId}`);
-          const fullMessage = `[Message from ${fromName}]: ${message}`;
-          const response = await getAgentResponse(targetAgentId, fullMessage);
-          console.log(`[Bridge] Response captured (${response.length} chars), returning to ${fromAgentId}`);
-          socket.write(JSON.stringify({ success: true, response }) + '\n');
-        } else {
-          // Fallback to PTY capture for Codex agents or if orchestrator not configured
-          if (terminalType === 'codex') {
-            console.log(`[Bridge] Using PTY capture for Codex agent: ${fromAgentId} → ${targetAgentId}`);
-          } else {
-            console.log(`[Bridge] Fallback to PTY capture (orchestrator not configured): ${fromAgentId} → ${targetAgentId}`);
-          }
-
-          const fullMessage = `[Message from ${fromName}]: ${message}`;
-          const response = await getAgentResponse(targetAgentId, fullMessage);
-
-          console.log(`[Bridge] Response captured (${response.length} chars), returning to ${fromAgentId}`);
-          socket.write(JSON.stringify({ success: true, response }) + '\n');
+        // Deliver message to target agent without waiting for response
+        const ptyProcess = ptys.get(targetAgentId);
+        if (!ptyProcess) {
+          socket.write(JSON.stringify({ success: false, error: 'Target agent not running' }) + '\n');
+          return;
         }
+
+        const fullMessage = `[Message from ${fromName}]: ${message}`;
+        console.log(`[Bridge] Delivering message to ${targetAgentId}`);
+        ptyProcess.write(fullMessage + '\r');
+
+        // Return immediately - receiver will send response via send_response tool
+        socket.write(JSON.stringify({ success: true, delivered: true }) + '\n');
       } catch (err) {
         console.error('[Bridge] Error:', err.message);
         socket.write(JSON.stringify({ success: false, error: err.message }) + '\n');
