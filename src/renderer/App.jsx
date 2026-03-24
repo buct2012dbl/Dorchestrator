@@ -3,6 +3,7 @@ import GraphView from './components/GraphView';
 import TerminalGrid from './components/TerminalGrid';
 import AgentConfigPanel from './components/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
+import MuxWorkspace from './components/mux/MuxWorkspace';
 import { useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
 import './App.css';
@@ -19,6 +20,8 @@ function App() {
     removeAgent,
     updateAgent,
     updateAgentStatus,
+    addNotification,
+    clearNotifications,
   } = useAgents();
 
   const [showConfig, setShowConfig] = useState(false);
@@ -33,7 +36,46 @@ function App() {
   const [workspace, setWorkspace] = useState(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [terminalKey, setTerminalKey] = useState(0);
+  const [mode, setMode] = useState('swarm'); // 'swarm' or 'mux'
   const termGridRef = useRef(null);
+
+  // Keyboard shortcuts for Mux mode
+  useEffect(() => {
+    if (mode !== 'mux') return;
+
+    const handleKeyDown = (e) => {
+      // Cmd+1-9: Jump to agent 1-9
+      if (e.metaKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const index = parseInt(e.key) - 1;
+        if (agents[index]) {
+          setSelectedAgent(agents[index].id);
+        }
+      }
+      // Cmd+Shift+]: Next agent
+      else if (e.metaKey && e.shiftKey && e.key === ']') {
+        e.preventDefault();
+        const currentIndex = agents.findIndex(a => a.id === selectedAgent);
+        const nextIndex = (currentIndex + 1) % agents.length;
+        if (agents[nextIndex]) {
+          setSelectedAgent(agents[nextIndex].id);
+        }
+      }
+      // Cmd+Shift+[: Previous agent
+      else if (e.metaKey && e.shiftKey && e.key === '[') {
+        e.preventDefault();
+        const currentIndex = agents.findIndex(a => a.id === selectedAgent);
+        const prevIndex = (currentIndex - 1 + agents.length) % agents.length;
+        if (agents[prevIndex]) {
+          setSelectedAgent(agents[prevIndex].id);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, agents, selectedAgent, setSelectedAgent]);
+
 
   // Load workspace + config on mount
   useEffect(() => {
@@ -90,12 +132,17 @@ function App() {
       updateAgentStatus(agentId, NODE_STATUS.IDLE);
     }));
 
+    unsubs.push(window.electronAPI.onAgentNotification(({ agentId, message }) => {
+      console.log(`[Notification] ${agentId}: ${message}`);
+      addNotification(agentId, message);
+    }));
+
     return () => {
       // Clear all timers on cleanup
       Object.values(statusUpdateTimers).forEach(clearTimeout);
       unsubs.forEach((unsub) => unsub());
     };
-  }, [updateAgentStatus]);
+  }, [updateAgentStatus, addNotification]);
 
   const handleSelectFolder = useCallback(async () => {
     const folderPath = await window.electronAPI.selectFolder();
@@ -183,26 +230,44 @@ function App() {
       <div className="header">
         <h1>Dorchestrator</h1>
         <div className="header-controls">
+          <div className="mode-toggle">
+            <button
+              className={`mode-btn ${mode === 'swarm' ? 'active' : ''}`}
+              onClick={() => setMode('swarm')}
+            >
+              Swarm
+            </button>
+            <button
+              className={`mode-btn ${mode === 'mux' ? 'active' : ''}`}
+              onClick={() => setMode('mux')}
+            >
+              Mux
+            </button>
+          </div>
           <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
             <span className="workspace-icon">▸</span>
             <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
           </button>
           <span className="header-info-text">{agents.length} agents</span>
-          <span className="header-info-text">{edges.length} connections</span>
-          <button
-            className="view-toggle-btn"
-            onClick={() => setShowGraph(!showGraph)}
-            title={showGraph ? 'Hide Graph' : 'Show Graph'}
-          >
-            {showGraph ? '◈ GRAPH' : '◈'}
-          </button>
-          <button
-            className="view-toggle-btn"
-            onClick={() => setShowTerminal(!showTerminal)}
-            title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
-          >
-            {showTerminal ? '▣ TERM' : '▣'}
-          </button>
+          {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
+          {mode === 'swarm' && (
+            <button
+              className="view-toggle-btn"
+              onClick={() => setShowGraph(!showGraph)}
+              title={showGraph ? 'Hide Graph' : 'Show Graph'}
+            >
+              {showGraph ? '◈ GRAPH' : '◈'}
+            </button>
+          )}
+          {mode === 'swarm' && (
+            <button
+              className="view-toggle-btn"
+              onClick={() => setShowTerminal(!showTerminal)}
+              title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
+            >
+              {showTerminal ? '▣ TERM' : '▣'}
+            </button>
+          )}
           {/* <button
             className={`api-key-btn ${isConfigured ? 'has-key' : 'no-key'}`}
             onClick={() => setShowSettings(!showSettings)}
@@ -243,45 +308,49 @@ function App() {
       )} */}
 
       <div className="main-layout">
-        <div className="center-panel">
-          <div
-            className="graph-section"
-            style={{
-              height: showTerminal ? `${splitRatio}%` : '100%',
-              display: showGraph ? 'block' : 'none'
-            }}
-          >
-            <GraphView
-              agents={agents}
-              edges={edges}
-              onAgentsChange={setAgents}
-              onEdgesChange={setEdges}
-              onNodeSelect={handleNodeSelect}
-              onAddAgent={addAgent}
-              onRemoveAgent={removeAgent}
-            />
-          </div>
-          {showGraph && showTerminal && (
+        {mode === 'swarm' ? (
+          <div className="center-panel">
             <div
-              className={`split-handle ${isDragging ? 'dragging' : ''}`}
-              onMouseDown={handleMouseDown}
-            />
-          )}
-          <div
-            className="terminal-section"
-            style={{
-              height: showGraph ? `${100 - splitRatio}%` : '100%',
-              display: showTerminal ? 'block' : 'none'
-            }}
-          >
-            <TerminalGrid
-              key={terminalKey}
-              ref={termGridRef}
-              agents={agents}
-              selectedAgent={selectedAgent}
-            />
+              className="graph-section"
+              style={{
+                height: showTerminal ? `${splitRatio}%` : '100%',
+                display: showGraph ? 'block' : 'none'
+              }}
+            >
+              <GraphView
+                agents={agents}
+                edges={edges}
+                onAgentsChange={setAgents}
+                onEdgesChange={setEdges}
+                onNodeSelect={handleNodeSelect}
+                onAddAgent={addAgent}
+                onRemoveAgent={removeAgent}
+              />
+            </div>
+            {showGraph && showTerminal && (
+              <div
+                className={`split-handle ${isDragging ? 'dragging' : ''}`}
+                onMouseDown={handleMouseDown}
+              />
+            )}
+            <div
+              className="terminal-section"
+              style={{
+                height: showGraph ? `${100 - splitRatio}%` : '100%',
+                display: showTerminal ? 'block' : 'none'
+              }}
+            >
+              <TerminalGrid
+                key={terminalKey}
+                ref={termGridRef}
+                agents={agents}
+                selectedAgent={selectedAgent}
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <MuxWorkspace />
+        )}
         {showConfig && selectedAgentData && (
           <div className="config-sidebar">
             <AgentConfigPanel

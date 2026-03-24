@@ -62,7 +62,15 @@ class GraphConfigManager {
       const config = JSON.parse(data);
       console.log(`[GraphConfig] Loaded from ${this.configPath}`);
       return {
-        agents: config.agents || [],
+        agents: (config.agents || []).map(agent => ({
+          ...agent,
+          data: {
+            ...agent.data,
+            // Reset transient notification state on load
+            unreadCount: 0,
+            latestNotification: null,
+          },
+        })),
         edges: config.edges || [],
       };
     } catch (err) {

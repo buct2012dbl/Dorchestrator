@@ -1,0 +1,157 @@
+.mux-sidebar {
+  width: 280px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mux-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.mux-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.mux-new-template-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--background);
+  border: none;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mux-new-template-btn:hover {
+  opacity: 0.8;
+}
+
+.mux-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.mux-sidebar-item {
+  position: relative;
+  padding: 12px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.mux-sidebar-item:hover {
+  background: rgba(0, 255, 136, 0.05);
+  border-color: var(--border);
+}
+
+.mux-sidebar-item.active {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+}
+
+.mux-sidebar-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.mux-sidebar-item-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.mux-sidebar-item.active .mux-sidebar-item-number {
+  background: var(--accent);
+  color: var(--background);
+  border-color: var(--accent);
+}
+
+.mux-sidebar-item-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.mux-sidebar-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.mux-sidebar-layout {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.mux-sidebar-terminal-count {
+  opacity: 0.6;
+}
+
+.mux-sidebar-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.mux-sidebar-item:hover .mux-sidebar-delete {
+  opacity: 1;
+}
+
+.mux-sidebar-delete:hover {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: white;
+}

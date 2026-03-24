@@ -81,6 +81,9 @@ export function useAgents() {
         id,
         status: NODE_STATUS.IDLE,
         name: tmpl.role,
+        unreadCount: 0,
+        latestNotification: null,
+        gitBranch: null,
       },
     };
     setAgents((prev) => [...prev, newNode]);
@@ -105,6 +108,27 @@ export function useAgents() {
 
   const updateAgentStatus = useCallback((id, status) => {
     updateAgent(id, { status });
+  }, [updateAgent]);
+
+  const addNotification = useCallback((id, message) => {
+    setAgents((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              data: {
+                ...a.data,
+                unreadCount: (a.data.unreadCount || 0) + 1,
+                latestNotification: message,
+              },
+            }
+          : a
+      )
+    );
+  }, []);
+
+  const clearNotifications = useCallback((id) => {
+    updateAgent(id, { unreadCount: 0, latestNotification: null });
   }, [updateAgent]);
 
   const getConnectedAgents = useCallback((id) => {
@@ -134,5 +158,7 @@ export function useAgents() {
     getConnectedAgents,
     appendLog,
     terminalLogs,
+    addNotification,
+    clearNotifications,
   };
 }

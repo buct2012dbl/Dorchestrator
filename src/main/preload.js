@@ -62,6 +62,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pty-exit', listener);
     return () => ipcRenderer.removeListener('pty-exit', listener);
   },
+  onAgentNotification: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('agent-notification', listener);
+    return () => ipcRenderer.removeListener('agent-notification', listener);
+  },
+
+  // Mux mode templates
+  loadMuxTemplates: () => ipcRenderer.invoke('load-mux-templates'),
+  saveMuxTemplate: (template) => ipcRenderer.invoke('save-mux-template', template),
+  deleteMuxTemplate: (id) => ipcRenderer.invoke('delete-mux-template', id),
+
+  // Mux mode PTY
+  spawnMuxTerminal: (data) => ipcRenderer.invoke('mux-pty-spawn', data),
+  muxPtyInput: (data) => ipcRenderer.send('mux-pty-input', data),
+  muxPtyResize: (data) => ipcRenderer.invoke('mux-pty-resize', data),
+  killMuxTerminal: (data) => ipcRenderer.invoke('mux-pty-kill', data),
+  onMuxPtyData: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('mux-pty-data', listener);
+    return () => ipcRenderer.removeListener('mux-pty-data', listener);
+  },
+  onMuxPtyExit: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('mux-pty-exit', listener);
+    return () => ipcRenderer.removeListener('mux-pty-exit', listener);
+  },
 
   // Whisper voice recognition
   whisperCheckModel: () => ipcRenderer.invoke('whisper:checkModel'),

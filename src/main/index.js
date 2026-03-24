@@ -10,6 +10,7 @@ const WhisperManager = require('./whisperManager');
 const pty = require('node-pty');
 const commConfig = require('./communication-config');
 const graphConfigManager = require('./graphConfigManager');
+const templateManager = require('./templateManager');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -18,8 +19,10 @@ const logStream = fs.createWriteStream(logFile, { flags: 'a' });
 function log(...args) {
   const message = `[${new Date().toISOString()}] ${args.join(' ')}`;
   console.log(...args);
-  if (!app.isPackaged) return;
-  logStream.write(message + '\n');
+  if (!app.isPackaged || !logStream.writable) return;
+  try {
+    logStream.write(message + '\n');
+  } catch {}
 }
 
 // Override console methods
@@ -27,11 +30,19 @@ const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 console.log = (...args) => {
   originalConsoleLog(...args);
-  if (app.isPackaged) logStream.write(`[${new Date().toISOString()}] ${args.join(' ')}\n`);
+  if (app.isPackaged && logStream.writable) {
+    try {
+      logStream.write(`[${new Date().toISOString()}] ${args.join(' ')}\n`);
+    } catch {}
+  }
 };
 console.error = (...args) => {
   originalConsoleError(...args);
-  if (app.isPackaged) logStream.write(`[${new Date().toISOString()}] ERROR: ${args.join(' ')}\n`);
+  if (app.isPackaged && logStream.writable) {
+    try {
+      logStream.write(`[${new Date().toISOString()}] ERROR: ${args.join(' ')}\n`);
+    } catch {}
+  }
 };
 
 log('App starting...');
@@ -386,6 +397,8 @@ let workspace = null; // current working directory for PTY sessions
 // PTY management
 const ptys = new Map();     // agentId -> pty instance
 const ptyDims = new Map();  // agentId -> { cols, rows }
+const muxPtys = new Map();  // terminalId -> pty instance (for mux mode)
+const muxPtyDims = new Map(); // terminalId -> { cols, rows }
 let authConfig = {
   authToken: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || null,
   baseURL: process.env.ANTHROPIC_BASE_URL || null,
@@ -440,6 +453,7 @@ app.whenReady().then(async () => {
   // Initialize graph config manager with workspace
   if (workspace) {
     graphConfigManager.setWorkspace(workspace);
+    templateManager.setWorkspace(workspace);
   }
 
   await startBridgeServer(); // wait for port to be assigned before any PTY spawning
@@ -491,6 +505,7 @@ ipcMain.handle('set-workspace', (event, { workspacePath }) => {
   settings.workspace = workspacePath;
   saveSettings(settings);
   graphConfigManager.setWorkspace(workspacePath);
+  templateManager.setWorkspace(workspacePath);
   return { success: true };
 });
 
@@ -512,6 +527,20 @@ ipcMain.handle('is-configured', async () => {
 ipcMain.handle('load-graph-config', async () => {
   return graphConfigManager.loadGraphConfig();
 });
+
+// Mux template management
+ipcMain.handle('load-mux-templates', async () => {
+  return templateManager.loadTemplates();
+});
+
+ipcMain.handle('save-mux-template', async (event, template) => {
+  return templateManager.saveTemplate(template);
+});
+
+ipcMain.handle('delete-mux-template', async (event, id) => {
+  return templateManager.deleteTemplate(id);
+});
+
 
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges }) => {
@@ -705,6 +734,17 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     });
 
     ptyProcess.onData((data) => {
+      // Parse OSC sequences for notifications (OSC 9, 99, 777)
+      // Require message to have ≥3 chars and contain at least one letter to avoid matching xterm color/palette sequences
+      const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
+      if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
+        const notification = oscMatch[1];
+        console.log(`[Notification] ${agentId}: ${notification}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('agent-notification', { agentId, message: notification });
+        }
+      }
+
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('pty-data', { agentId, data });
       }
@@ -770,6 +810,107 @@ ipcMain.handle('pty-kill', async (event, { agentId }) => {
   }
   return { success: true };
 });
+
+// Mux PTY management
+ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }) => {
+  console.log(`[MuxPTY] Spawning terminal ${terminalId}`, config);
+
+  if (muxPtys.has(terminalId)) {
+    try { muxPtys.get(terminalId).kill(); } catch {}
+    muxPtys.delete(terminalId);
+  }
+
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    LANG: process.env.LANG || 'en_US.UTF-8',
+    PATH: `${path.dirname(NODE_PATH)}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+  };
+  if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
+  if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
+
+  let command, args;
+
+  if (config.cliType === 'shell') {
+    command = process.env.SHELL || '/bin/zsh';
+    args = [];
+  } else if (config.cliType === 'codex') {
+    command = process.env.CODEX_PATH || 'codex';
+    args = ['--full-auto'];
+    if (config.model) args.push('--model', config.model);
+    if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
+  } else if (config.cliType === 'coding-agent') {
+    command = 'node';
+    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
+    args = [codingAgentPath, 'start'];
+    if (config.model) args.push('--model', config.model);
+    if (config.systemPrompt) args.push('--system-prompt', config.systemPrompt);
+  } else {
+    command = process.env.CLAUDE_PATH || CLAUDE_PATH;
+    args = ['--dangerously-skip-permissions'];
+    if (config.model) args.push('--model', config.model);
+    if (config.systemPrompt) args.push('--append-system-prompt', config.systemPrompt);
+  }
+
+  try {
+    const ptyProcess = pty.spawn(command, args, {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd: workspace || process.env.HOME || '/',
+      env,
+    });
+
+    ptyProcess.onData((data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('mux-pty-data', { terminalId, data });
+      }
+    });
+
+    ptyProcess.onExit(({ exitCode }) => {
+      console.log(`[MuxPTY] Terminal ${terminalId} exited with code ${exitCode}`);
+      muxPtys.delete(terminalId);
+      muxPtyDims.delete(terminalId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('mux-pty-exit', { terminalId, exitCode });
+      }
+    });
+
+    muxPtys.set(terminalId, ptyProcess);
+    muxPtyDims.set(terminalId, { cols, rows });
+    return { success: true };
+  } catch (err) {
+    console.error('[MuxPTY] Failed to spawn:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.on('mux-pty-input', (event, { terminalId, data }) => {
+  const ptyProcess = muxPtys.get(terminalId);
+  if (ptyProcess) {
+    ptyProcess.write(data);
+  }
+});
+
+ipcMain.handle('mux-pty-resize', async (event, { terminalId, cols, rows }) => {
+  const ptyProcess = muxPtys.get(terminalId);
+  if (ptyProcess) {
+    ptyProcess.resize(cols, rows);
+    muxPtyDims.set(terminalId, { cols, rows });
+  }
+  return { success: true };
+});
+
+ipcMain.handle('mux-pty-kill', async (event, { terminalId }) => {
+  if (muxPtys.has(terminalId)) {
+    try { muxPtys.get(terminalId).kill(); } catch {}
+    muxPtys.delete(terminalId);
+    muxPtyDims.delete(terminalId);
+  }
+  return { success: true };
+});
+
 
 ipcMain.handle('open-log-file', async () => {
   const { shell } = require('electron');
