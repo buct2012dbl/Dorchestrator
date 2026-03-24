@@ -10,6 +10,8 @@ function MuxWorkspace() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -38,13 +40,18 @@ function MuxWorkspace() {
   };
 
   const handleDeleteTemplate = (id) => {
-    if (confirm('Delete this template?')) {
-      window.electronAPI.deleteMuxTemplate(id);
-      setTemplates(prev => prev.filter(t => t.id !== id));
-      if (selectedTemplate === id) {
-        setSelectedTemplate(null);
-      }
+    setDeleteId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    window.electronAPI.deleteMuxTemplate(deleteId);
+    setTemplates(prev => prev.filter(t => t.id !== deleteId));
+    if (selectedTemplate === deleteId) {
+      setSelectedTemplate(null);
     }
+    setShowDeleteConfirm(false);
+    setDeleteId(null);
   };
 
   const handleNewTemplate = () => {
@@ -52,8 +59,8 @@ function MuxWorkspace() {
     setShowEditor(true);
   };
 
-  const handleSaveAsTemplate = () => {
-    setEditingTemplate(null);
+  const handleEditTemplate = () => {
+    setEditingTemplate(currentTemplate);
     setShowEditor(true);
   };
 
@@ -70,7 +77,7 @@ function MuxWorkspace() {
       />
       <MuxTerminalView
         template={currentTemplate}
-        onSaveAsTemplate={handleSaveAsTemplate}
+        onEditTemplate={handleEditTemplate}
       />
       {showEditor && (
         <TemplateEditorModal
@@ -78,6 +85,17 @@ function MuxWorkspace() {
           onSave={handleSaveTemplate}
           onCancel={() => setShowEditor(false)}
         />
+      )}
+      {showDeleteConfirm && (
+        <div className="config-confirm-overlay">
+          <div className="config-confirm-dialog">
+            <h4>Delete this template?</h4>
+            <div className="config-confirm-actions">
+              <button className="btn-cancel" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button className="btn-confirm" onClick={confirmDelete}>OK</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
