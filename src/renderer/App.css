@@ -64,6 +64,39 @@
   -webkit-app-region: no-drag;
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.mode-btn {
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: 'Share Tech Mono', monospace;
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--foreground);
+}
+
+.mode-btn.active {
+  background: var(--accent);
+  color: var(--background);
+  font-weight: 600;
+}
+
+
 .header-info-text {
   font-size: 11px;
   color: var(--muted-foreground);
@@ -223,6 +256,23 @@
   flex: 1;
   overflow: hidden;
 }
+
+.mux-mode {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mux-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  font-size: 24px;
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
 
 .graph-section {
   overflow: hidden;

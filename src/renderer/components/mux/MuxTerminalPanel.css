@@ -1,0 +1,53 @@
+.mux-terminal-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mux-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mux-terminal-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.mux-terminal-close {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.mux-terminal-close:hover {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: white;
+}
+
+.mux-terminal-content {
+  flex: 1;
+  overflow: hidden;
+}
