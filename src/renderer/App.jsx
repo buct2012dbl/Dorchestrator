@@ -233,13 +233,13 @@ function App() {
           <div className="mode-toggle">
             <button
               className={`mode-btn ${mode === 'swarm' ? 'active' : ''}`}
-              onClick={() => setMode('swarm')}
+              onClick={() => { setMode('swarm'); setShowConfig(false); }}
             >
               Swarm
             </button>
             <button
               className={`mode-btn ${mode === 'mux' ? 'active' : ''}`}
-              onClick={() => setMode('mux')}
+              onClick={() => { setMode('mux'); setShowConfig(false); }}
             >
               Mux
             </button>
