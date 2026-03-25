@@ -63,7 +63,7 @@ function computeManualRects(agents, cols, containerW, containerH) {
   return rects;
 }
 
-const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent }, ref) {
+const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent, onSelectAgent }, ref) {
   const [layout, setLayout] = useState('auto');
   const [terminalOrder, setTerminalOrder] = useState(() => [agents.map((a) => a.id)]);
   const termRefs = useRef({});
@@ -189,6 +189,7 @@ const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent },
                   agent={agent}
                   isSelected={selectedAgent === agent.id}
                   onDragStart={layout === 'auto' ? (e) => handleDragStart(agent.id, e) : undefined}
+                  onSelect={() => onSelectAgent?.(agent.id)}
                 />
               )}
             </div>

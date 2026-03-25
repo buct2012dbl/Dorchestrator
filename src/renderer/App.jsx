@@ -345,6 +345,7 @@ function App() {
                 ref={termGridRef}
                 agents={agents}
                 selectedAgent={selectedAgent}
+                onSelectAgent={setSelectedAgent}
               />
             </div>
           </div>
