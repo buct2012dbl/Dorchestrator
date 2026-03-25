@@ -30,11 +30,15 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   React.useEffect(() => {
     if (!reactFlowInstance) return;
     const observer = new ResizeObserver(() => {
-      requestAnimationFrame(() => reactFlowInstance.fitView({ duration: 0 }));
+      requestAnimationFrame(() => {
+        if (nodes.length > 0) {
+          reactFlowInstance.fitView({ duration: 0, padding: 0.2 });
+        }
+      });
     });
     if (reactFlowWrapper.current) observer.observe(reactFlowWrapper.current);
     return () => observer.disconnect();
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, nodes.length]);
 
   React.useEffect(() => {
     if (isDraggingRef.current) {
