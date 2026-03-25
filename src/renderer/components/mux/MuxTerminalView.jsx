@@ -25,7 +25,7 @@ function computeGridRects(layout, containerW, containerH) {
   return rects;
 }
 
-function MuxTerminalView({ template, onSaveAsTemplate }) {
+function MuxTerminalView({ template, onEditTemplate }) {
   const [terminals, setTerminals] = useState([]);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -68,7 +68,7 @@ function MuxTerminalView({ template, onSaveAsTemplate }) {
     <div className="mux-terminal-view">
       <div className="mux-toolbar">
         <span className="mux-template-name">{template?.name || 'No template selected'}</span>
-        <button className="mux-save-btn" onClick={onSaveAsTemplate}>Save as Template</button>
+        <button className="mux-save-btn" onClick={onEditTemplate}>Edit</button>
       </div>
       <div className="mux-grid-container" ref={containerRef}>
         {terminals.map(term => (

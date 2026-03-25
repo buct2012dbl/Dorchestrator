@@ -4,3 +4,77 @@
   overflow: hidden;
   background: var(--background);
 }
+
+.config-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.config-confirm-dialog {
+  background: var(--card);
+  border: 2px solid var(--accent);
+  padding: 24px;
+  min-width: 300px;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.config-confirm-dialog h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'Orbitron', monospace;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0 0 20px 0;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+.config-confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-confirm,
+.btn-cancel {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 150ms;
+  border: 2px solid;
+}
+
+.btn-confirm {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-confirm:hover {
+  background: var(--accent);
+  color: var(--background);
+  box-shadow: var(--box-shadow-neon);
+}
+
+.btn-cancel {
+  background: transparent;
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+
+.btn-cancel:hover {
+  background: var(--muted);
+  border-color: var(--muted-foreground);
+}
