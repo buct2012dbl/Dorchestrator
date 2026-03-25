@@ -129,6 +129,11 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onD
           window.electronAPI?.ptyInput({ agentId: agent.id, data });
         });
 
+        // Update selection when terminal is focused
+        terminal.textarea?.addEventListener('focus', () => {
+          onSelect?.();
+        });
+
         terminal.focus();
       }
     }
