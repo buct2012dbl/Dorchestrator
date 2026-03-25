@@ -248,7 +248,7 @@ function App() {
             <span className="workspace-icon">▸</span>
             <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
           </button>
-          <span className="header-info-text">{agents.length} agents</span>
+          {mode === 'swarm' && <span className="header-info-text">{agents.length} agents</span>}
           {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
           {mode === 'swarm' && (
             <button
