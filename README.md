@@ -13,11 +13,22 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 
 ## Features
 
-### Visual Agent Graph
+### Dual Mode Operation
+- **Swarm Mode** - Visual graph-based multi-agent orchestration with inter-agent communication
+- **Mux Mode** - Template-based terminal multiplexer for managing multiple agent sessions
+- Toggle between modes with a single click in the header
+
+### Visual Agent Graph (Swarm Mode)
 - Drag-and-drop interface powered by React Flow
 - Real-time node connections for defining agent relationships
 - Color-coded agents with customizable roles and templates
 - Interactive canvas with zoom, pan, and selection controls
+
+### Mux Mode
+- Template-based agent session management
+- Sidebar navigation for quick template switching
+- Create, edit, and delete custom templates
+- Persistent template storage across sessions
 
 ### Integrated Terminals
 - Live PTY sessions for each agent — choose between `claude` CLI, `codex` CLI, or built-in agent per agent
