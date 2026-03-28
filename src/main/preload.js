@@ -72,6 +72,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadMuxTemplates: () => ipcRenderer.invoke('load-mux-templates'),
   saveMuxTemplate: (template) => ipcRenderer.invoke('save-mux-template', template),
   deleteMuxTemplate: (id) => ipcRenderer.invoke('delete-mux-template', id),
+  getSelectedMuxTemplate: () => ipcRenderer.invoke('get-selected-mux-template'),
+  setSelectedMuxTemplate: (id) => ipcRenderer.invoke('set-selected-mux-template', id),
 
   // Mux mode PTY
   spawnMuxTerminal: (data) => ipcRenderer.invoke('mux-pty-spawn', data),

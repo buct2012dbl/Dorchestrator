@@ -87,6 +87,30 @@ class TemplateManager {
       return false;
     }
   }
+
+  getSelectedTemplateId() {
+    if (!this.configDir) return null;
+    const selPath = path.join(this.configDir, 'selected-template.json');
+    if (!fs.existsSync(selPath)) return null;
+    try {
+      const data = JSON.parse(fs.readFileSync(selPath, 'utf8'));
+      return data.selectedTemplateId || null;
+    } catch {
+      return null;
+    }
+  }
+
+  setSelectedTemplateId(id) {
+    if (!this.configDir) return false;
+    try {
+      const selPath = path.join(this.configDir, 'selected-template.json');
+      fs.writeFileSync(selPath, JSON.stringify({ selectedTemplateId: id }, null, 2));
+      return true;
+    } catch (err) {
+      console.error('[TemplateManager] Failed to save selected template:', err);
+      return false;
+    }
+  }
 }
 
 module.exports = new TemplateManager();

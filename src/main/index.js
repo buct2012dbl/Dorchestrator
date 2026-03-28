@@ -541,6 +541,14 @@ ipcMain.handle('delete-mux-template', async (event, id) => {
   return templateManager.deleteTemplate(id);
 });
 
+ipcMain.handle('get-selected-mux-template', async () => {
+  return templateManager.getSelectedTemplateId();
+});
+
+ipcMain.handle('set-selected-mux-template', async (event, id) => {
+  return templateManager.setSelectedTemplateId(id);
+});
+
 
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges }) => {

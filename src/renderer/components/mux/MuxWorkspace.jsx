@@ -17,12 +17,20 @@ function MuxWorkspace() {
     if (!window.electronAPI) return;
 
     window.electronAPI.loadMuxTemplates().then(loadedTemplates => {
+      let finalTemplates;
       if (loadedTemplates.length === 0) {
-        setTemplates(DEFAULT_TEMPLATES);
+        finalTemplates = DEFAULT_TEMPLATES;
         DEFAULT_TEMPLATES.forEach(t => window.electronAPI.saveMuxTemplate(t));
       } else {
-        setTemplates(loadedTemplates);
+        finalTemplates = loadedTemplates;
       }
+      setTemplates(finalTemplates);
+
+      window.electronAPI.getSelectedMuxTemplate().then(savedId => {
+        if (savedId && finalTemplates.find(t => t.id === savedId)) {
+          setSelectedTemplate(savedId);
+        }
+      });
     });
   }, []);
 
@@ -37,6 +45,13 @@ function MuxWorkspace() {
     });
     setShowEditor(false);
     setEditingTemplate(null);
+  };
+
+  const handleSelectTemplate = (id) => {
+    setSelectedTemplate(id);
+    if (window.electronAPI) {
+      window.electronAPI.setSelectedMuxTemplate(id);
+    }
   };
 
   const handleDeleteTemplate = (id) => {
@@ -71,7 +86,7 @@ function MuxWorkspace() {
       <MuxSidebar
         templates={templates}
         selectedTemplate={selectedTemplate}
-        onSelectTemplate={setSelectedTemplate}
+        onSelectTemplate={handleSelectTemplate}
         onNewTemplate={handleNewTemplate}
         onDeleteTemplate={handleDeleteTemplate}
       />
