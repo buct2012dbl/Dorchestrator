@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   getDefaultModelForTerminalType,
   getModelsForTerminalType,
@@ -52,11 +52,21 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
   const [name, setName] = useState(template?.name || '');
   const [rows, setRows] = useState(template?.layout.rows || 2);
   const [cols, setCols] = useState(template?.layout.cols || 2);
+  const [rowInput, setRowInput] = useState(String(template?.layout.rows || 2));
+  const [colInput, setColInput] = useState(String(template?.layout.cols || 2));
   const [terminals, setTerminals] = useState(() => {
     if (template?.layout.terminals) return template.layout.terminals.map(normalizeTerminalConfig);
     return generateTerminals(2, 2);
   });
   const [selectedCell, setSelectedCell] = useState(null);
+
+  useEffect(() => {
+    setRowInput(String(rows));
+  }, [rows]);
+
+  useEffect(() => {
+    setColInput(String(cols));
+  }, [cols]);
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -78,6 +88,46 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
     setCols(newCols);
     setTerminals(generateTerminals(newRows, newCols));
     setSelectedCell(null);
+  };
+
+  const commitDimensionChange = (dimension, rawValue) => {
+    const nextValue = Number.parseInt(rawValue, 10);
+    if (Number.isNaN(nextValue)) {
+      if (dimension === 'rows') setRowInput(String(rows));
+      else setColInput(String(cols));
+      return;
+    }
+
+    const clampedValue = Math.max(1, Math.min(4, nextValue));
+    if (dimension === 'rows') setRowInput(String(clampedValue));
+    else setColInput(String(clampedValue));
+
+    if (dimension === 'rows') {
+      handleGridSizeChange(clampedValue, cols);
+      return;
+    }
+
+    handleGridSizeChange(rows, clampedValue);
+  };
+
+  const handleDimensionInputChange = (dimension, rawValue) => {
+    if (!/^\d*$/.test(rawValue)) return;
+
+    if (dimension === 'rows') {
+      setRowInput(rawValue);
+    } else {
+      setColInput(rawValue);
+    }
+
+    if (!rawValue) return;
+    commitDimensionChange(dimension, rawValue);
+  };
+
+  const handleDimensionKeyDown = (event, dimension, rawValue) => {
+    if (event.key === 'Enter') {
+      commitDimensionChange(dimension, rawValue);
+      event.currentTarget.blur();
+    }
   };
 
   const updateTerminalConfig = (row, col, field, value) => {
@@ -134,23 +184,29 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Rows</label>
+              <label>Rows(1-4)</label>
               <input
-                type="number"
-                min="1"
-                max="4"
-                value={rows}
-                onChange={(e) => handleGridSizeChange(Math.max(1, Math.min(4, +e.target.value)), cols)}
+                type="text"
+                inputMode="numeric"
+                pattern="[1-4]*"
+                value={rowInput}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => handleDimensionInputChange('rows', e.target.value)}
+                onBlur={(e) => commitDimensionChange('rows', e.target.value)}
+                onKeyDown={(e) => handleDimensionKeyDown(e, 'rows', rowInput)}
               />
             </div>
             <div className="form-group">
-              <label>Columns</label>
+              <label>Columns(1-4)</label>
               <input
-                type="number"
-                min="1"
-                max="4"
-                value={cols}
-                onChange={(e) => handleGridSizeChange(rows, Math.max(1, Math.min(4, +e.target.value)))}
+                type="text"
+                inputMode="numeric"
+                pattern="[1-4]*"
+                value={colInput}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => handleDimensionInputChange('cols', e.target.value)}
+                onBlur={(e) => commitDimensionChange('cols', e.target.value)}
+                onKeyDown={(e) => handleDimensionKeyDown(e, 'cols', colInput)}
               />
             </div>
           </div>
