@@ -25,11 +25,32 @@ function computeGridRects(layout, containerW, containerH) {
   return rects;
 }
 
+function getTemplateSpawnSignature(template) {
+  if (!template?.layout) return 'no-template';
+
+  const { rows, cols, terminals = [] } = template.layout;
+  return JSON.stringify({
+    id: template.id,
+    rows,
+    cols,
+    terminals: terminals.map((term) => ({
+      id: term.id,
+      row: term.row,
+      col: term.col,
+      cliType: term.config?.cliType || 'empty',
+      model: term.config?.model || '',
+      name: term.config?.name || '',
+      systemPrompt: term.config?.systemPrompt || '',
+    })),
+  });
+}
+
 function MuxTerminalView({ template, onEditTemplate }) {
   const [terminals, setTerminals] = useState([]);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const termRefs = useRef({});
+  const spawnSignature = getTemplateSpawnSignature(template);
 
   useEffect(() => {
     if (!template) {
@@ -44,7 +65,7 @@ function MuxTerminalView({ template, onEditTemplate }) {
     }));
 
     setTerminals(newTerminals);
-  }, [template?.id]);
+  }, [spawnSignature, template]);
 
   useEffect(() => {
     if (!containerRef.current) return;
