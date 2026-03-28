@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AGENT_TEMPLATES } from '../store/agentStore';
+import {
+  getDefaultModelForTerminalType,
+  getModelsForTerminalType,
+} from '../constants/models';
 import './AgentConfigPanel.css';
 
 function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
@@ -71,24 +75,6 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
     setTerminalType(tmpl.terminalType || 'claude-code');
   };
 
-  const CLAUDE_MODELS = [
-    'claude-opus-4-6',
-    'claude-sonnet-4-6',
-    'claude-haiku-4-5-20251001',
-  ];
-
-  const CODEX_MODELS = [
-    'gpt-5',
-    'o4-mini',
-    'o3',
-    'gpt-4.1',
-    'gpt-4o',
-  ];
-
-  const CODING_AGENT_MODELS = [
-    'gpt-5'
-  ];
-
   return (
     <div className="config-panel">
       <div className="config-header">
@@ -154,10 +140,7 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
           <select value={terminalType} onChange={(e) => {
             const next = e.target.value;
             setTerminalType(next);
-            // Reset model to a sensible default when switching terminal type
-            if (next === 'codex') setModel('o4-mini');
-            else if (next === 'coding-agent') setModel('gpt-5');
-            else setModel('claude-sonnet-4-6');
+            setModel(getDefaultModelForTerminalType(next));
           }}>
             <option value="claude-code">Claude Code</option>
             <option value="codex">Codex (OpenAI)</option>
@@ -168,9 +151,7 @@ function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {
         <div className="config-field">
           <label>Model</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(terminalType === 'codex' ? CODEX_MODELS :
-              terminalType === 'coding-agent' ? CODING_AGENT_MODELS :
-              CLAUDE_MODELS).map((m) => (
+            {getModelsForTerminalType(terminalType).map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>

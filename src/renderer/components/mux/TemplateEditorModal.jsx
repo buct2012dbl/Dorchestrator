@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import {
+  getDefaultModelForTerminalType,
+  getModelsForTerminalType,
+} from '../../constants/models';
 import './TemplateEditorModal.css';
 
 const generateTerminals = (r, c) => {
@@ -21,12 +25,35 @@ const generateTerminals = (r, c) => {
   return terms;
 };
 
+const normalizeTerminalConfig = (terminal) => {
+  const cliType = terminal.config.cliType || 'empty';
+  const normalized = {
+    ...terminal,
+    config: {
+      ...terminal.config,
+      cliType,
+    },
+  };
+
+  if (cliType === 'empty' || cliType === 'shell') {
+    normalized.config.model = '';
+    return normalized;
+  }
+
+  const validModels = getModelsForTerminalType(cliType);
+  if (!validModels.includes(normalized.config.model)) {
+    normalized.config.model = getDefaultModelForTerminalType(cliType);
+  }
+
+  return normalized;
+};
+
 function TemplateEditorModal({ template, onSave, onCancel }) {
   const [name, setName] = useState(template?.name || '');
   const [rows, setRows] = useState(template?.layout.rows || 2);
   const [cols, setCols] = useState(template?.layout.cols || 2);
   const [terminals, setTerminals] = useState(() => {
-    if (template?.layout.terminals) return template.layout.terminals;
+    if (template?.layout.terminals) return template.layout.terminals.map(normalizeTerminalConfig);
     return generateTerminals(2, 2);
   });
   const [selectedCell, setSelectedCell] = useState(null);
@@ -40,7 +67,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
     const newTemplate = {
       id: template?.id || `template-${Date.now()}`,
       name: name.trim(),
-      layout: { rows, cols, terminals },
+      layout: { rows, cols, terminals: terminals.map(normalizeTerminalConfig) },
     };
 
     onSave(newTemplate);
@@ -58,6 +85,24 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
       prev.map(t =>
         t.row === row && t.col === col
           ? { ...t, config: { ...t.config, [field]: value } }
+          : t
+      )
+    );
+  };
+
+  const handleCliTypeChange = (terminal, cliType) => {
+    const nextConfig = { cliType };
+
+    if (cliType === 'empty' || cliType === 'shell') {
+      nextConfig.model = '';
+    } else {
+      nextConfig.model = getDefaultModelForTerminalType(cliType);
+    }
+
+    setTerminals(prev =>
+      prev.map(t =>
+        t.row === terminal.row && t.col === terminal.col
+          ? { ...t, config: { ...t.config, ...nextConfig } }
           : t
       )
     );
@@ -158,7 +203,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                   <label>CLI Type</label>
                   <select
                     value={selectedTerminal.config.cliType}
-                    onChange={(e) => updateTerminalConfig(selectedTerminal.row, selectedTerminal.col, 'cliType', e.target.value)}
+                    onChange={(e) => handleCliTypeChange(selectedTerminal, e.target.value)}
                   >
                     <option value="empty">Empty (no CLI)</option>
                     <option value="shell">Shell</option>
@@ -176,9 +221,9 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                         value={selectedTerminal.config.model}
                         onChange={(e) => updateTerminalConfig(selectedTerminal.row, selectedTerminal.col, 'model', e.target.value)}
                       >
-                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                        <option value="claude-opus-4-6">Claude Opus 4.6</option>
-                        <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+                        {getModelsForTerminalType(selectedTerminal.config.cliType).map((model) => (
+                          <option key={model} value={model}>{model}</option>
+                        ))}
                       </select>
                     </div>
 
