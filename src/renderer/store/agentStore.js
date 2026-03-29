@@ -60,7 +60,14 @@ export const STATUS_COLORS = {
   waiting: '#e5e510',
 };
 
-let nextId = 1;
-export function generateId() {
-  return `agent-${nextId++}`;
+export function generateId(existingIds = new Set()) {
+  let id;
+  do {
+    const randomPart =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    id = `agent-${randomPart}`;
+  } while (existingIds.has(id));
+  return id;
 }

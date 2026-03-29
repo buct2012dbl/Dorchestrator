@@ -70,24 +70,30 @@ export function useAgents() {
   }, [isLoaded]);
 
   const addAgent = useCallback((template, position) => {
-    const id = generateId();
     const tmpl = AGENT_TEMPLATES[template] || AGENT_TEMPLATES.custom;
-    const newNode = {
-      id,
-      type: 'agentNode',
-      position: position || { x: 300, y: 300 },
-      data: {
-        ...tmpl,
-        id,
-        status: NODE_STATUS.IDLE,
-        name: tmpl.role,
-        unreadCount: 0,
-        latestNotification: null,
-        gitBranch: null,
-      },
-    };
-    setAgents((prev) => [...prev, newNode]);
-    return id;
+    let newId = null;
+    setAgents((prev) => {
+      const id = generateId(new Set(prev.map((agent) => agent.id)));
+      newId = id;
+      return [
+        ...prev,
+        {
+          id,
+          type: 'agentNode',
+          position: position || { x: 300, y: 300 },
+          data: {
+            ...tmpl,
+            id,
+            status: NODE_STATUS.IDLE,
+            name: tmpl.role,
+            unreadCount: 0,
+            latestNotification: null,
+            gitBranch: null,
+          },
+        },
+      ];
+    });
+    return newId;
   }, []);
 
   const removeAgent = useCallback((id) => {

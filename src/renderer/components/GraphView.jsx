@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -30,8 +30,13 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   React.useEffect(() => {
     if (!reactFlowInstance) return;
     const observer = new ResizeObserver(() => {
-      // Just trigger a re-render, don't auto-fit
-      reactFlowInstance.setViewport(reactFlowInstance.getViewport());
+      // Let React Flow recalculate after layout changes like opening the config sidebar.
+      window.requestAnimationFrame(() => {
+        reactFlowInstance.fitView({
+          padding: 0.2,
+          duration: 0,
+        });
+      });
     });
     if (reactFlowWrapper.current) observer.observe(reactFlowWrapper.current);
     return () => observer.disconnect();
@@ -167,7 +172,6 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   return (
     <div className="graph-view" ref={reactFlowWrapper}>
       <ReactFlow
-        key={`flow-${nodes.length}-${edgesState.length}`}
         nodes={nodes}
         edges={edgesState}
         onNodesChange={handleNodesChange}
