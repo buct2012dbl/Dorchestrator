@@ -45,7 +45,7 @@ function getTemplateSpawnSignature(template) {
   });
 }
 
-function MuxTerminalView({ template, onEditTemplate }) {
+function MuxTerminalView({ template, active = true, onEditTemplate }) {
   const [terminals, setTerminals] = useState([]);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -86,7 +86,10 @@ function MuxTerminalView({ template, onEditTemplate }) {
   const rects = computeGridRects(template?.layout, containerSize.w, containerSize.h);
 
   return (
-    <div className="mux-terminal-view">
+    <div
+      className={`mux-terminal-view ${active ? 'active' : 'hidden'}`}
+      style={{ display: active ? 'flex' : 'none' }}
+    >
       <div className="mux-toolbar">
         <span className="mux-template-name">{template?.name || 'No template selected'}</span>
         <button className="mux-save-btn" onClick={onEditTemplate}>Edit</button>

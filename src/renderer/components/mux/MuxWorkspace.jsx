@@ -12,6 +12,7 @@ function MuxWorkspace() {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const [visitedTemplateIds, setVisitedTemplateIds] = useState([]);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -29,10 +30,22 @@ function MuxWorkspace() {
       window.electronAPI.getSelectedMuxTemplate().then(savedId => {
         if (savedId && finalTemplates.find(t => t.id === savedId)) {
           setSelectedTemplate(savedId);
+          setVisitedTemplateIds([savedId]);
         }
       });
     });
   }, []);
+
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    setVisitedTemplateIds((prev) => (
+      prev.includes(selectedTemplate) ? prev : [...prev, selectedTemplate]
+    ));
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    setVisitedTemplateIds((prev) => prev.filter((id) => templates.some((template) => template.id === id)));
+  }, [templates]);
 
   const handleSaveTemplate = (template) => {
     window.electronAPI.saveMuxTemplate(template);
@@ -80,6 +93,9 @@ function MuxWorkspace() {
   };
 
   const currentTemplate = templates.find(t => t.id === selectedTemplate);
+  const visibleTemplates = visitedTemplateIds
+    .map((id) => templates.find((template) => template.id === id))
+    .filter(Boolean);
 
   return (
     <div className="mux-workspace">
@@ -90,10 +106,22 @@ function MuxWorkspace() {
         onNewTemplate={handleNewTemplate}
         onDeleteTemplate={handleDeleteTemplate}
       />
-      <MuxTerminalView
-        template={currentTemplate}
-        onEditTemplate={handleEditTemplate}
-      />
+      {visibleTemplates.length > 0 ? (
+        visibleTemplates.map((template) => (
+          <MuxTerminalView
+            key={template.id}
+            template={template}
+            active={template.id === selectedTemplate}
+            onEditTemplate={handleEditTemplate}
+          />
+        ))
+      ) : (
+        <MuxTerminalView
+          template={currentTemplate}
+          active
+          onEditTemplate={handleEditTemplate}
+        />
+      )}
       {showEditor && (
         <TemplateEditorModal
           template={editingTemplate}
