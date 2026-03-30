@@ -81,7 +81,7 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 - Node.js 16+
 - **For Claude Code agents:** `claude` CLI installed and in PATH ([get it here](https://github.com/anthropics/claude-code))
 - **For Codex agents:** `codex` CLI installed and in PATH ([get it here](https://github.com/openai/codex))
-- **For Built-in agents:** No additional CLI required
+- **For Built-in agents:** Make sure to copy /coding-agent/config/agents.example.json to your-home-dir/.dorchestrator/coding-agent/config/agents.json and configure your own API provider if you need.
 - Anthropic API key (for Claude Code agents)
 - OpenAI API key (for Codex agents)
 - **ffmpeg** (required for voice assistant): `brew install ffmpeg`

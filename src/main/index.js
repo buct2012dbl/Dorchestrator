@@ -627,7 +627,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     // Coding Agent CLI
     command = 'node';
     const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
-    const configPath = path.join(__dirname, '../../coding-agent/config/agents.json');
+    const configPath = path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json');
     args = [codingAgentPath, 'start', '--config', configPath];
     if (agentData?.model) args.push('--model', agentData.model);
     if (agentData?.id) args.push('--agent', agentData.id);
