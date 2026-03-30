@@ -105,6 +105,59 @@ function findClaude() {
 const NODE_PATH = findNode();
 const CLAUDE_PATH = findClaude();
 
+function buildTerminalCommand(config = {}, options = {}) {
+  const {
+    allowShell = false,
+    codingAgentConfigPath,
+    codingAgentAgentId,
+    logPrefix = '[PTY]',
+    logId,
+  } = options;
+
+  const terminalType = config.terminalType || config.cliType || 'claude-code';
+  let command;
+  let args;
+
+  if (allowShell && terminalType === 'shell') {
+    command = process.env.SHELL || '/bin/zsh';
+    args = [];
+  } else if (terminalType === 'codex') {
+    command = process.env.CODEX_PATH || 'codex';
+    args = ['--full-auto'];
+    if (config.model) args.push('--model', config.model);
+    if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
+    if (config.name) {
+      console.log(`${logPrefix} Codex agent name: ${config.name}`);
+    }
+  } else if (terminalType === 'coding-agent') {
+    command = 'node';
+    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
+    args = [codingAgentPath, 'start'];
+    if (codingAgentConfigPath) args.push('--config', codingAgentConfigPath);
+    if (config.model) args.push('--model', config.model);
+    if (codingAgentAgentId) args.push('--agent', codingAgentAgentId);
+    if (config.systemPrompt) args.push('--system-prompt', config.systemPrompt);
+    if (config.name) {
+      console.log(`${logPrefix} Coding agent name: ${config.name}`);
+    }
+  } else {
+    command = process.env.CLAUDE_PATH || CLAUDE_PATH;
+    args = ['--dangerously-skip-permissions'];
+    if (config.model) args.push('--model', config.model);
+    if (config.systemPrompt) {
+      args.push('--append-system-prompt', config.systemPrompt);
+      if (logId) {
+        console.log(`${logPrefix} Setting system prompt for ${logId}: "${config.systemPrompt}"`);
+      }
+    }
+    if (config.name) {
+      console.log(`${logPrefix} Agent name: ${config.name}`);
+    }
+  }
+
+  return { terminalType, command, args };
+}
+
 // ---- Agent graph (kept in sync for PTY spawning) ----
 let agentGraph = { agents: [], edges: [] };
 
@@ -610,44 +663,12 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
   if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
 
-  const terminalType = agentData?.terminalType || 'claude-code';
-
-  let command, args;
-
-  if (terminalType === 'codex') {
-    // OpenAI Codex CLI
-    command = process.env.CODEX_PATH || 'codex';
-    args = ['--full-auto'];
-    if (agentData?.model) args.push('--model', agentData.model);
-    if (agentData?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(agentData.systemPrompt)}`);
-    if (agentData?.name) {
-      console.log(`[PTY] Codex agent name: ${agentData.name}`);
-    }
-  } else if (terminalType === 'coding-agent') {
-    // Coding Agent CLI
-    command = 'node';
-    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
-    const configPath = path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json');
-    args = [codingAgentPath, 'start', '--config', configPath];
-    if (agentData?.model) args.push('--model', agentData.model);
-    if (agentData?.id) args.push('--agent', agentData.id);
-    if (agentData?.systemPrompt) args.push('--system-prompt', agentData.systemPrompt);
-    if (agentData?.name) {
-      console.log(`[PTY] Coding agent name: ${agentData.name}`);
-    }
-  } else {
-    // Claude Code CLI (default)
-    command = process.env.CLAUDE_PATH || CLAUDE_PATH;
-    args = ['--dangerously-skip-permissions'];
-    if (agentData?.model) args.push('--model', agentData.model);
-    if (agentData?.systemPrompt) {
-      args.push('--append-system-prompt', agentData.systemPrompt);
-      console.log(`[PTY] Setting system prompt for ${agentId}: "${agentData.systemPrompt}"`);
-    }
-    if (agentData?.name) {
-      console.log(`[PTY] Agent name: ${agentData.name}`);
-    }
-  }
+  const { terminalType, command, args } = buildTerminalCommand(agentData, {
+    codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
+    codingAgentAgentId: agentData?.id,
+    logPrefix: '[PTY]',
+    logId: agentId,
+  });
 
   // Write MCP config for inter-agent messaging if bridge is ready (both Claude Code and Codex)
   const tmpDir = os.tmpdir();
@@ -838,28 +859,12 @@ ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }
   if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
   if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
 
-  let command, args;
-
-  if (config.cliType === 'shell') {
-    command = process.env.SHELL || '/bin/zsh';
-    args = [];
-  } else if (config.cliType === 'codex') {
-    command = process.env.CODEX_PATH || 'codex';
-    args = ['--full-auto'];
-    if (config.model) args.push('--model', config.model);
-    if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
-  } else if (config.cliType === 'coding-agent') {
-    command = 'node';
-    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
-    args = [codingAgentPath, 'start'];
-    if (config.model) args.push('--model', config.model);
-    if (config.systemPrompt) args.push('--system-prompt', config.systemPrompt);
-  } else {
-    command = process.env.CLAUDE_PATH || CLAUDE_PATH;
-    args = ['--dangerously-skip-permissions'];
-    if (config.model) args.push('--model', config.model);
-    if (config.systemPrompt) args.push('--append-system-prompt', config.systemPrompt);
-  }
+  const { command, args } = buildTerminalCommand(config, {
+    codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
+    allowShell: true,
+    logPrefix: '[MuxPTY]',
+    logId: terminalId,
+  });
 
   try {
     const ptyProcess = pty.spawn(command, args, {
