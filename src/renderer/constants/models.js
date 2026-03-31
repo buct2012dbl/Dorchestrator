@@ -23,7 +23,6 @@ export function getModelsForTerminalType(terminalType) {
 
 export function getDefaultModelForTerminalType(terminalType) {
   if (terminalType === 'codex') return 'o4-mini';
-  if (terminalType === 'coding-agent') return 'gpt-5';
+  if (terminalType === 'coding-agent') return 'gpt-5.4';
   return 'claude-sonnet-4-6';
 }
-

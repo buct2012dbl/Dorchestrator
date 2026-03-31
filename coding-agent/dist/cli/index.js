@@ -72,8 +72,17 @@ program
         for (const agentConfig of config.agents) {
             orchestrator.createAgent(agentConfig);
         }
-        // If agent ID doesn't exist, create a dynamic agent
-        if (!orchestrator.getAgent(options.agent)) {
+        const existingAgent = orchestrator.getAgent(options.agent);
+        if (existingAgent) {
+            if (options.model)
+                existingAgent.config.model = options.model;
+            if (options.systemPrompt) {
+                existingAgent.config.systemPrompt = existingAgent.config.systemPrompt
+                    ? `${existingAgent.config.systemPrompt}\n\n${options.systemPrompt}`
+                    : options.systemPrompt;
+            }
+        }
+        else {
             const dynamicAgent = {
                 id: options.agent,
                 name: options.agent,
