@@ -1,8 +1,68 @@
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import chalk from 'chalk';
+import boxen from 'boxen';
 import ora from 'ora';
 import type { Orchestrator } from '../core/orchestrator.js';
+
+const BRAND_ART = [
+  '  ____   ___  ____   ____ _   _ _____ ____ _____ ____      _  _____ ___  ____  ',
+  ' |  _ \\ / _ \\|  _ \\ / ___| | | | ____/ ___|_   _|  _ \\    / \\|_   _/ _ \\|  _ \\ ',
+  " | | | | | | | |_) | |   | |_| |  _| \\___ \\ | | | |_) |  / _ \\ | || | | | |_) |",
+  ' | |_| | |_| |  _ <| |___|  _  | |___ ___) || | |  _ <  / ___ \\| || |_| |  _ < ',
+  ' |____/ \\___/|_| \\_\\\\____|_| |_|_____|____/ |_| |_| \\_\\/_/   \\_\\_| \\___/|_| \\_\\'
+].join('\n');
+
+function trimMiddle(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  if (maxLength <= 3) return value.slice(0, maxLength);
+  const head = Math.ceil((maxLength - 1) / 2);
+  const tail = Math.floor((maxLength - 2) / 2);
+  return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
+}
+
+function makeStatLine(label: string, value: string): string {
+  return `${chalk.hex('#7dd3fc')(label.padEnd(10))}${chalk.white(value)}`;
+}
+
+function renderHeader(agentName: string, model: string, workspacePath: string): void {
+  const width = output.columns || 100;
+  const workspace = trimMiddle(workspacePath, Math.max(36, width - 42));
+  const hero = boxen(chalk.hex('#8ec5ff').bold(BRAND_ART), {
+    padding: { top: 0, right: 1, bottom: 0, left: 1 },
+    margin: 0,
+    borderStyle: 'round',
+    borderColor: 'cyan',
+    backgroundColor: '#08111f'
+  });
+
+  const status = boxen(
+    [
+      chalk.hex('#9fb0c3')('Built-in agent console'),
+      '',
+      makeStatLine('Agent', agentName),
+      makeStatLine('Model', model),
+      makeStatLine('Workspace', workspace),
+      makeStatLine('Commands', 'exit  stats  clear')
+    ].join('\n'),
+    {
+      padding: { top: 0, right: 1, bottom: 0, left: 1 },
+      margin: 0,
+      borderStyle: 'round',
+      borderColor: 'gray',
+      backgroundColor: '#0d1726'
+    }
+  );
+
+  console.clear();
+  console.log(hero);
+  console.log(status);
+  console.log(chalk.hex('#5b7088')(' Type a task and press Enter. The agent keeps session context across turns.\n'));
+}
+
+function renderPrompt(): string {
+  return chalk.hex('#7dd3fc')('› ') + chalk.whiteBright('Prompt') + chalk.hex('#5b7088')('  ');
+}
 
 export async function startRepl(orchestrator: Orchestrator, agentId: string): Promise<void> {
   const rl = readline.createInterface({
@@ -11,79 +71,69 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
     terminal: true
   });
 
-  // Track if we're intentionally closing
   let intentionalClose = false;
 
-  // Handle unexpected close
   rl.on('close', () => {
     if (!intentionalClose) {
-      console.log(chalk.red('\n⚠️  Readline closed unexpectedly!'));
-      console.log(chalk.gray('This usually happens when stdin is not a TTY or gets closed.'));
+      console.log(chalk.red('\nReadline closed unexpectedly.'));
+      console.log(chalk.gray('This usually means stdin is not attached to a live TTY.'));
     }
     orchestrator.shutdown();
     process.exit(0);
   });
 
-  // Prevent SIGINT from closing readline during agent work
   process.on('SIGINT', () => {
-    console.log(chalk.yellow('\n\nUse "exit" or "quit" to exit'));
+    console.log(chalk.yellow('\nUse "exit" or "quit" to leave the session.'));
   });
 
-  // Get agent info
   const agent = orchestrator.getAgent(agentId);
+  const agentName = agent?.config.name || agentId;
+  const model = agent?.config.model || 'unknown';
   const workspacePath = process.cwd();
 
-  // Display header with context
-  console.log(chalk.cyan('━'.repeat(60)));
-  console.log(chalk.cyan.bold('  Interactive Mode'));
-  console.log(chalk.gray(`  Agent: ${agent?.config.name || agentId}`));
-  console.log(chalk.gray(`  Model: ${agent?.config.model || 'unknown'}`));
-  console.log(chalk.gray(`  Workspace: ${workspacePath}`));
-  console.log(chalk.cyan('━'.repeat(60)));
-  console.log(chalk.dim('  Commands: exit, stats, clear\n'));
-
+  renderHeader(agentName, model, workspacePath);
 
   while (true) {
     try {
-      const message = await rl.question(chalk.green('You: '));
+      const message = await rl.question(renderPrompt());
 
       if (!message.trim()) continue;
 
-      if (message.toLowerCase() === 'exit' || message.toLowerCase() === 'quit') {
-        console.log(chalk.yellow('\n👋 Goodbye!'));
+      const normalized = message.toLowerCase();
+
+      if (normalized === 'exit' || normalized === 'quit') {
+        console.log(chalk.hex('#fbbf24')('\nSession closed.'));
         intentionalClose = true;
         rl.close();
         orchestrator.shutdown();
         process.exit(0);
       }
 
-      if (message.toLowerCase() === 'stats') {
+      if (normalized === 'stats') {
         const stats = orchestrator.getStats();
-        console.log(chalk.blue('\n📊 System Stats:'));
-        console.log(JSON.stringify(stats, null, 2));
+        console.log();
+        console.log(
+          boxen(JSON.stringify(stats, null, 2), {
+            padding: { top: 0, right: 1, bottom: 0, left: 1 },
+            borderStyle: 'round',
+            borderColor: 'blue'
+          })
+        );
         console.log();
         continue;
       }
 
-      if (message.toLowerCase() === 'clear') {
-        console.clear();
-        // Redisplay header
-        console.log(chalk.cyan('━'.repeat(60)));
-        console.log(chalk.cyan.bold('  Interactive Mode'));
-        console.log(chalk.gray(`  Agent: ${agent?.config.name || agentId}`));
-        console.log(chalk.gray(`  Model: ${agent?.config.model || 'unknown'}`));
-        console.log(chalk.gray(`  Workspace: ${workspacePath}`));
-        console.log(chalk.cyan('━'.repeat(60)));
-        console.log(chalk.dim('  Commands: exit, stats, clear\n'));
+      if (normalized === 'clear') {
+        renderHeader(agentName, model, workspacePath);
         continue;
       }
 
-      process.stdout.write(chalk.blue('\nAgent: \n'));
+      console.log();
+      console.log(chalk.hex('#5b7088')('┌─ Built-in Agent'));
+      console.log(chalk.hex('#5b7088')('│'));
 
-      // Pause readline to prevent interference during agent response
       rl.pause();
 
-      // Show thinking spinner inline
       const spinner = ora({
         text: chalk.dim('Thinking...'),
         color: 'cyan',
@@ -96,23 +146,20 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
           spinner.stop();
         });
 
-        // Force a newline and ensure clean state for next prompt
-        process.stdout.write('\n');
+        process.stdout.write(`\n${chalk.hex('#5b7088')('└────────────────────────────────────────────────────────')}\n\n`);
       } catch (error) {
         spinner.stop();
-        console.error(chalk.red('Error'));
-        throw error;
+        console.error(chalk.red('Error'), error);
+        process.stdout.write('\n');
       } finally {
-        // Always resume readline, even if there was an error
         rl.resume();
-        // Force terminal back to proper state after resume
         if (input.isTTY && input.setRawMode) {
           input.setRawMode(false);
           input.setRawMode(true);
         }
       }
     } catch (error) {
-      console.error(chalk.red('\n❌ Error:'), error);
+      console.error(chalk.red('\nError:'), error);
       console.log();
     }
   }

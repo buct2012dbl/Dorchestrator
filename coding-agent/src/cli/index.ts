@@ -17,8 +17,42 @@ import { sendMessageTool, spawnAgentTool, broadcastTool } from '../tools/agent-t
 import { setSharedContextTool, getSharedContextTool, listSharedContextTool, deleteSharedContextTool } from '../tools/shared-context-tools.js';
 import { startRepl } from './repl.js';
 import chalk from 'chalk';
+import boxen from 'boxen';
 
 const program = new Command();
+
+function renderLaunchScreen(agentId: string, model: string, agentCount: number, toolCount: number): void {
+  const title = [
+    '  ____   ___  ____   ____ _   _ _____ ____ _____ ____      _  _____ ___  ____  ',
+    ' |  _ \\ / _ \\|  _ \\ / ___| | | | ____/ ___|_   _|  _ \\    / \\|_   _/ _ \\|  _ \\ ',
+    " | | | | | | | |_) | |   | |_| |  _| \\___ \\ | | | |_) |  / _ \\ | || | | | |_) |",
+    ' | |_| | |_| |  _ <| |___|  _  | |___ ___) || | |  _ <  / ___ \\| || |_| |  _ < ',
+    ' |____/ \\___/|_| \\_\\\\____|_| |_|_____|____/ |_| |_| \\_\\/_/   \\_\\_| \\___/|_| \\_\\'
+  ].join('\n');
+
+  const summary = [
+    `${chalk.hex('#9fb0c3')('Built-in agent console')}`,
+    `${chalk.hex('#7dd3fc')('Agent')}   ${chalk.white(agentId)}`,
+    `${chalk.hex('#7dd3fc')('Model')}   ${chalk.white(model)}`,
+    `${chalk.hex('#7dd3fc')('Fleet')}   ${chalk.white(`${agentCount} agents`)}`,
+    `${chalk.hex('#7dd3fc')('Tools')}   ${chalk.white(`${toolCount} registered`)}`,
+    `${chalk.hex('#7dd3fc')('Mode')}    ${chalk.white('Interactive terminal')}`
+  ].join('\n');
+
+  console.clear();
+  console.log(
+    boxen(
+      `${chalk.hex('#8ec5ff').bold(title)}\n\n${summary}`,
+      {
+        padding: { top: 1, right: 2, bottom: 1, left: 2 },
+        margin: { top: 0, bottom: 1, left: 0, right: 0 },
+        borderStyle: 'round',
+        borderColor: 'cyan',
+        backgroundColor: '#08111f'
+      }
+    )
+  );
+}
 
 program
   .name('coding-agent')
@@ -34,9 +68,6 @@ program
   .option('-s, --system-prompt <text>', 'System prompt to append')
   .action(async (options) => {
     try {
-      console.log(chalk.blue('🤖 Coding Agent System'));
-      console.log(chalk.gray('Loading configuration...'));
-
       // Load config
       await configLoader.load(options.config);
       const config = configLoader.get();
@@ -110,10 +141,13 @@ program
         orchestrator.createAgent(dynamicAgent);
       }
 
-      console.log(chalk.green('✓ Configuration loaded'));
-      console.log(chalk.green(`✓ ${config.agents.length} agents registered`));
-      console.log(chalk.green(`✓ ${toolRegistry.getAll().length} tools available`));
-      console.log();
+      const activeAgent = orchestrator.getAgent(options.agent);
+      renderLaunchScreen(
+        options.agent,
+        activeAgent?.config.model || options.model || config.defaults.model,
+        config.agents.length,
+        toolRegistry.getAll().length
+      );
 
       // Start REPL
       await startRepl(orchestrator, options.agent);
