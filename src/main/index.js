@@ -105,6 +105,13 @@ function findClaude() {
 const NODE_PATH = findNode();
 const CLAUDE_PATH = findClaude();
 
+function getCodingAgentCliPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'coding-agent', 'dist', 'cli', 'index.js');
+  }
+  return path.join(__dirname, '../../coding-agent/dist/cli/index.js');
+}
+
 function buildTerminalCommand(config = {}, options = {}) {
   const {
     allowShell = false,
@@ -130,8 +137,11 @@ function buildTerminalCommand(config = {}, options = {}) {
       console.log(`${logPrefix} Codex agent name: ${config.name}`);
     }
   } else if (terminalType === 'coding-agent') {
-    command = 'node';
-    const codingAgentPath = path.join(__dirname, '../../coding-agent/dist/cli/index.js');
+    command = NODE_PATH;
+    const codingAgentPath = getCodingAgentCliPath();
+    if (!fs.existsSync(codingAgentPath)) {
+      throw new Error(`Built-in coding-agent CLI not found at ${codingAgentPath}. Build coding-agent before launching.`);
+    }
     args = [codingAgentPath, 'start'];
     if (codingAgentConfigPath) args.push('--config', codingAgentConfigPath);
     if (config.model) args.push('--model', config.model);

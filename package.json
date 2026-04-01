@@ -7,7 +7,7 @@
     "start": "electron .",
     "dev": "concurrently \"npm run dev:react\" \"wait-on http://localhost:3000 && electron .\"",
     "dev:react": "vite",
-    "build": "vite build && electron-builder",
+    "build": "npm --prefix coding-agent run build && vite build && electron-builder",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "keywords": [
@@ -50,6 +50,26 @@
       "buildResources": "build",
       "output": "release"
     },
+    "extraResources": [
+      {
+        "from": "coding-agent/dist",
+        "to": "coding-agent/dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "coding-agent/node_modules",
+        "to": "coding-agent/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "coding-agent/package.json",
+        "to": "coding-agent/package.json"
+      }
+    ],
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "mac": {
