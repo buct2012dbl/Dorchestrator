@@ -186,6 +186,30 @@ function getConnectedAgents(agentId) {
 // ---- TCP bridge server for inter-agent messaging ----
 let bridgePort = 0;
 
+async function ensureAgentPtyRunning(agentId) {
+  let ptyProcess = ptys.get(agentId);
+  if (ptyProcess) return ptyProcess;
+
+  const targetAgent = agentGraph.agents.find((a) => a.id === agentId);
+  if (!targetAgent?.data) {
+    throw new Error(`Target agent ${agentId} not found in graph`);
+  }
+
+  const dims = ptyDims.get(agentId) || { cols: 80, rows: 24 };
+  const result = spawnPty(agentId, targetAgent.data, dims.cols, dims.rows);
+  if (!result?.success) {
+    throw new Error(result?.error || `Failed to start target agent ${agentId}`);
+  }
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    ptyProcess = ptys.get(agentId);
+    if (ptyProcess) return ptyProcess;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Target agent ${agentId} did not become ready`);
+}
+
 function startBridgeServer() {
   return new Promise((resolve) => {
   const server = net.createServer(async (socket) => {
@@ -210,12 +234,9 @@ function startBridgeServer() {
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
       try {
-        // Deliver message to target agent without waiting for response
-        const ptyProcess = ptys.get(targetAgentId);
-        if (!ptyProcess) {
-          socket.write(JSON.stringify({ success: false, error: 'Target agent not running' }) + '\n');
-          return;
-        }
+        // Auto-start the target PTY on demand so bridge tools work even if the panel
+        // has not been opened yet in the renderer.
+        const ptyProcess = await ensureAgentPtyRunning(targetAgentId);
 
         const fullMessage = `[Message from ${fromName}]: ${message}`;
         console.log(`[Bridge] Delivering message to ${targetAgentId}`);
@@ -735,9 +756,22 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
           console.error('[PTY] Failed to add MCP server for Codex:', err.message);
         }
       } else if (terminalType === 'coding-agent') {
-        // Coding Agent: MCP support to be added later
-        // For now, skip MCP bridge configuration
-        console.log(`[PTY] MCP bridge not yet implemented for coding-agent`);
+        const mcpConfig = {
+          mcpServers: {
+            'agent-bridge': {
+              command: NODE_PATH,
+              args: [mcpBridgePath, bridgeConfigPath],
+            },
+          },
+        };
+        const mcpConfigPath = path.join(tmpDir, `ao-coding-agent-mcp-${agentId}.json`);
+        try {
+          fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+          env.CODING_AGENT_MCP_CONFIG = mcpConfigPath;
+          console.log(`[PTY] Wrote MCP config for coding-agent ${agentId}: ${mcpConfigPath}`);
+        } catch (err) {
+          console.error('[PTY] Failed to write MCP config for coding-agent:', err.message);
+        }
       } else {
         // Claude Code: use --mcp-config flag
         const mcpConfig = {

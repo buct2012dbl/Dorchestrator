@@ -15,6 +15,7 @@ import { bashTool } from '../tools/bash-tool.js';
 import { searchCodeTool, getDependenciesTool, findSymbolTool, indexCodebaseTool } from '../tools/context-tools.js';
 import { sendMessageTool, spawnAgentTool, broadcastTool } from '../tools/agent-tools.js';
 import { setSharedContextTool, getSharedContextTool, listSharedContextTool, deleteSharedContextTool } from '../tools/shared-context-tools.js';
+import { registerMcpToolsFromEnvironment } from '../tools/mcp-tools.js';
 import { startRepl } from './repl.js';
 import chalk from 'chalk';
 import boxen from 'boxen';
@@ -51,6 +52,16 @@ function renderLaunchScreen(agentId: string, model: string, agentCount: number, 
       }
     )
   );
+}
+
+function addToolsToAgents(agentConfigs: Array<{ tools: string[] }>, toolIds: string[]): void {
+  for (const agentConfig of agentConfigs) {
+    for (const toolId of toolIds) {
+      if (!agentConfig.tools.includes(toolId)) {
+        agentConfig.tools.push(toolId);
+      }
+    }
+  }
 }
 
 program
@@ -92,6 +103,15 @@ program
       toolRegistry.register(getSharedContextTool);
       toolRegistry.register(listSharedContextTool);
       toolRegistry.register(deleteSharedContextTool);
+      let mcpToolIds: string[] = [];
+      try {
+        mcpToolIds = await registerMcpToolsFromEnvironment((tool) => {
+          toolRegistry.register(tool);
+        });
+      } catch (error) {
+        console.warn(chalk.yellow(`Failed to initialize MCP tools: ${error instanceof Error ? error.message : String(error)}`));
+      }
+      addToolsToAgents(config.agents, mcpToolIds);
 
       // Register agent factories
       agentRegistry.registerFactory('coding', (config) => new CodingAgent(config));
@@ -137,6 +157,7 @@ program
           tools: ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'searchCode', 'getDependencies', 'findSymbol'],
           permissions: { fileWrite: true, shellExec: true, networkAccess: true, allowAll: true }
         };
+        addToolsToAgents([dynamicAgent], mcpToolIds);
         orchestrator.createAgent(dynamicAgent);
       }
 
