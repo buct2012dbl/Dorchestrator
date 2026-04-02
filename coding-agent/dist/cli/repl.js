@@ -4,11 +4,9 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import ora from 'ora';
 const BRAND_ART = [
-    '  ____   ___  ____   ____ _   _ _____ ____ _____ ____      _  _____ ___  ____  ',
-    ' |  _ \\ / _ \\|  _ \\ / ___| | | | ____/ ___|_   _|  _ \\    / \\|_   _/ _ \\|  _ \\ ',
-    " | | | | | | | |_) | |   | |_| |  _| \\___ \\ | | | |_) |  / _ \\ | || | | | |_) |",
-    ' | |_| | |_| |  _ <| |___|  _  | |___ ___) || | |  _ <  / ___ \\| || |_| |  _ < ',
-    ' |____/ \\___/|_| \\_\\\\____|_| |_|_____|____/ |_| |_| \\_\\/_/   \\_\\_| \\___/|_| \\_\\'
+    '╔╦╗╔═╗╦═╗╔═╗╦ ╦╔═╗╔═╗╔╦╗╦═╗╔═╗╔╦╗╔═╗╦═╗',
+    ' ║║║ ║╠╦╝║  ╠═╣║╣ ╚═╗ ║ ╠╦╝╠═╣ ║ ║ ║╠╦╝',
+    '═╩╝╚═╝╩╚═╚═╝╩ ╩╚═╝╚═╝ ╩ ╩╚═╩ ╩ ╩ ╚═╝╩╚═'
 ].join('\n');
 function trimMiddle(value, maxLength) {
     if (value.length <= maxLength)
@@ -25,16 +23,11 @@ function makeStatLine(label, value) {
 function renderHeader(agentName, model, workspacePath) {
     const width = output.columns || 100;
     const workspace = trimMiddle(workspacePath, Math.max(36, width - 42));
-    const hero = boxen(chalk.hex('#8ec5ff').bold(BRAND_ART), {
-        padding: { top: 0, right: 1, bottom: 0, left: 1 },
-        margin: 0,
-        borderStyle: 'round',
-        borderColor: 'cyan',
-        backgroundColor: '#08111f'
-    });
-    const status = boxen([
-        chalk.hex('#9fb0c3')('Built-in agent console'),
+    const panel = boxen([
+        chalk.hex('#8ec5ff').bold(BRAND_ART),
         '',
+        chalk.hex('#9fb0c3')('Built-in agent console'),
+        chalk.hex('#5b7088')('────────────────────────────────────────'),
         makeStatLine('Agent', agentName),
         makeStatLine('Model', model),
         makeStatLine('Workspace', workspace),
@@ -43,12 +36,11 @@ function renderHeader(agentName, model, workspacePath) {
         padding: { top: 0, right: 1, bottom: 0, left: 1 },
         margin: 0,
         borderStyle: 'round',
-        borderColor: 'gray',
-        backgroundColor: '#0d1726'
+        borderColor: 'cyan',
+        backgroundColor: '#08111f'
     });
     console.clear();
-    console.log(hero);
-    console.log(status);
+    console.log(panel);
     console.log(chalk.hex('#5b7088')(' Type a task and press Enter. The agent keeps session context across turns.\n'));
 }
 function renderPrompt() {
