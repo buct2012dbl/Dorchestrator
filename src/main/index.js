@@ -210,6 +210,13 @@ async function ensureAgentPtyRunning(agentId) {
   throw new Error(`Target agent ${agentId} did not become ready`);
 }
 
+function normalizeBridgeAgentId(rawAgentId) {
+  if (!rawAgentId || typeof rawAgentId !== 'string') return rawAgentId;
+  const bracketMatch = rawAgentId.match(/\[([^\]]+)\]/);
+  if (bracketMatch) return bracketMatch[1].trim();
+  return rawAgentId.trim();
+}
+
 function startBridgeServer() {
   return new Promise((resolve) => {
   const server = net.createServer(async (socket) => {
@@ -223,24 +230,44 @@ function startBridgeServer() {
       let msg;
       try { msg = JSON.parse(line); } catch { socket.write(JSON.stringify({ success: false, error: 'Bad JSON' }) + '\n'); return; }
 
-      const { fromAgentId, targetAgentId, message } = msg;
-      console.log(`[Bridge] ${fromAgentId} → ${targetAgentId}: ${message ? message.slice(0, 80) : '(empty message)'}`);
+      const { fromAgentId, targetAgentId, message, kind = 'message' } = msg;
+      const normalizedTargetAgentId = normalizeBridgeAgentId(targetAgentId);
+      console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}): ${message ? message.slice(0, 80) : '(empty message)'}`);
 
       const fromAgent = agentGraph.agents.find((a) => a.id === fromAgentId);
       const fromName = fromAgent?.data?.name || fromAgentId;
 
       // Check target agent's terminal type
-      const targetAgent = agentGraph.agents.find((a) => a.id === targetAgentId);
+      const targetAgent = agentGraph.agents.find((a) => a.id === normalizedTargetAgentId);
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
       try {
         // Auto-start the target PTY on demand so bridge tools work even if the panel
         // has not been opened yet in the renderer.
-        const ptyProcess = await ensureAgentPtyRunning(targetAgentId);
+        const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
 
-        const fullMessage = `[Message from ${fromName}]: ${message}`;
-        console.log(`[Bridge] Delivering message to ${targetAgentId}`);
-        ptyProcess.write(fullMessage + '\r');
+        const fullMessage = kind === 'response'
+          ? `[Response from ${fromName}]: ${message}`
+          : `[Message from ${fromName}]: ${message}`;
+        console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
+
+        if (kind === 'response') {
+          // Responses are informational and should not be re-processed as fresh work,
+          // otherwise agents can get stuck acknowledging each other forever.
+          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n\r\n`);
+        } else if (terminalType === 'codex') {
+          // Codex does not reliably process foreign input injected into the live PTY.
+          // Reuse the dedicated exec path so the message is actually handled.
+          void getAgentResponse(normalizedTargetAgentId, fullMessage)
+            .then((response) => {
+              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId}: ${String(response).slice(0, 200)}`);
+            })
+            .catch((err) => {
+              console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
+            });
+        } else {
+          ptyProcess.write(fullMessage + '\r');
+        }
 
         // Return immediately - receiver will send response via send_response tool
         socket.write(JSON.stringify({ success: true, delivered: true }) + '\n');

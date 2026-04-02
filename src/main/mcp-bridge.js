@@ -139,7 +139,7 @@ async function handleMessage(msg) {
     const { name, arguments: args } = params || {};
     if (name === 'send_message') {
       const { target_agent_id, message } = args || {};
-      const result = await callBridge({ fromAgentId: agentId, targetAgentId: target_agent_id, message });
+      const result = await callBridge({ fromAgentId: agentId, targetAgentId: target_agent_id, message, kind: 'message' });
       send({
         jsonrpc: '2.0', id,
         result: {
@@ -155,7 +155,7 @@ async function handleMessage(msg) {
     }
     if (name === 'send_response') {
       const { target_agent_id, response } = args || {};
-      const result = await callBridge({ fromAgentId: agentId, targetAgentId: target_agent_id, message: response });
+      const result = await callBridge({ fromAgentId: agentId, targetAgentId: target_agent_id, message: response, kind: 'response' });
       send({
         jsonrpc: '2.0', id,
         result: {
