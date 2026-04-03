@@ -258,7 +258,16 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
           >
             | |
           </button>
-          <button className="mux-save-btn" onClick={onEditTemplate}>Edit</button>
+          <button
+            className="mux-icon-btn mux-edit-btn"
+            onClick={onEditTemplate}
+            title="Edit template"
+            aria-label="Edit template"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20h4.2l9.9-9.9-4.2-4.2L4 15.8V20zm13-15.1 2.1 2.1c.5.5.5 1.3 0 1.8l-1.3 1.3-4.2-4.2 1.3-1.3c.5-.5 1.3-.5 1.8 0z" />
+            </svg>
+          </button>
         </div>
       </div>
       <div className="mux-grid-container" ref={containerRef}>
