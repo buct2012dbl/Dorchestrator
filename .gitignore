@@ -1,5 +1,6 @@
 node_modules/
 dist/
+doc/
 !/coding-agent/dist
 build/
 .DS_Store

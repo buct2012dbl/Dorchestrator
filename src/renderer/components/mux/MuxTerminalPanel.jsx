@@ -4,13 +4,14 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import './MuxTerminalPanel.css';
 
-const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, config, rect, onClose }, ref) {
+const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, config, rect, onClose, onFocus, isFocused = false }, ref) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const fitAddonRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
     resize: () => fitAddonRef.current?.fit(),
+    focus: () => termRef.current?.focus(),
   }));
 
   useEffect(() => {
@@ -102,9 +103,15 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
     };
   }, [terminalId, config]);
 
+  useEffect(() => {
+    if (isFocused) {
+      termRef.current?.focus();
+    }
+  }, [isFocused]);
+
   return (
     <div
-      className="mux-terminal-panel"
+      className={`mux-terminal-panel ${isFocused ? 'focused' : ''}`}
       style={{
         position: 'absolute',
         left: rect.left,
@@ -112,6 +119,7 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
         width: rect.width,
         height: rect.height,
       }}
+      onMouseDown={() => onFocus?.()}
     >
       <div className="mux-terminal-header">
         <span className="mux-terminal-name">{config.name}</span>
