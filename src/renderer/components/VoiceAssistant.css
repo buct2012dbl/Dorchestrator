@@ -10,9 +10,9 @@
 }
 
 .voice-assistant {
-  --voice-surface: rgba(18, 18, 26, 0.72);
-  --voice-surface-strong: rgba(18, 18, 26, 0.82);
-  --voice-border: rgba(42, 42, 58, 0.9);
+  --voice-surface: rgba(18, 18, 26, 0.5);
+  --voice-surface-strong: rgba(18, 18, 26, 0.56);
+  --voice-border: rgba(42, 42, 58, 0.7);
 }
 
 .voice-orb {
