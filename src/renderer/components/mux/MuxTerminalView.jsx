@@ -256,7 +256,11 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
             title="Split focused terminal vertically (Cmd/Ctrl+Shift+Right)"
             aria-label="Split focused terminal vertically"
           >
-            | |
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75" />
+              <path d="M12 5.75v12.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              <path d="M14.5 8.5h3v7h-3z" />
+            </svg>
           </button>
           <button
             className="mux-icon-btn mux-edit-btn"
