@@ -3,8 +3,7 @@ import { BaseAgent } from './base-agent.js';
 import type { AgentConfig } from '../core/agent-registry.js';
 import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
-import { toolRegistry } from '../tools/tool-registry.js';
-import { selectProvider, executeWithFallback } from './provider-utils.js';
+import { selectProvider, executeWithFallback, formatToolsForProvider } from './provider-utils.js';
 import chalk from 'chalk';
 import ora from 'ora';
 
@@ -35,11 +34,7 @@ export class CodingAgent extends BaseAgent {
       this.config.provider
     );
 
-    // Get tools in provider format
     const tools = this.getTools();
-    const toolsFormatted = provider.name === 'anthropic'
-      ? toolRegistry.toAnthropicFormat(tools)
-      : toolRegistry.toOpenAIFormat(tools);
 
     // Execute with automatic fallback on error
     let fullResponse = '';
@@ -55,6 +50,7 @@ export class CodingAgent extends BaseAgent {
       let currentToolCall: { id: string; name: string; arguments: string } | null = null;
 
       await executeWithFallback(provider, resolvedModel, async (activeProvider) => {
+        const toolsFormatted = formatToolsForProvider(activeProvider, tools);
         const stream = activeProvider.streamText({
           model: resolvedModel,
           messages: session.messages as any,

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { selectProvider, executeWithFallback } from '../../src/agent/provider-utils.js';
+import { selectProvider, executeWithFallback, formatToolsForProvider } from '../../src/agent/provider-utils.js';
 import { providerRegistry } from '../../src/llm/provider.js';
 import { configLoader } from '../../src/config/loader.js';
 import type { LLMProvider } from '../../src/llm/provider.js';
+import { toolRegistry } from '../../src/tools/tool-registry.js';
 
 vi.mock('../../src/llm/provider.js', () => ({
   providerRegistry: {
@@ -31,6 +32,13 @@ vi.mock('../../src/monitoring/metrics.js', () => ({
   metrics: {
     increment: vi.fn(),
     timing: vi.fn()
+  }
+}));
+
+vi.mock('../../src/tools/tool-registry.js', () => ({
+  toolRegistry: {
+    toAnthropicFormat: vi.fn((tools) => tools.map((tool: any) => ({ name: tool.id }))),
+    toOpenAIFormat: vi.fn((tools) => tools.map((tool: any) => ({ type: 'function', function: { name: tool.id } })))
   }
 }));
 
@@ -177,5 +185,31 @@ describe('executeWithFallback', () => {
 
     expect(result).toBe('success');
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('formatToolsForProvider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should use Anthropic formatting for Anthropic providers', () => {
+    const formatted = formatToolsForProvider(
+      { name: 'anthropic', models: [], streamText: vi.fn() } as unknown as LLMProvider,
+      [{ id: 'read' }] as any
+    );
+
+    expect(toolRegistry.toAnthropicFormat).toHaveBeenCalledWith([{ id: 'read' }]);
+    expect(formatted).toEqual([{ name: 'read' }]);
+  });
+
+  it('should use OpenAI formatting for non-Anthropic providers', () => {
+    const formatted = formatToolsForProvider(
+      { name: 'fallback-provider', models: [], streamText: vi.fn() } as unknown as LLMProvider,
+      [{ id: 'read' }] as any
+    );
+
+    expect(toolRegistry.toOpenAIFormat).toHaveBeenCalledWith([{ id: 'read' }]);
+    expect(formatted).toEqual([{ type: 'function', function: { name: 'read' } }]);
   });
 });

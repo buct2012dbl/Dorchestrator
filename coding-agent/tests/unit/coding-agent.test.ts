@@ -3,14 +3,9 @@ import { CodingAgent } from '../../src/agent/coding-agent.js';
 import { sessionManager } from '../../src/core/session.js';
 import { messageBus } from '../../src/core/message-bus.js';
 import { toolRegistry } from '../../src/tools/tool-registry.js';
-import { selectProvider, executeWithFallback } from '../../src/agent/provider-utils.js';
+import { selectProvider, executeWithFallback, formatToolsForProvider } from '../../src/agent/provider-utils.js';
 import type { AgentConfig } from '../../src/core/agent-registry.js';
 import type { LLMProvider } from '../../src/llm/provider.js';
-
-// Mock crypto
-global.crypto = {
-  randomUUID: () => 'test-uuid-' + Math.random()
-} as any;
 
 vi.mock('../../src/core/session.js', () => ({
   sessionManager: {
@@ -40,7 +35,8 @@ vi.mock('../../src/tools/tool-registry.js', () => ({
 
 vi.mock('../../src/agent/provider-utils.js', () => ({
   selectProvider: vi.fn(),
-  executeWithFallback: vi.fn()
+  executeWithFallback: vi.fn(),
+  formatToolsForProvider: vi.fn((provider, tools) => tools)
 }));
 
 describe('CodingAgent', () => {
@@ -162,7 +158,9 @@ describe('CodingAgent', () => {
     it('should format tools for Anthropic provider', async () => {
       await agent.process('Test');
 
-      expect(toolRegistry.toAnthropicFormat).toHaveBeenCalled();
+      expect(formatToolsForProvider).toHaveBeenCalledWith(mockProvider, [
+        { id: 'read', description: 'Read file', parameters: {} }
+      ]);
     });
 
     it('should format tools for OpenAI provider', async () => {
@@ -175,7 +173,9 @@ describe('CodingAgent', () => {
 
       await agent.process('Test');
 
-      expect(toolRegistry.toOpenAIFormat).toHaveBeenCalled();
+      expect(formatToolsForProvider).toHaveBeenCalledWith(mockProvider, [
+        { id: 'read', description: 'Read file', parameters: {} }
+      ]);
     });
 
     it('should add assistant response to session', async () => {
@@ -227,6 +227,37 @@ describe('CodingAgent', () => {
 
       expect(response).toBeDefined();
       expect(typeof response).toBe('string');
+    });
+
+    it('reformats tools for the active fallback provider', async () => {
+      const fallbackProvider = {
+        ...mockProvider,
+        name: 'openai',
+        streamText: vi.fn().mockReturnValue((async function* () {
+          yield { type: 'text' as const, content: 'Fallback response' };
+        })())
+      };
+
+      vi.mocked(toolRegistry.getForAgent).mockReturnValue([
+        { id: 'read', description: 'Read file', parameters: {} }
+      ] as any);
+
+      vi.mocked(formatToolsForProvider)
+        .mockReturnValueOnce([{ type: 'function', function: { name: 'read', arguments: '{}' } }] as any);
+
+      vi.mocked(executeWithFallback).mockImplementation(async (_provider, _model, fn) => {
+        return await fn(fallbackProvider as any);
+      });
+
+      await agent.process('Test fallback tools');
+
+      expect(formatToolsForProvider).toHaveBeenCalledTimes(1);
+      expect(formatToolsForProvider).toHaveBeenCalledWith(fallbackProvider as any, [
+        { id: 'read', description: 'Read file', parameters: {} }
+      ]);
+      expect(fallbackProvider.streamText).toHaveBeenCalledWith(expect.objectContaining({
+        tools: [{ type: 'function', function: { name: 'read', arguments: '{}' } }]
+      }));
     });
 
     it('should propagate errors from provider', async () => {

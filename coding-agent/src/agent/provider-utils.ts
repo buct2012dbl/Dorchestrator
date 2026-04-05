@@ -3,11 +3,22 @@ import { configLoader } from '../config/loader.js';
 import { logger } from '../monitoring/logger.js';
 import { metrics } from '../monitoring/metrics.js';
 import type { LLMProvider } from '../llm/provider.js';
+import { toolRegistry } from '../tools/tool-registry.js';
+import type { Tool as RegistryTool } from '../tools/tool-registry.js';
 
 export interface ProviderSelectionResult {
   provider: LLMProvider;
   resolvedModel: string;
   source: 'explicit' | 'detected' | 'fallback';
+}
+
+export function formatToolsForProvider(
+  provider: LLMProvider,
+  tools: RegistryTool[]
+): unknown[] {
+  return provider.name === 'anthropic'
+    ? toolRegistry.toAnthropicFormat(tools)
+    : toolRegistry.toOpenAIFormat(tools);
 }
 
 /**

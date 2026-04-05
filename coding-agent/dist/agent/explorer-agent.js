@@ -1,8 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
-import { toolRegistry } from '../tools/tool-registry.js';
-import { selectProvider, executeWithFallback } from './provider-utils.js';
+import { selectProvider, executeWithFallback, formatToolsForProvider } from './provider-utils.js';
 export class ExplorerAgent extends BaseAgent {
     constructor(config) {
         super(config);
@@ -22,14 +21,11 @@ export class ExplorerAgent extends BaseAgent {
         });
         // Select provider with fallback support
         const { provider, resolvedModel } = selectProvider(this.config.model, this.config.provider);
-        // Get tools in provider format
         const tools = this.getTools();
-        const toolsFormatted = provider.name === 'anthropic'
-            ? toolRegistry.toAnthropicFormat(tools)
-            : toolRegistry.toOpenAIFormat(tools);
         // Execute with automatic fallback on error
         let fullResponse = '';
         await executeWithFallback(provider, resolvedModel, async (activeProvider) => {
+            const toolsFormatted = formatToolsForProvider(activeProvider, tools);
             const stream = activeProvider.streamText({
                 model: resolvedModel,
                 messages: session.messages.map(m => ({
