@@ -80,6 +80,12 @@ function clearMergeMetadata(term) {
   };
 }
 
+function canSplitTerminal(term, axis) {
+  if (!term) return false;
+  const span = axis === 'horizontal' ? term.bounds.height : term.bounds.width;
+  return span >= MIN_SPLIT_FRACTION * 2;
+}
+
 function groupTerminalsByRow(terminals) {
   const rows = [];
 
@@ -135,7 +141,6 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
   const [focusedTerminalId, setFocusedTerminalId] = useState(null);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
-  const termRefs = useRef({});
   const spawnSignature = getTemplateSpawnSignature(template);
 
   useEffect(() => {
@@ -171,10 +176,16 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        handleVerticalSplit('left');
+        handleSplit('vertical', 'left');
       } else if (event.key === 'ArrowRight') {
         event.preventDefault();
-        handleVerticalSplit('right');
+        handleSplit('vertical', 'right');
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        handleSplit('horizontal', 'up');
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        handleSplit('horizontal', 'down');
       }
     };
 
@@ -223,21 +234,31 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
     });
   };
 
-  const handleVerticalSplit = (direction = 'right') => {
+  const handleSplit = (axis = 'vertical', direction) => {
     setTerminals((prev) => {
       const sourceTerminal = prev.find((term) => term.id === focusedTerminalId);
-      if (!sourceTerminal || sourceTerminal.bounds.width < MIN_SPLIT_FRACTION * 2) {
+      if (!canSplitTerminal(sourceTerminal, axis)) {
         return prev;
       }
 
-      const halfWidth = sourceTerminal.bounds.width / 2;
-      const splitOnLeft = direction === 'left';
-      const existingBounds = splitOnLeft
-        ? { ...sourceTerminal.bounds, x: sourceTerminal.bounds.x + halfWidth, width: halfWidth }
-        : { ...sourceTerminal.bounds, width: halfWidth };
-      const newBounds = splitOnLeft
-        ? { ...sourceTerminal.bounds, width: halfWidth }
-        : { ...sourceTerminal.bounds, x: sourceTerminal.bounds.x + halfWidth, width: halfWidth };
+      const originalBounds = { ...sourceTerminal.bounds };
+      const splitAlongWidth = axis === 'vertical';
+      const halfSpan = splitAlongWidth ? sourceTerminal.bounds.width / 2 : sourceTerminal.bounds.height / 2;
+      const splitBefore = direction === 'left' || direction === 'up';
+      const existingBounds = splitAlongWidth
+        ? (splitBefore
+            ? { ...sourceTerminal.bounds, x: sourceTerminal.bounds.x + halfSpan, width: halfSpan }
+            : { ...sourceTerminal.bounds, width: halfSpan })
+        : (splitBefore
+            ? { ...sourceTerminal.bounds, y: sourceTerminal.bounds.y + halfSpan, height: halfSpan }
+            : { ...sourceTerminal.bounds, height: halfSpan });
+      const newBounds = splitAlongWidth
+        ? (splitBefore
+            ? { ...sourceTerminal.bounds, width: halfSpan }
+            : { ...sourceTerminal.bounds, x: sourceTerminal.bounds.x + halfSpan, width: halfSpan })
+        : (splitBefore
+            ? { ...sourceTerminal.bounds, height: halfSpan }
+            : { ...sourceTerminal.bounds, y: sourceTerminal.bounds.y + halfSpan, height: halfSpan });
 
       const nextTerminal = {
         id: `mux-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -247,7 +268,7 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
         },
         bounds: newBounds,
         mergePartnerId: sourceTerminal.id,
-        mergeBounds: { ...sourceTerminal.bounds },
+        mergeBounds: originalBounds,
       };
 
       setFocusedTerminalId(nextTerminal.id);
@@ -262,7 +283,7 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
             ...term,
             bounds: existingBounds,
             mergePartnerId: nextTerminal.id,
-            mergeBounds: { ...sourceTerminal.bounds },
+            mergeBounds: originalBounds,
           }, nextTerminal];
         }
 
@@ -272,9 +293,9 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
   };
 
   const rects = computePanelRects(terminals, containerSize.w, containerSize.h);
-  const canSplitFocusedTerminal = terminals.some(
-    (term) => term.id === focusedTerminalId && term.bounds.width >= MIN_SPLIT_FRACTION * 2
-  );
+  const focusedTerminal = terminals.find((term) => term.id === focusedTerminalId);
+  const canSplitFocusedTerminalVertically = canSplitTerminal(focusedTerminal, 'vertical');
+  const canSplitFocusedTerminalHorizontally = canSplitTerminal(focusedTerminal, 'horizontal');
 
   return (
     <div
@@ -286,8 +307,8 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
         <div className="mux-toolbar-actions">
           <button
             className="mux-icon-btn"
-            onClick={() => handleVerticalSplit('left')}
-            disabled={!canSplitFocusedTerminal}
+            onClick={() => handleSplit('vertical', 'left')}
+            disabled={!canSplitFocusedTerminalVertically}
             title="Split focused terminal to the left (Cmd/Ctrl+Shift+Left)"
             aria-label="Split focused terminal to the left"
           >
@@ -299,8 +320,8 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
           </button>
           <button
             className="mux-icon-btn"
-            onClick={() => handleVerticalSplit('right')}
-            disabled={!canSplitFocusedTerminal}
+            onClick={() => handleSplit('vertical', 'right')}
+            disabled={!canSplitFocusedTerminalVertically}
             title="Split focused terminal to the right (Cmd/Ctrl+Shift+Right)"
             aria-label="Split focused terminal to the right"
           >
@@ -308,6 +329,32 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
               <rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75" />
               <path d="M12 5.75v12.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
               <path d="M14.5 8.5h3v7h-3z" />
+            </svg>
+          </button>
+          <button
+            className="mux-icon-btn"
+            onClick={() => handleSplit('horizontal', 'up')}
+            disabled={!canSplitFocusedTerminalHorizontally}
+            title="Split focused terminal upward (Cmd/Ctrl+Shift+Up)"
+            aria-label="Split focused terminal upward"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75" />
+              <path d="M4.25 12h15.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              <path d="M7.5 6.5h9v3h-9z" />
+            </svg>
+          </button>
+          <button
+            className="mux-icon-btn"
+            onClick={() => handleSplit('horizontal', 'down')}
+            disabled={!canSplitFocusedTerminalHorizontally}
+            title="Split focused terminal downward (Cmd/Ctrl+Shift+Down)"
+            aria-label="Split focused terminal downward"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.75" />
+              <path d="M4.25 12h15.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              <path d="M7.5 14.5h9v3h-9z" />
             </svg>
           </button>
           <button
@@ -332,7 +379,6 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
             onClose={() => handleCloseTerminal(term.id)}
             onFocus={() => handleFocusTerminal(term.id)}
             isFocused={term.id === focusedTerminalId}
-            ref={el => termRefs.current[term.id] = el}
           />
         ))}
       </div>
