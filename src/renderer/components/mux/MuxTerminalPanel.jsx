@@ -8,6 +8,7 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const ptyAliveRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
     resize: () => fitAddonRef.current?.fit(),
@@ -43,8 +44,21 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
 
     termRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    ptyAliveRef.current = false;
 
     let spawned = false;
+
+    function spawnSession() {
+      if (config.cliType === 'empty') return;
+
+      ptyAliveRef.current = true;
+      window.electronAPI?.spawnMuxTerminal({
+        terminalId,
+        config,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    }
 
     // Wait for container to have real dimensions before opening terminal
     const resizeObserver = new ResizeObserver(() => {
@@ -58,20 +72,17 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
 
         // Spawn PTY if not empty
         if (config.cliType !== 'empty') {
-          window.electronAPI?.spawnMuxTerminal({
+          spawnSession();
+        }
+      } else {
+        fitAddon.fit();
+        if (ptyAliveRef.current) {
+          window.electronAPI?.muxPtyResize({
             terminalId,
-            config,
             cols: terminal.cols,
             rows: terminal.rows,
           });
         }
-      } else {
-        fitAddon.fit();
-        window.electronAPI?.muxPtyResize({
-          terminalId,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        });
       }
     });
     resizeObserver.observe(containerRef.current);
@@ -85,12 +96,21 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
 
     const unsubExit = window.electronAPI?.onMuxPtyExit(({ terminalId: id }) => {
       if (id === terminalId) {
-        terminal.writeln('\r\n\x1b[33m[Session ended]\x1b[0m');
+        ptyAliveRef.current = false;
+        terminal.writeln('\r\n\x1b[33m[Session ended - press any key to restart]\x1b[0m');
       }
     });
 
     // Handle user input
     terminal.onData((data) => {
+      if (!ptyAliveRef.current) {
+        if (config.cliType === 'empty') {
+          return;
+        }
+        terminal.clear();
+        spawnSession();
+        return;
+      }
       window.electronAPI?.muxPtyInput({ terminalId, data });
     });
 
@@ -99,6 +119,7 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
       unsubData?.();
       unsubExit?.();
       terminal.dispose();
+      ptyAliveRef.current = false;
       window.electronAPI?.killMuxTerminal({ terminalId });
     };
   }, [terminalId, config]);
