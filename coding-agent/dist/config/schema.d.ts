@@ -88,8 +88,8 @@ export declare const AgentConfigSchema: z.ZodObject<{
     tools: string[];
     id: string;
     type: string;
-    temperature: number;
     name: string;
+    temperature: number;
     model: string;
     maxTokens: number;
     description: string;
@@ -105,8 +105,8 @@ export declare const AgentConfigSchema: z.ZodObject<{
     tools: string[];
     id: string;
     type: string;
-    temperature: number;
     name: string;
+    temperature: number;
     model: string;
     maxTokens: number;
     description: string;
@@ -192,8 +192,8 @@ export declare const ConfigSchema: z.ZodObject<{
         tools: string[];
         id: string;
         type: string;
-        temperature: number;
         name: string;
+        temperature: number;
         model: string;
         maxTokens: number;
         description: string;
@@ -209,8 +209,8 @@ export declare const ConfigSchema: z.ZodObject<{
         tools: string[];
         id: string;
         type: string;
-        temperature: number;
         name: string;
+        temperature: number;
         model: string;
         maxTokens: number;
         description: string;
@@ -317,8 +317,8 @@ export declare const ConfigSchema: z.ZodObject<{
         tools: string[];
         id: string;
         type: string;
-        temperature: number;
         name: string;
+        temperature: number;
         model: string;
         maxTokens: number;
         description: string;
@@ -357,8 +357,8 @@ export declare const ConfigSchema: z.ZodObject<{
         tools: string[];
         id: string;
         type: string;
-        temperature: number;
         name: string;
+        temperature: number;
         model: string;
         maxTokens: number;
         description: string;

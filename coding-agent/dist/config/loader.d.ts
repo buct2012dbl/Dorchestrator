@@ -9,8 +9,8 @@ export declare class ConfigLoader {
         tools: string[];
         id: string;
         type: string;
-        temperature: number;
         name: string;
+        temperature: number;
         model: string;
         maxTokens: number;
         description: string;
