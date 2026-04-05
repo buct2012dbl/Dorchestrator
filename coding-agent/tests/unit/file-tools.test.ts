@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { editTool, readTool, writeTool } from '../../src/tools/file-tools.js';
+import { editTool, grepTool, readTool, writeTool } from '../../src/tools/file-tools.js';
 import type { ToolContext } from '../../src/tools/tool-registry.js';
 
 describe('file-tools workspace boundaries', () => {
@@ -78,5 +78,42 @@ describe('file-tools workspace boundaries', () => {
       data: { path: 'inside.txt', replaced: true }
     });
     await expect(readFile(join(workspaceDir, 'inside.txt'), 'utf-8')).resolves.toBe('updated');
+  });
+
+  it('allows grep to search inside the workspace', async () => {
+    const result = await grepTool.execute({ pattern: 'inside', path: '.' }, context);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      count: 1
+    });
+    expect(result.data?.matches).toEqual(expect.arrayContaining(['./inside.txt:1:inside']));
+  });
+
+  it('rejects grep paths outside the workspace', async () => {
+    const result = await grepTool.execute({ pattern: 'outside', path: '../' }, context);
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Access denied: path must stay within the working directory'
+    });
+  });
+
+  it('treats shell metacharacters in grep arguments as literal input', async () => {
+    const sentinelPath = join(workspaceDir, 'sentinel.txt');
+    const result = await grepTool.execute(
+      {
+        pattern: 'inside" && touch sentinel.txt && echo "',
+        path: '.',
+        file_pattern: '*.txt" && touch sentinel.txt && echo "'
+      },
+      context
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: { matches: [], count: 0 }
+    });
+    await expect(readFile(sentinelPath, 'utf-8')).rejects.toThrow();
   });
 });

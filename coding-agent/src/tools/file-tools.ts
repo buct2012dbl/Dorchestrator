@@ -1,11 +1,11 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import glob from 'fast-glob';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Tool, ToolContext, ToolResult } from './tool-registry.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 function resolveWorkspacePath(workingDirectory: string, requestedPath: string): string {
   const workspaceRoot = resolve(workingDirectory);
@@ -202,43 +202,46 @@ export const grepTool: Tool = {
     context: ToolContext
   ): Promise<ToolResult> {
     try {
-      const searchPath = args.path || '.';
+      const searchPath = args.path ? resolveWorkspacePath(context.workingDirectory, args.path) : context.workingDirectory;
+      const relativeSearchPath = relative(context.workingDirectory, searchPath) || '.';
+      const rgArgs = ['-n', args.pattern, relativeSearchPath];
 
-      // Use ripgrep if available, fallback to grep
-      let command = `rg -n "${args.pattern}" ${searchPath}`;
       if (args.file_pattern) {
-        command += ` -g "${args.file_pattern}"`;
+        rgArgs.push('-g', args.file_pattern);
       }
 
-      try {
-        const { stdout } = await execAsync(command, {
-          cwd: context.workingDirectory,
-          maxBuffer: 10 * 1024 * 1024 // 10MB
-        });
-
+      const parseMatches = (stdout: string): ToolResult => {
         const matches = stdout.trim().split('\n').filter(Boolean);
         return {
           success: true,
           data: { matches, count: matches.length }
         };
+      };
+
+      try {
+        const { stdout } = await execFileAsync('rg', rgArgs, {
+          cwd: context.workingDirectory,
+          maxBuffer: 10 * 1024 * 1024 // 10MB
+        });
+
+        return parseMatches(stdout);
       } catch (error: any) {
-        // rg not found, try grep
-        if (error.code === 127) {
-          const grepCmd = `grep -rn "${args.pattern}" ${searchPath}`;
-          const { stdout } = await execAsync(grepCmd, {
+        if (error?.code === 'ENOENT') {
+          const grepArgs = ['-r', '-n'];
+          if (args.file_pattern) {
+            grepArgs.push(`--include=${args.file_pattern}`);
+          }
+          grepArgs.push(args.pattern, relativeSearchPath);
+
+          const { stdout } = await execFileAsync('grep', grepArgs, {
             cwd: context.workingDirectory,
             maxBuffer: 10 * 1024 * 1024
           });
 
-          const matches = stdout.trim().split('\n').filter(Boolean);
-          return {
-            success: true,
-            data: { matches, count: matches.length }
-          };
+          return parseMatches(stdout);
         }
 
-        // No matches found
-        if (error.code === 1) {
+        if (error?.code === 1) {
           return {
             success: true,
             data: { matches: [], count: 0 }
