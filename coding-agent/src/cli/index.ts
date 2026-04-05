@@ -64,6 +64,46 @@ function addToolsToAgents(agentConfigs: Array<{ tools: string[] }>, toolIds: str
   }
 }
 
+function buildDynamicAgentConfig(
+  agentId: string,
+  model: string,
+  systemPrompt: string,
+): {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  systemPrompt: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  contextWindow: number;
+  tools: string[];
+  permissions: {
+    fileWrite: boolean;
+    shellExec: boolean;
+    networkAccess: boolean;
+  };
+} {
+  return {
+    id: agentId,
+    name: agentId,
+    type: 'coding',
+    description: 'Dynamic coding agent',
+    systemPrompt,
+    model,
+    temperature: 0.7,
+    maxTokens: 4096,
+    contextWindow: 200000,
+    tools: ['read', 'write', 'edit', 'glob', 'grep', 'searchCode', 'getDependencies', 'findSymbol'],
+    permissions: {
+      fileWrite: true,
+      shellExec: false,
+      networkAccess: false
+    }
+  };
+}
+
 program
   .name('coding-agent')
   .description('Production-grade coding agent system')
@@ -144,19 +184,11 @@ program
             : options.systemPrompt;
         }
       } else {
-        const dynamicAgent = {
-          id: options.agent,
-          name: options.agent,
-          type: 'coding',
-          description: 'Dynamic coding agent',
-          systemPrompt: options.systemPrompt || '',
-          model: options.model || config.defaults.model,
-          temperature: 0.7,
-          maxTokens: 4096,
-          contextWindow: 200000,
-          tools: ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'searchCode', 'getDependencies', 'findSymbol'],
-          permissions: { fileWrite: true, shellExec: true, networkAccess: true, allowAll: true }
-        };
+        const dynamicAgent = buildDynamicAgentConfig(
+          options.agent,
+          options.model || config.defaults.model,
+          options.systemPrompt || ''
+        );
         addToolsToAgents([dynamicAgent], mcpToolIds);
         orchestrator.createAgent(dynamicAgent);
       }

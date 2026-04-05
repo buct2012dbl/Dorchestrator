@@ -1,9 +1,18 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import glob from 'fast-glob';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+function resolveWorkspacePath(workingDirectory, requestedPath) {
+    const workspaceRoot = resolve(workingDirectory);
+    const resolvedPath = resolve(workspaceRoot, requestedPath);
+    const relativePath = relative(workspaceRoot, resolvedPath);
+    if (relativePath === '..' || relativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)) {
+        throw new Error('Access denied: path must stay within the working directory');
+    }
+    return resolvedPath;
+}
 export const readTool = {
     id: 'read',
     description: 'Read the contents of a file',
@@ -19,7 +28,7 @@ export const readTool = {
     },
     async execute(args, context) {
         try {
-            const filePath = resolve(context.workingDirectory, args.file_path);
+            const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
             const content = await readFile(filePath, 'utf-8');
             return {
                 success: true,
@@ -53,7 +62,7 @@ export const writeTool = {
     },
     async execute(args, context) {
         try {
-            const filePath = resolve(context.workingDirectory, args.file_path);
+            const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
             await writeFile(filePath, args.content, 'utf-8');
             return {
                 success: true,
@@ -91,7 +100,7 @@ export const editTool = {
     },
     async execute(args, context) {
         try {
-            const filePath = resolve(context.workingDirectory, args.file_path);
+            const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
             const content = await readFile(filePath, 'utf-8');
             if (!content.includes(args.old_string)) {
                 return {
@@ -174,39 +183,40 @@ export const grepTool = {
     },
     async execute(args, context) {
         try {
-            const searchPath = args.path || '.';
-            // Use ripgrep if available, fallback to grep
-            let command = `rg -n "${args.pattern}" ${searchPath}`;
+            const searchPath = args.path ? resolveWorkspacePath(context.workingDirectory, args.path) : context.workingDirectory;
+            const relativeSearchPath = relative(context.workingDirectory, searchPath) || '.';
+            const rgArgs = ['-n', args.pattern, relativeSearchPath];
             if (args.file_pattern) {
-                command += ` -g "${args.file_pattern}"`;
+                rgArgs.push('-g', args.file_pattern);
             }
-            try {
-                const { stdout } = await execAsync(command, {
-                    cwd: context.workingDirectory,
-                    maxBuffer: 10 * 1024 * 1024 // 10MB
-                });
+            const parseMatches = (stdout) => {
                 const matches = stdout.trim().split('\n').filter(Boolean);
                 return {
                     success: true,
                     data: { matches, count: matches.length }
                 };
+            };
+            try {
+                const { stdout } = await execFileAsync('rg', rgArgs, {
+                    cwd: context.workingDirectory,
+                    maxBuffer: 10 * 1024 * 1024 // 10MB
+                });
+                return parseMatches(stdout);
             }
             catch (error) {
-                // rg not found, try grep
-                if (error.code === 127) {
-                    const grepCmd = `grep -rn "${args.pattern}" ${searchPath}`;
-                    const { stdout } = await execAsync(grepCmd, {
+                if (error?.code === 'ENOENT') {
+                    const grepArgs = ['-r', '-n'];
+                    if (args.file_pattern) {
+                        grepArgs.push(`--include=${args.file_pattern}`);
+                    }
+                    grepArgs.push(args.pattern, relativeSearchPath);
+                    const { stdout } = await execFileAsync('grep', grepArgs, {
                         cwd: context.workingDirectory,
                         maxBuffer: 10 * 1024 * 1024
                     });
-                    const matches = stdout.trim().split('\n').filter(Boolean);
-                    return {
-                        success: true,
-                        data: { matches, count: matches.length }
-                    };
+                    return parseMatches(stdout);
                 }
-                // No matches found
-                if (error.code === 1) {
+                if (error?.code === 1) {
                     return {
                         success: true,
                         data: { matches: [], count: 0 }

@@ -152,7 +152,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     }
   } else {
     command = process.env.CLAUDE_PATH || CLAUDE_PATH;
-    args = ['--dangerously-skip-permissions'];
+    args = [];
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) {
       args.push('--append-system-prompt', config.systemPrompt);
