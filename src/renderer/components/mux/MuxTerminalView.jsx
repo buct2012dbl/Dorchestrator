@@ -80,19 +80,54 @@ function clearMergeMetadata(term) {
   };
 }
 
+function groupTerminalsByRow(terminals) {
+  const rows = [];
+
+  terminals.forEach((term) => {
+    const matchingRow = rows.find((row) => (
+      Math.abs(row.y - term.bounds.y) < 0.0001 &&
+      Math.abs(row.height - term.bounds.height) < 0.0001
+    ));
+
+    if (matchingRow) {
+      matchingRow.terminals.push(term);
+      return;
+    }
+
+    rows.push({
+      y: term.bounds.y,
+      height: term.bounds.height,
+      terminals: [term],
+    });
+  });
+
+  return rows
+    .sort((a, b) => a.y - b.y)
+    .map((row) => ({
+      ...row,
+      terminals: row.terminals.sort((a, b) => a.bounds.x - b.bounds.x),
+    }));
+}
+
 function rebalanceTerminals(terminals) {
   if (terminals.length === 0) return [];
 
-  const width = 1 / terminals.length;
-  return terminals.map((term, index) => ({
-    ...clearMergeMetadata(term),
-    bounds: {
-      x: index * width,
-      y: 0,
-      width,
-      height: 1,
-    },
-  }));
+  const rows = groupTerminalsByRow(terminals);
+  const rowHeight = 1 / rows.length;
+
+  return rows.flatMap((row, rowIndex) => {
+    const width = 1 / row.terminals.length;
+
+    return row.terminals.map((term, columnIndex) => ({
+      ...clearMergeMetadata(term),
+      bounds: {
+        x: columnIndex * width,
+        y: rowIndex * rowHeight,
+        width,
+        height: rowHeight,
+      },
+    }));
+  });
 }
 
 function MuxTerminalView({ template, active = true, onEditTemplate }) {
