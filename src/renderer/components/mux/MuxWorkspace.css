@@ -1,8 +1,119 @@
 .mux-workspace {
   display: flex;
   flex: 1;
+  position: relative;
   overflow: hidden;
   background: var(--background);
+}
+
+.mux-sidebar-shell {
+  position: relative;
+  display: flex;
+  width: 292px;
+  min-width: 292px;
+  flex-shrink: 0;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+.mux-sidebar-shell.collapsed {
+  width: 0;
+  min-width: 0;
+}
+
+.mux-sidebar-panel {
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mux-sidebar-shell.collapsed .mux-sidebar-panel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mux-sidebar-divider-hitbox {
+  position: relative;
+  width: 12px;
+  min-width: 12px;
+  height: 100%;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.mux-sidebar-divider-hitbox::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-right: 1px solid var(--border);
+  opacity: 0.7;
+}
+
+.mux-sidebar-shell.collapsed .mux-sidebar-divider-hitbox {
+  width: 0;
+  min-width: 0;
+}
+
+.mux-sidebar-shell.collapsed .mux-sidebar-divider-hitbox::before {
+  opacity: 0;
+}
+
+.mux-sidebar-reopen-hitbox {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 100%;
+  z-index: 5;
+}
+
+.mux-sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  color: var(--accent);
+  font-size: 18px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.mux-sidebar-toggle:hover {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.mux-sidebar-toggle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.mux-sidebar-close-toggle {
+  right: -14px;
+  border-radius: 999px;
+}
+
+.mux-sidebar-open-toggle {
+  left: -6px;
+  border-radius: 0 999px 999px 0;
+}
+
+.mux-sidebar-divider-hitbox:hover .mux-sidebar-close-toggle,
+.mux-sidebar-reopen-hitbox:hover .mux-sidebar-open-toggle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .config-confirm-overlay {

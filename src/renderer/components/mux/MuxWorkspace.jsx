@@ -6,6 +6,7 @@ import { DEFAULT_TEMPLATES } from '../../store/defaultTemplates';
 import './MuxWorkspace.css';
 
 function MuxWorkspace() {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
@@ -99,13 +100,39 @@ function MuxWorkspace() {
 
   return (
     <div className="mux-workspace">
-      <MuxSidebar
-        templates={templates}
-        selectedTemplate={selectedTemplate}
-        onSelectTemplate={handleSelectTemplate}
-        onNewTemplate={handleNewTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-      />
+      <div className={`mux-sidebar-shell ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="mux-sidebar-divider-hitbox">
+          <button
+            type="button"
+            className="mux-sidebar-toggle mux-sidebar-close-toggle"
+            aria-label="Close templates sidebar"
+            onClick={() => setIsSidebarCollapsed(true)}
+          >
+            &lt;
+          </button>
+        </div>
+        <div className="mux-sidebar-panel">
+          <MuxSidebar
+            templates={templates}
+            selectedTemplate={selectedTemplate}
+            onSelectTemplate={handleSelectTemplate}
+            onNewTemplate={handleNewTemplate}
+            onDeleteTemplate={handleDeleteTemplate}
+          />
+        </div>
+      </div>
+      {isSidebarCollapsed && (
+        <div className="mux-sidebar-reopen-hitbox">
+          <button
+            type="button"
+            className="mux-sidebar-toggle mux-sidebar-open-toggle"
+            aria-label="Open templates sidebar"
+            onClick={() => setIsSidebarCollapsed(false)}
+          >
+            &gt;
+          </button>
+        </div>
+      )}
       {visibleTemplates.length > 0 ? (
         visibleTemplates.map((template) => (
           <MuxTerminalView
