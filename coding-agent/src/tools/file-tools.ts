@@ -1,11 +1,23 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import glob from 'fast-glob';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Tool, ToolContext, ToolResult } from './tool-registry.js';
 
 const execAsync = promisify(exec);
+
+function resolveWorkspacePath(workingDirectory: string, requestedPath: string): string {
+  const workspaceRoot = resolve(workingDirectory);
+  const resolvedPath = resolve(workspaceRoot, requestedPath);
+  const relativePath = relative(workspaceRoot, resolvedPath);
+
+  if (relativePath === '..' || relativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)) {
+    throw new Error('Access denied: path must stay within the working directory');
+  }
+
+  return resolvedPath;
+}
 
 export const readTool: Tool = {
   id: 'read',
@@ -22,7 +34,7 @@ export const readTool: Tool = {
   },
   async execute(args: { file_path: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = resolve(context.workingDirectory, args.file_path);
+      const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
       const content = await readFile(filePath, 'utf-8');
       return {
         success: true,
@@ -56,7 +68,7 @@ export const writeTool: Tool = {
   },
   async execute(args: { file_path: string; content: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = resolve(context.workingDirectory, args.file_path);
+      const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
       await writeFile(filePath, args.content, 'utf-8');
       return {
         success: true,
@@ -97,7 +109,7 @@ export const editTool: Tool = {
     context: ToolContext
   ): Promise<ToolResult> {
     try {
-      const filePath = resolve(context.workingDirectory, args.file_path);
+      const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
       const content = await readFile(filePath, 'utf-8');
 
       if (!content.includes(args.old_string)) {
