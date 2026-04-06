@@ -36,6 +36,7 @@
   background: transparent;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
+  border-radius: 0;
   padding: 4px 10px;
   font-size: 10px;
   cursor: pointer;

@@ -15,6 +15,7 @@
   background: transparent;
   color: var(--foreground);
   border: 1px solid var(--border);
+  border-radius: 0;
   padding: 6px 14px;
   font-size: 11px;
   cursor: pointer;

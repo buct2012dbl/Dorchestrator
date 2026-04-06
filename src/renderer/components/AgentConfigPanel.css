@@ -28,6 +28,7 @@
 .config-close {
   background: none;
   border: none;
+  border-radius: 0;
   color: var(--muted-foreground);
   font-size: 18px;
   cursor: pointer;
@@ -70,6 +71,7 @@
   background: transparent;
   color: var(--foreground);
   border: 1px solid var(--border);
+  border-radius: 0;
   padding: 5px 12px;
   font-size: 10px;
   cursor: pointer;
@@ -167,6 +169,7 @@
   background: transparent;
   color: var(--accent);
   border: 2px solid var(--accent);
+  border-radius: 0;
   padding: 10px 16px;
   font-size: 12px;
   cursor: pointer;
@@ -186,6 +189,7 @@
   background: transparent;
   color: var(--destructive);
   border: 2px solid var(--destructive);
+  border-radius: 0;
   padding: 10px 16px;
   font-size: 12px;
   cursor: pointer;
@@ -263,6 +267,7 @@
 .btn-cancel {
   flex: 1;
   padding: 10px 16px;
+  border-radius: 0;
   font-size: 12px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;

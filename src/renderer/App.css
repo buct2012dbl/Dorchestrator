@@ -69,7 +69,7 @@
   gap: 4px;
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 2px;
 }
 
@@ -79,7 +79,7 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 0;
   font-size: 13px;
   font-family: 'Share Tech Mono', monospace;
   transition: all 0.2s;
@@ -214,6 +214,7 @@
   background: transparent;
   color: var(--accent);
   border: 2px solid var(--accent);
+  border-radius: 0;
   padding: 8px 18px;
   font-size: 11px;
   cursor: pointer;
@@ -385,6 +386,7 @@
 .workspace-browse-btn {
   background: transparent;
   border: 2px solid var(--accent);
+  border-radius: 0;
   color: var(--accent);
   padding: 12px 32px;
   font-size: 13px;
@@ -419,6 +421,7 @@
   gap: 8px;
   background: transparent;
   border: 1px solid var(--border);
+  border-radius: 0;
   color: var(--foreground);
   padding: 6px 14px;
   font-size: 11px;
@@ -452,6 +455,7 @@
 .view-toggle-btn {
   background: transparent;
   border: 1px solid var(--border);
+  border-radius: 0;
   color: var(--foreground);
   padding: 6px 14px;
   font-size: 11px;
@@ -468,4 +472,3 @@
   color: var(--accent);
   box-shadow: var(--box-shadow-neon-sm);
 }
-

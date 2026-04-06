@@ -76,6 +76,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
+  border-radius: 0;
   background: color-mix(in srgb, var(--card) 92%, transparent);
   color: var(--accent);
   font-size: 18px;
@@ -102,12 +103,10 @@
 
 .mux-sidebar-close-toggle {
   right: -14px;
-  border-radius: 999px;
 }
 
 .mux-sidebar-open-toggle {
   left: -6px;
-  border-radius: 0 999px 999px 0;
 }
 
 .mux-sidebar-divider-hitbox:hover .mux-sidebar-close-toggle,
@@ -158,6 +157,7 @@
 .btn-cancel {
   flex: 1;
   padding: 10px 16px;
+  border-radius: 0;
   font-size: 12px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;

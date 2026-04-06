@@ -47,6 +47,7 @@
 .modal-close {
   background: none;
   border: none;
+  border-radius: 0;
   color: var(--muted-foreground);
   font-size: 18px;
   cursor: pointer;
@@ -233,6 +234,7 @@
 .btn-primary,
 .btn-secondary {
   padding: 10px 16px;
+  border-radius: 0;
   font-size: 12px;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
