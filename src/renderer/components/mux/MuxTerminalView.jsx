@@ -139,6 +139,8 @@ function rebalanceTerminals(terminals) {
 function MuxTerminalView({ template, active = true, onEditTemplate }) {
   const [terminals, setTerminals] = useState([]);
   const [focusedTerminalId, setFocusedTerminalId] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetVersion, setResetVersion] = useState(0);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const spawnSignature = getTemplateSpawnSignature(template);
@@ -153,7 +155,7 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
     const newTerminals = createRuntimeTerminals(template);
     setTerminals(newTerminals);
     setFocusedTerminalId(newTerminals[0]?.id || null);
-  }, [spawnSignature, template]);
+  }, [spawnSignature, template, resetVersion]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -292,6 +294,11 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
     });
   };
 
+  const handleConfirmReset = () => {
+    setShowResetConfirm(false);
+    setResetVersion((prev) => prev + 1);
+  };
+
   const rects = computePanelRects(terminals, containerSize.w, containerSize.h);
   const focusedTerminal = terminals.find((term) => term.id === focusedTerminalId);
   const canSplitFocusedTerminalVertically = canSplitTerminal(focusedTerminal, 'vertical');
@@ -358,6 +365,18 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
             </svg>
           </button>
           <button
+            className="mux-icon-btn"
+            onClick={() => setShowResetConfirm(true)}
+            disabled={!template}
+            title="Reset layout and respawn terminals"
+            aria-label="Reset layout and respawn terminals"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 8a7 7 0 1 0 2 4.95" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M19 3.75v4.5h-4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
             className="mux-icon-btn mux-edit-btn"
             onClick={onEditTemplate}
             title="Edit template"
@@ -382,6 +401,18 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
           />
         ))}
       </div>
+      {showResetConfirm && (
+        <div className="config-confirm-overlay">
+          <div className="config-confirm-dialog">
+            <h4>Reset this template?</h4>
+            <p>Revert the current Mux layout to the saved template and respawn all terminals.</p>
+            <div className="config-confirm-actions">
+              <button className="btn-cancel" onClick={() => setShowResetConfirm(false)}>Cancel</button>
+              <button className="btn-confirm" onClick={handleConfirmReset}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
