@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
@@ -502,6 +502,57 @@ function saveSettings(settings) {
   fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2));
 }
 
+function encryptSetting(value) {
+  if (!value || !safeStorage.isEncryptionAvailable()) return null;
+  return safeStorage.encryptString(value).toString('base64');
+}
+
+function decryptSetting(value) {
+  if (!value || !safeStorage.isEncryptionAvailable()) return null;
+  try {
+    return safeStorage.decryptString(Buffer.from(value, 'base64'));
+  } catch (error) {
+    log('Failed to decrypt secure setting:', error.message);
+    return null;
+  }
+}
+
+function writeSecureAuthSettings(nextSettings, authToken, baseURL) {
+  delete nextSettings.authToken;
+  delete nextSettings.baseURL;
+
+  const encryptedAuthToken = encryptSetting(authToken);
+  const encryptedBaseURL = encryptSetting(baseURL);
+
+  if (encryptedAuthToken) nextSettings.secureAuthToken = encryptedAuthToken;
+  else delete nextSettings.secureAuthToken;
+
+  if (encryptedBaseURL) nextSettings.secureBaseURL = encryptedBaseURL;
+  else delete nextSettings.secureBaseURL;
+}
+
+function readSecureAuthSettings(savedSettings) {
+  const secureAuthToken = decryptSetting(savedSettings.secureAuthToken);
+  const secureBaseURL = decryptSetting(savedSettings.secureBaseURL);
+  const legacyAuthToken = typeof savedSettings.authToken === 'string' ? savedSettings.authToken : null;
+  const legacyBaseURL = typeof savedSettings.baseURL === 'string' ? savedSettings.baseURL : null;
+  const shouldMigrateLegacy = Boolean(legacyAuthToken || legacyBaseURL);
+
+  if (secureAuthToken || secureBaseURL) {
+    return {
+      authToken: secureAuthToken,
+      baseURL: secureBaseURL,
+      shouldMigrateLegacy,
+    };
+  }
+
+  return {
+    authToken: legacyAuthToken,
+    baseURL: legacyBaseURL,
+    shouldMigrateLegacy,
+  };
+}
+
 let settings = {};
 let workspace = null; // current working directory for PTY sessions
 
@@ -558,8 +609,14 @@ function createWindow() {
 app.whenReady().then(async () => {
   settings = loadSettings();
   workspace = settings.workspace || null;
-  authConfig.authToken = settings.authToken || authConfig.authToken;
-  authConfig.baseURL = settings.baseURL || authConfig.baseURL;
+  const storedAuth = readSecureAuthSettings(settings);
+  authConfig.authToken = storedAuth.authToken || authConfig.authToken;
+  authConfig.baseURL = storedAuth.baseURL || authConfig.baseURL;
+
+  if (storedAuth.shouldMigrateLegacy) {
+    writeSecureAuthSettings(settings, storedAuth.authToken, storedAuth.baseURL);
+    saveSettings(settings);
+  }
 
   // Initialize graph config manager with workspace
   if (workspace) {
@@ -601,8 +658,7 @@ app.on('before-quit', () => {
 // Configure auth token and base URL at runtime
 ipcMain.handle('configure', async (event, { authToken, baseURL }) => {
   authConfig = { authToken, baseURL };
-  settings.authToken = authToken;
-  settings.baseURL = baseURL;
+  writeSecureAuthSettings(settings, authToken, baseURL);
   saveSettings(settings);
   orchestrator.configure({ authToken, baseURL });
   return { success: true };
