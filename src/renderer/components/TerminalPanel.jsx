@@ -1,16 +1,60 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPanel.css';
+import useTerminalSession from './useTerminalSession';
+
+const TERMINAL_OPTIONS = { allowProposedApi: true };
 
 const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onDragStart, onSelect }, ref) {
-  const containerRef = useRef(null);
-  const termRef = useRef(null);
-  const fitAddonRef = useRef(null);
-  const initialized = useRef(false);
-  const ptyAlive = useRef(false);
   const justSpawned = useRef(false);
+  const spawnFilterTimerRef = useRef(null);
+
+  const { containerRef, termRef, ptyAliveRef } = useTerminalSession({
+    sessionKey: `${agent.id}:${agent.data.restartKey || ''}`,
+    terminalOptions: TERMINAL_OPTIONS,
+    spawnDelayMs: 100,
+    beforeSpawn: () => {
+      justSpawned.current = true;
+      if (spawnFilterTimerRef.current !== null) {
+        window.clearTimeout(spawnFilterTimerRef.current);
+      }
+      spawnFilterTimerRef.current = window.setTimeout(() => {
+        justSpawned.current = false;
+        spawnFilterTimerRef.current = null;
+      }, 500);
+    },
+    onSpawn: ({ terminal }) => {
+      console.log('[Renderer] Spawning agent:', agent.id, 'with data:', agent.data);
+      window.electronAPI?.spawnAgent({
+        agentId: agent.id,
+        agentData: agent.data,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    },
+    onInput: ({ data }) => {
+      window.electronAPI?.ptyInput({ agentId: agent.id, data });
+    },
+    onResize: ({ terminal }) => {
+      window.electronAPI?.ptyResize({
+        agentId: agent.id,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    },
+    onFocus: () => {
+      onSelect?.();
+    },
+    onCleanup: () => {
+      if (spawnFilterTimerRef.current !== null) {
+        window.clearTimeout(spawnFilterTimerRef.current);
+        spawnFilterTimerRef.current = null;
+      }
+      justSpawned.current = false;
+      window.electronAPI?.killAgent({ agentId: agent.id });
+    },
+    shouldIgnoreInput: (data) => data.match(/^\x1b\[\?1;/),
+  });
 
   useImperativeHandle(ref, () => ({
     write: (text) => {
@@ -35,147 +79,15 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onD
     clear: () => termRef.current?.clear(),
     writeText: (text) => {
       // Write text as if user typed it
-      if (termRef.current && ptyAlive.current) {
+      if (termRef.current && ptyAliveRef.current) {
         window.electronAPI?.ptyInput({ agentId: agent.id, data: text });
       }
     },
     notifyExit: () => {
-      ptyAlive.current = false;
+      ptyAliveRef.current = false;
       termRef.current?.writeln('\r\n\x1b[33m[Session ended — press any key to restart]\x1b[0m');
     },
   }));
-
-  useEffect(() => {
-    console.log('[TerminalPanel] Mounting for agent:', agent.id, agent.data);
-    const el = containerRef.current;
-    if (!el) return;
-
-    const terminal = new Terminal({
-      theme: {
-        background: '#1a1a1a',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        cursorAccent: '#1a1a1a',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-      },
-      fontSize: 12,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      cursorBlink: true,
-      scrollback: 5000,
-      allowProposedApi: true,
-    });
-
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-
-    termRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-    initialized.current = false;
-    ptyAlive.current = false;
-
-    function spawnSession() {
-      ptyAlive.current = true;
-      justSpawned.current = true;
-
-      // Disable filtering after 500ms
-      setTimeout(() => {
-        justSpawned.current = false;
-      }, 500);
-
-      console.log('[Renderer] Spawning agent:', agent.id, 'with data:', agent.data);
-      window.electronAPI?.spawnAgent({
-        agentId: agent.id,
-        agentData: agent.data,
-        cols: terminal.cols,
-        rows: terminal.rows,
-      });
-    }
-
-    function tryOpen() {
-      if (initialized.current) return;
-      const { width, height } = el.getBoundingClientRect();
-      if (width > 0 && height > 0) {
-        initialized.current = true;
-        terminal.open(el);
-
-        setTimeout(() => {
-          try {
-            if (fitAddon && terminal && terminal.element) {
-              fitAddon.fit();
-            }
-          } catch {}
-          spawnSession();
-        }, 100);
-
-        // Forward all raw input directly to the PTY
-        terminal.onData((data) => {
-          if (!ptyAlive.current) {
-            // Restart on any keypress after session ends (consume the keypress)
-            terminal.clear();
-            spawnSession();
-            return;
-          }
-          // Filter out device attribute responses that xterm sends automatically
-          if (data.match(/^\x1b\[\?1;/)) {
-            return; // Don't send these to PTY
-          }
-          window.electronAPI?.ptyInput({ agentId: agent.id, data });
-        });
-
-        // Update selection when terminal is focused
-        terminal.textarea?.addEventListener('focus', () => {
-          onSelect?.();
-        });
-
-        terminal.focus();
-      }
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (!initialized.current) {
-        tryOpen();
-        return;
-      }
-      try {
-        // Only fit if terminal is properly initialized and has element
-        if (terminal && fitAddon && terminal.element && !terminal.isDisposed) {
-          fitAddon.fit();
-        }
-      } catch (e) {
-        console.warn('[TerminalPanel] Fit error:', e);
-      }
-      if (ptyAlive.current && terminal && terminal.cols && terminal.rows) {
-        window.electronAPI?.ptyResize({
-          agentId: agent.id,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        });
-      }
-    });
-    resizeObserver.observe(el);
-
-    requestAnimationFrame(tryOpen);
-
-    return () => {
-      resizeObserver.disconnect();
-      // Dispose terminal safely
-      if (terminal && !terminal.isDisposed) {
-        terminal.dispose();
-      }
-      termRef.current = null;
-      fitAddonRef.current = null;
-      initialized.current = false;
-      ptyAlive.current = false;
-      window.electronAPI?.killAgent({ agentId: agent.id });
-    };
-  }, [agent.id, agent.data.restartKey]); // Restart when restartKey changes
 
   return (
     <div className={`terminal-panel ${isSelected ? 'terminal-selected' : ''}`} onClick={onSelect}>

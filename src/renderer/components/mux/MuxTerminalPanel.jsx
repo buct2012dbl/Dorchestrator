@@ -1,14 +1,36 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import './MuxTerminalPanel.css';
+import useTerminalSession from '../useTerminalSession';
 
 const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, config, rect, onClose, onFocus, isFocused = false }, ref) {
-  const containerRef = useRef(null);
-  const termRef = useRef(null);
-  const fitAddonRef = useRef(null);
-  const ptyAliveRef = useRef(false);
+  const canSpawn = config.cliType !== 'empty';
+  const sessionKey = `${terminalId}:${JSON.stringify(config)}`;
+  const { containerRef, termRef, fitAddonRef, ptyAliveRef } = useTerminalSession({
+    sessionKey,
+    canSpawn,
+    onSpawn: ({ terminal }) => {
+      window.electronAPI?.spawnMuxTerminal({
+        terminalId,
+        config,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    },
+    onInput: ({ data }) => {
+      window.electronAPI?.muxPtyInput({ terminalId, data });
+    },
+    onResize: ({ terminal }) => {
+      window.electronAPI?.muxPtyResize({
+        terminalId,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    },
+    onCleanup: () => {
+      window.electronAPI?.killMuxTerminal({ terminalId });
+    },
+  });
 
   useImperativeHandle(ref, () => ({
     resize: () => fitAddonRef.current?.fit(),
@@ -16,119 +38,30 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
   }));
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    const terminal = new Terminal({
-      theme: {
-        background: '#1a1a1a',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        cursorAccent: '#1a1a1a',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-      },
-      fontSize: 12,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      cursorBlink: true,
-      scrollback: 5000,
-    });
-
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-
-    termRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-    ptyAliveRef.current = false;
-
-    let spawned = false;
-
-    function spawnSession() {
-      if (config.cliType === 'empty') return;
-
-      ptyAliveRef.current = true;
-      window.electronAPI?.spawnMuxTerminal({
-        terminalId,
-        config,
-        cols: terminal.cols,
-        rows: terminal.rows,
-      });
+    if (isFocused) {
+      termRef.current?.focus();
     }
+  }, [isFocused]);
 
-    // Wait for container to have real dimensions before opening terminal
-    const resizeObserver = new ResizeObserver(() => {
-      const el = containerRef.current;
-      if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
-
-      if (!spawned) {
-        spawned = true;
-        terminal.open(el);
-        fitAddon.fit();
-
-        // Spawn PTY if not empty
-        if (config.cliType !== 'empty') {
-          spawnSession();
-        }
-      } else {
-        fitAddon.fit();
-        if (ptyAliveRef.current) {
-          window.electronAPI?.muxPtyResize({
-            terminalId,
-            cols: terminal.cols,
-            rows: terminal.rows,
-          });
-        }
-      }
-    });
-    resizeObserver.observe(containerRef.current);
-
-    // Listen for PTY data
+  useEffect(() => {
     const unsubData = window.electronAPI?.onMuxPtyData(({ terminalId: id, data }) => {
       if (id === terminalId) {
-        terminal.write(data);
+        termRef.current?.write(data);
       }
     });
 
     const unsubExit = window.electronAPI?.onMuxPtyExit(({ terminalId: id }) => {
       if (id === terminalId) {
         ptyAliveRef.current = false;
-        terminal.writeln('\r\n\x1b[33m[Session ended - press any key to restart]\x1b[0m');
+        termRef.current?.writeln('\r\n\x1b[33m[Session ended - press any key to restart]\x1b[0m');
       }
-    });
-
-    // Handle user input
-    terminal.onData((data) => {
-      if (!ptyAliveRef.current) {
-        if (config.cliType === 'empty') {
-          return;
-        }
-        terminal.clear();
-        spawnSession();
-        return;
-      }
-      window.electronAPI?.muxPtyInput({ terminalId, data });
     });
 
     return () => {
-      resizeObserver.disconnect();
       unsubData?.();
       unsubExit?.();
-      terminal.dispose();
-      ptyAliveRef.current = false;
-      window.electronAPI?.killMuxTerminal({ terminalId });
     };
-  }, [terminalId, config]);
-
-  useEffect(() => {
-    if (isFocused) {
-      termRef.current?.focus();
-    }
-  }, [isFocused]);
+  }, [ptyAliveRef, termRef, terminalId]);
 
   return (
     <div
