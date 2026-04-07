@@ -195,17 +195,6 @@ const TerminalPanel = forwardRef(function TerminalPanel({ agent, isSelected, onD
   );
 });
 
-function getColorCode(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  if (r > g && r > b) return '31';
-  if (g > r && g > b) return '32';
-  if (b > r && b > g) return '34';
-  if (r > 150 && g > 100) return '33';
-  return '37';
-}
-
 function getStatusColor(status) {
   const map = { idle: '#6b6b6b', running: '#2472c8', success: '#0dbc79', error: '#cd3131', waiting: '#e5e510' };
   return map[status] || '#6b6b6b';
