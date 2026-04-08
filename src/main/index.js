@@ -183,6 +183,199 @@ function getConnectedAgents(agentId) {
     .map((a) => ({ id: a.id, role: a.data?.role || '', name: a.data?.name || '' }));
 }
 
+function buildPtyEnvironment() {
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    LANG: process.env.LANG || 'en_US.UTF-8',
+    PATH: `${path.dirname(NODE_PATH)}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+  };
+
+  if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
+  if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
+
+  return env;
+}
+
+function getPtyWorkingDirectory() {
+  return workspace || process.env.HOME || '/';
+}
+
+function killTrackedPty(ptyMap, dimsMap, id) {
+  if (!ptyMap.has(id)) return;
+  try { ptyMap.get(id).kill(); } catch {}
+  ptyMap.delete(id);
+  dimsMap.delete(id);
+}
+
+function getMcpBridgePath(tmpDir, logPrefix) {
+  if (!app.isPackaged) {
+    return path.join(__dirname, 'mcp-bridge.js');
+  }
+
+  const sourcePath = path.join(process.resourcesPath, 'app.asar', 'src', 'main', 'mcp-bridge.js');
+  const targetPath = path.join(tmpDir, 'ao-mcp-bridge.js');
+
+  try {
+    if (!fs.existsSync(targetPath)) {
+      const bridgeContent = fs.readFileSync(sourcePath, 'utf8');
+      fs.writeFileSync(targetPath, bridgeContent);
+      console.log(`${logPrefix} Copied MCP bridge to: ${targetPath}`);
+    }
+  } catch (err) {
+    console.error(`${logPrefix} Failed to copy MCP bridge:`, err.message);
+  }
+
+  return targetPath;
+}
+
+function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPrefix) {
+  if (bridgePort <= 0) {
+    return () => {};
+  }
+
+  const connectedAgents = getConnectedAgents(agentId);
+  if (connectedAgents.length === 0) {
+    return () => {};
+  }
+
+  const tmpDir = os.tmpdir();
+  const mcpBridgePath = getMcpBridgePath(tmpDir, logPrefix);
+  const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
+  const bridgeConfig = { agentId, bridgePort, connectedAgents };
+
+  try {
+    fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
+    console.log(`${logPrefix} Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
+  } catch (err) {
+    console.error(`${logPrefix} Failed to write bridge config:`, err.message);
+  }
+
+  if (terminalType === 'codex') {
+    const mcpServerName = `agent-bridge-${agentId}`;
+
+    try {
+      execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
+    } catch {}
+
+    try {
+      const addCmd = `${command} mcp add ${mcpServerName} -- ${NODE_PATH} ${mcpBridgePath} ${bridgeConfigPath}`;
+      execSync(addCmd, { stdio: 'pipe', timeout: 5000 });
+      console.log(`${logPrefix} Added MCP server for Codex ${agentId}: ${mcpServerName}`);
+    } catch (err) {
+      console.error(`${logPrefix} Failed to add MCP server for Codex:`, err.message);
+    }
+
+    return () => {
+      try {
+        execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
+        console.log(`${logPrefix} Removed MCP server for Codex ${agentId}: ${mcpServerName}`);
+      } catch (err) {
+        console.log(`${logPrefix} MCP server cleanup skipped (may not exist): ${err.message}`);
+      }
+    };
+  }
+
+  const mcpConfig = {
+    mcpServers: {
+      'agent-bridge': {
+        command: NODE_PATH,
+        args: [mcpBridgePath, bridgeConfigPath],
+      },
+    },
+  };
+
+  if (terminalType === 'coding-agent') {
+    const mcpConfigPath = path.join(tmpDir, `ao-coding-agent-mcp-${agentId}.json`);
+    try {
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+      env.CODING_AGENT_MCP_CONFIG = mcpConfigPath;
+      console.log(`${logPrefix} Wrote MCP config for coding-agent ${agentId}: ${mcpConfigPath}`);
+    } catch (err) {
+      console.error(`${logPrefix} Failed to write MCP config for coding-agent:`, err.message);
+    }
+    return () => {};
+  }
+
+  const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
+  try {
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+    args.push('--mcp-config', mcpConfigPath);
+    console.log(`${logPrefix} Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
+  } catch (err) {
+    console.error(`${logPrefix} Failed to write MCP config:`, err.message);
+  }
+
+  return () => {};
+}
+
+function spawnTrackedPty({
+  ptyId,
+  command,
+  args,
+  cols = 80,
+  rows = 24,
+  env,
+  ptyMap,
+  dimsMap,
+  idKey,
+  dataChannel,
+  exitChannel,
+  logPrefix,
+  onData,
+  onExit,
+}) {
+  console.log(`${logPrefix} Spawning: ${command} ${args.join(' ')}`);
+  console.log(`${logPrefix} CWD: ${getPtyWorkingDirectory()}`);
+
+  const ptyProcess = pty.spawn(command, args, {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd: getPtyWorkingDirectory(),
+    env,
+  });
+
+  ptyProcess.onData((data) => {
+    if (onData) onData(data);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(dataChannel, { [idKey]: ptyId, data });
+    }
+  });
+
+  ptyProcess.onExit(({ exitCode }) => {
+    console.log(`${logPrefix} Process exited with code ${exitCode} for ${ptyId}`);
+    const isCurrent = ptyMap.get(ptyId) === ptyProcess;
+
+    if (isCurrent) {
+      ptyMap.delete(ptyId);
+      dimsMap.delete(ptyId);
+    }
+
+    if (onExit) onExit(exitCode, { isCurrent });
+
+    if (isCurrent && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(exitChannel, { [idKey]: ptyId, exitCode });
+    }
+  });
+
+  ptyMap.set(ptyId, ptyProcess);
+  dimsMap.set(ptyId, { cols, rows });
+  return ptyProcess;
+}
+
+function forwardAgentPtyData(agentId, data) {
+  const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
+  if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
+    const notification = oscMatch[1];
+    console.log(`[Notification] ${agentId}: ${notification}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent-notification', { agentId, message: notification });
+    }
+  }
+}
+
 // ---- TCP bridge server for inter-agent messaging ----
 let bridgePort = 0;
 
@@ -761,21 +954,9 @@ ipcMain.handle('clear-history', async (event, { agentId }) => {
 function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   console.log(`[PTY] spawnPty called for ${agentId}, agentData:`, JSON.stringify(agentData, null, 2));
 
-  // Kill existing session if any
-  if (ptys.has(agentId)) {
-    try { ptys.get(agentId).kill(); } catch {}
-    ptys.delete(agentId);
-  }
+  killTrackedPty(ptys, ptyDims, agentId);
 
-  const env = {
-    ...process.env,
-    TERM: 'xterm-256color',
-    COLORTERM: 'truecolor',
-    LANG: process.env.LANG || 'en_US.UTF-8',
-    PATH: `${path.dirname(NODE_PATH)}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
-  };
-  if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
-  if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
+  const env = buildPtyEnvironment();
 
   const { terminalType, command, args } = buildTerminalCommand(agentData, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
@@ -783,155 +964,30 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     logPrefix: '[PTY]',
     logId: agentId,
   });
-
-  // Write MCP config for inter-agent messaging if bridge is ready (both Claude Code and Codex)
-  const tmpDir = os.tmpdir();
-  if (bridgePort > 0) {
-    const connectedAgents = getConnectedAgents(agentId);
-    if (connectedAgents.length > 0) {
-      let mcpBridgePath;
-
-      if (app.isPackaged) {
-        // In production, copy mcp-bridge.js to temp directory since .asar files can't be executed
-        const sourcePath = path.join(process.resourcesPath, 'app.asar', 'src', 'main', 'mcp-bridge.js');
-        mcpBridgePath = path.join(tmpDir, 'ao-mcp-bridge.js');
-
-        // Copy if not exists or source is newer
-        try {
-          if (!fs.existsSync(mcpBridgePath)) {
-            const bridgeContent = fs.readFileSync(sourcePath, 'utf8');
-            fs.writeFileSync(mcpBridgePath, bridgeContent);
-            console.log(`[PTY] Copied MCP bridge to: ${mcpBridgePath}`);
-          }
-        } catch (err) {
-          console.error('[PTY] Failed to copy MCP bridge:', err.message);
-        }
-      } else {
-        mcpBridgePath = path.join(__dirname, 'mcp-bridge.js');
-      }
-
-      // Write bridge config (avoids env var passing issues)
-      const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
-      const bridgeConfig = { agentId, bridgePort, connectedAgents };
-      try {
-        fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
-        console.log(`[PTY] Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
-      } catch (err) {
-        console.error('[PTY] Failed to write bridge config:', err.message);
-      }
-
-      if (terminalType === 'codex') {
-        // Codex: dynamically add MCP server before spawning
-        // We'll use a unique name per agent to avoid conflicts
-        const mcpServerName = `agent-bridge-${agentId}`;
-
-        // First, remove any existing server with this name (cleanup from previous runs)
-        try {
-          execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
-        } catch {}
-
-        // Add the MCP bridge server
-        try {
-          const addCmd = `${command} mcp add ${mcpServerName} -- ${NODE_PATH} ${mcpBridgePath} ${bridgeConfigPath}`;
-          execSync(addCmd, { stdio: 'pipe', timeout: 5000 });
-          console.log(`[PTY] Added MCP server for Codex ${agentId}: ${mcpServerName}`);
-        } catch (err) {
-          console.error('[PTY] Failed to add MCP server for Codex:', err.message);
-        }
-      } else if (terminalType === 'coding-agent') {
-        const mcpConfig = {
-          mcpServers: {
-            'agent-bridge': {
-              command: NODE_PATH,
-              args: [mcpBridgePath, bridgeConfigPath],
-            },
-          },
-        };
-        const mcpConfigPath = path.join(tmpDir, `ao-coding-agent-mcp-${agentId}.json`);
-        try {
-          fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
-          env.CODING_AGENT_MCP_CONFIG = mcpConfigPath;
-          console.log(`[PTY] Wrote MCP config for coding-agent ${agentId}: ${mcpConfigPath}`);
-        } catch (err) {
-          console.error('[PTY] Failed to write MCP config for coding-agent:', err.message);
-        }
-      } else {
-        // Claude Code: use --mcp-config flag
-        const mcpConfig = {
-          mcpServers: {
-            'agent-bridge': {
-              command: NODE_PATH,
-              args: [mcpBridgePath, bridgeConfigPath],
-            },
-          },
-        };
-        const mcpConfigPath = path.join(tmpDir, `ao-mcp-${agentId}.json`);
-        try {
-          fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
-          args.push('--mcp-config', mcpConfigPath);
-          console.log(`[PTY] Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
-        } catch (err) {
-          console.error('[PTY] Failed to write MCP config:', err.message);
-        }
-      }
-    }
-  }
+  const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
-    console.log(`[PTY] Spawning: ${command} ${args.join(' ')}`);
-    console.log(`[PTY] CWD: ${workspace || process.env.HOME || '/'}`);
-
-    const ptyProcess = pty.spawn(command, args, {
-      name: 'xterm-256color',
+    spawnTrackedPty({
+      ptyId: agentId,
+      command,
+      args,
       cols,
       rows,
-      cwd: workspace || process.env.HOME || '/',
       env,
+      ptyMap: ptys,
+      dimsMap: ptyDims,
+      idKey: 'agentId',
+      dataChannel: 'pty-data',
+      exitChannel: 'pty-exit',
+      logPrefix: '[PTY]',
+      onData: (data) => forwardAgentPtyData(agentId, data),
+      onExit: (exitCode, { isCurrent }) => {
+        if (isCurrent) cleanupMcp();
+      },
     });
-
-    ptyProcess.onData((data) => {
-      // Parse OSC sequences for notifications (OSC 9, 99, 777)
-      // Require message to have ≥3 chars and contain at least one letter to avoid matching xterm color/palette sequences
-      const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
-      if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
-        const notification = oscMatch[1];
-        console.log(`[Notification] ${agentId}: ${notification}`);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('agent-notification', { agentId, message: notification });
-        }
-      }
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pty-data', { agentId, data });
-      }
-    });
-
-    ptyProcess.onExit(({ exitCode }) => {
-      console.log(`[PTY] Process exited with code ${exitCode} for agent ${agentId}`);
-
-      // Cleanup MCP server for Codex agents
-      if (terminalType === 'codex') {
-        const mcpServerName = `agent-bridge-${agentId}`;
-        try {
-          const codexPath = process.env.CODEX_PATH || 'codex';
-          execSync(`${codexPath} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
-          console.log(`[PTY] Removed MCP server for Codex ${agentId}: ${mcpServerName}`);
-        } catch (err) {
-          console.log(`[PTY] MCP server cleanup skipped (may not exist): ${err.message}`);
-        }
-      }
-
-      ptys.delete(agentId);
-      ptyDims.delete(agentId);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pty-exit', { agentId, exitCode });
-      }
-    });
-
-    ptys.set(agentId, ptyProcess);
-    ptyDims.set(agentId, { cols, rows });
     return { success: true };
   } catch (err) {
+    cleanupMcp();
     console.error('[PTY] Failed to spawn:', err.message);
     console.error('[PTY] Command:', command, args);
     return { success: false, error: err.message };
@@ -971,20 +1027,9 @@ ipcMain.handle('pty-kill', async (event, { agentId }) => {
 ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }) => {
   console.log(`[MuxPTY] Spawning terminal ${terminalId}`, config);
 
-  if (muxPtys.has(terminalId)) {
-    try { muxPtys.get(terminalId).kill(); } catch {}
-    muxPtys.delete(terminalId);
-  }
+  killTrackedPty(muxPtys, muxPtyDims, terminalId);
 
-  const env = {
-    ...process.env,
-    TERM: 'xterm-256color',
-    COLORTERM: 'truecolor',
-    LANG: process.env.LANG || 'en_US.UTF-8',
-    PATH: `${path.dirname(NODE_PATH)}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
-  };
-  if (authConfig.authToken) env.ANTHROPIC_API_KEY = authConfig.authToken;
-  if (authConfig.baseURL) env.ANTHROPIC_BASE_URL = authConfig.baseURL;
+  const env = buildPtyEnvironment();
 
   const { command, args } = buildTerminalCommand(config, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
@@ -994,31 +1039,23 @@ ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }
   });
 
   try {
-    const ptyProcess = pty.spawn(command, args, {
-      name: 'xterm-256color',
+    spawnTrackedPty({
+      ptyId: terminalId,
+      command,
+      args,
       cols,
       rows,
-      cwd: workspace || process.env.HOME || '/',
       env,
+      ptyMap: muxPtys,
+      dimsMap: muxPtyDims,
+      idKey: 'terminalId',
+      dataChannel: 'mux-pty-data',
+      exitChannel: 'mux-pty-exit',
+      logPrefix: '[MuxPTY]',
+      onExit: (exitCode) => {
+        console.log(`[MuxPTY] Terminal ${terminalId} exited with code ${exitCode}`);
+      },
     });
-
-    ptyProcess.onData((data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('mux-pty-data', { terminalId, data });
-      }
-    });
-
-    ptyProcess.onExit(({ exitCode }) => {
-      console.log(`[MuxPTY] Terminal ${terminalId} exited with code ${exitCode}`);
-      muxPtys.delete(terminalId);
-      muxPtyDims.delete(terminalId);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('mux-pty-exit', { terminalId, exitCode });
-      }
-    });
-
-    muxPtys.set(terminalId, ptyProcess);
-    muxPtyDims.set(terminalId, { cols, rows });
     return { success: true };
   } catch (err) {
     console.error('[MuxPTY] Failed to spawn:', err.message);
