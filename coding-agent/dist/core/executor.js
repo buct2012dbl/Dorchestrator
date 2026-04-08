@@ -12,19 +12,21 @@ export class ParallelExecutor {
         // Sort by priority (higher first)
         this.queue.sort((a, b) => b.priority - a.priority);
         // Execute tasks
-        const promises = [];
+        const activeTasks = new Set();
         while (this.queue.length > 0 || this.running > 0) {
             while (this.running < this.maxConcurrent && this.queue.length > 0) {
                 const task = this.queue.shift();
-                promises.push(this.executeTask(task));
+                let taskPromise;
+                taskPromise = this.executeTask(task).finally(() => {
+                    activeTasks.delete(taskPromise);
+                });
+                activeTasks.add(taskPromise);
             }
             // Wait for at least one task to complete
-            if (this.running >= this.maxConcurrent) {
-                await Promise.race(promises);
+            if (activeTasks.size > 0) {
+                await Promise.race(activeTasks);
             }
         }
-        // Wait for all tasks to complete
-        await Promise.all(promises);
         // Return results in original order
         return tasks.map(task => this.results.get(task.id));
     }
