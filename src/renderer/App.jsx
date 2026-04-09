@@ -8,6 +8,36 @@ import { useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
 import './App.css';
 
+function GraphIcon() {
+  return (
+    <svg className="view-toggle-icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5 14.5 10 5.5 15 14.5" />
+      <circle cx="5" cy="14.5" r="1.75" />
+      <circle cx="10" cy="5.5" r="1.75" />
+      <circle cx="15" cy="14.5" r="1.75" />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg className="view-toggle-icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.5 6.25 8.5 10l-4 3.75" />
+      <path d="M10 13.75h5.5" />
+      <rect x="2.5" y="3" width="15" height="14" rx="1.5" />
+    </svg>
+  );
+}
+
+function ViewToggleLabel({ icon, label, expanded }) {
+  return (
+    <span className="view-toggle-content">
+      {icon}
+      {expanded && <span>{label}</span>}
+    </span>
+  );
+}
+
 function App() {
   const {
     agents,
@@ -256,7 +286,7 @@ function App() {
               onClick={() => setShowGraph(!showGraph)}
               title={showGraph ? 'Hide Graph' : 'Show Graph'}
             >
-              {showGraph ? '◈ GRAPH' : '◈'}
+              <ViewToggleLabel icon={<GraphIcon />} label="GRAPH" expanded={showGraph} />
             </button>
           )}
           {mode === 'swarm' && (
@@ -265,7 +295,7 @@ function App() {
               onClick={() => setShowTerminal(!showTerminal)}
               title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
             >
-              {showTerminal ? '▣ TERM' : '▣'}
+              <ViewToggleLabel icon={<TerminalIcon />} label="TERM" expanded={showTerminal} />
             </button>
           )}
           {/* <button

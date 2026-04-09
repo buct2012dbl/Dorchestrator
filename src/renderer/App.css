@@ -105,6 +105,47 @@
   letter-spacing: 1px;
 }
 
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 34px;
+  padding: 0 12px;
+  background: rgba(7, 12, 10, 0.9);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.view-toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.view-toggle-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-toggle-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  flex-shrink: 0;
+}
+
 .api-key-btn {
   background: transparent;
   border: 2px solid var(--border);
