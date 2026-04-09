@@ -47,6 +47,7 @@ export default function useTerminalSession({
   const ptyAliveRef = useRef(false);
   const initializedRef = useRef(false);
   const handlersRef = useRef({});
+  const activeSessionIdRef = useRef(0);
 
   handlersRef.current = {
     beforeSpawn,
@@ -62,6 +63,8 @@ export default function useTerminalSession({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
+    const sessionId = activeSessionIdRef.current + 1;
+    activeSessionIdRef.current = sessionId;
 
     const terminal = new Terminal({
       ...BASE_TERMINAL_OPTIONS,
@@ -82,6 +85,9 @@ export default function useTerminalSession({
 
     const safeFit = () => {
       try {
+        if (activeSessionIdRef.current !== sessionId) {
+          return;
+        }
         if (terminal.element && !terminal.isDisposed) {
           fitAddon.fit();
         }
@@ -92,6 +98,9 @@ export default function useTerminalSession({
 
     const spawnSession = () => {
       if (!canSpawn) return;
+      if (activeSessionIdRef.current !== sessionId || terminal.isDisposed) {
+        return;
+      }
       handlersRef.current.beforeSpawn?.({ terminal });
       ptyAliveRef.current = true;
       handlersRef.current.onSpawn?.({ terminal });
@@ -99,6 +108,9 @@ export default function useTerminalSession({
 
     const openTerminal = () => {
       if (initializedRef.current) return;
+      if (activeSessionIdRef.current !== sessionId || terminal.isDisposed) {
+        return;
+      }
       const { width, height } = el.getBoundingClientRect();
       if (width <= 0 || height <= 0) return;
 
@@ -159,6 +171,9 @@ export default function useTerminalSession({
     animationFrameId = window.requestAnimationFrame(openTerminal);
 
     return () => {
+      if (activeSessionIdRef.current === sessionId) {
+        activeSessionIdRef.current = sessionId + 1;
+      }
       if (animationFrameId !== null) {
         window.cancelAnimationFrame(animationFrameId);
       }
