@@ -181,19 +181,29 @@ function MuxTerminalView({
   const [resetVersion, setResetVersion] = useState(0);
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const pendingRuntimeLayoutRef = useRef(null);
   const spawnSignature = getTemplateSpawnSignature(template);
 
   useEffect(() => {
     if (!template) {
       setTerminals([]);
       setFocusedTerminalId(null);
+      pendingRuntimeLayoutRef.current = null;
       return;
     }
 
     const newTerminals = createRuntimeTerminals(template);
+    pendingRuntimeLayoutRef.current = null;
     setTerminals(newTerminals);
     setFocusedTerminalId(newTerminals[0]?.id || null);
   }, [spawnSignature, template, resetVersion]);
+
+  useEffect(() => {
+    if (!template?.id || !pendingRuntimeLayoutRef.current) return;
+
+    onPersistRuntimeLayout?.(template.id, pendingRuntimeLayoutRef.current);
+    pendingRuntimeLayoutRef.current = null;
+  }, [onPersistRuntimeLayout, template, terminals]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -264,7 +274,7 @@ function MuxTerminalView({
             : clearMergeMetadata(term)
         ));
         setFocusedTerminalId(mergePartner.id);
-        onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(nextTerminals));
+        pendingRuntimeLayoutRef.current = serializeRuntimeLayout(nextTerminals);
         return nextTerminals;
       }
 
@@ -272,7 +282,7 @@ function MuxTerminalView({
       setFocusedTerminalId((currentFocusedId) => (
         currentFocusedId === terminalId ? rebalanced[0]?.id || null : currentFocusedId
       ));
-      onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(rebalanced));
+      pendingRuntimeLayoutRef.current = serializeRuntimeLayout(rebalanced);
       return rebalanced;
     });
   };
@@ -332,7 +342,7 @@ function MuxTerminalView({
 
         return [term];
       });
-      onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(nextTerminals));
+      pendingRuntimeLayoutRef.current = serializeRuntimeLayout(nextTerminals);
       return nextTerminals;
     });
   };
