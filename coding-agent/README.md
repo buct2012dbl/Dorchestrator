@@ -137,12 +137,13 @@ Edit `config/agents.json` to customize agents:
 **Anthropic:**
 - claude-opus-4-6
 - claude-sonnet-4-6
-- claude-haiku-4-5
+- claude-haiku-4-5-20251001
 
 **OpenAI:**
-- gpt-4-turbo
-- gpt-4
-- gpt-3.5-turbo
+- gpt-5.1
+- gpt-5.2
+- gpt-5.3
+- gpt-5.4
 
 **Ollama (local):**
 - codellama:13b

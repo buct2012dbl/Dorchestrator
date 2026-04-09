@@ -63,7 +63,7 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 - Terminal type selection: Claude Code, Codex, or Built-in Agent per agent
 - Model selection:
   - Claude: Opus 4.6, Sonnet 4.6, Haiku 4.5
-  - Codex: gpt-5, o4-mini, o3, gpt-4.1, gpt-4o
+  - Codex: gpt-5.1, gpt-5.2, gpt-5.3, gpt-5.4
   - Built-in: Uses integrated coding agent
 - System prompts for role-specific instructions
 - Persistent settings across sessions
@@ -200,7 +200,7 @@ In the **Configure Agent** panel, select the **Terminal** field:
 | Terminal | CLI | Models | MCP Support |
 |----------|-----|--------|-------------|
 | **Claude Code** | `claude` | Opus 4.6, Sonnet 4.6, Haiku 4.5 | Yes |
-| **Codex (OpenAI)** | `codex` | gpt-5, o4-mini, o3, gpt-4.1, gpt-4o | Yes |
+| **Codex (OpenAI)** | `codex` | gpt-5.1, gpt-5.2, gpt-5.3, gpt-5.4 | Yes |
 
 You can mix agent types in the same workspace — for example, use a Claude Code CEO to orchestrate other Claude agents while running a Codex agent for parallel tasks.
 
@@ -327,6 +327,5 @@ MIT
 - [OpenAI](https://openai.com) for Codex CLI
 - [React Flow](https://reactflow.dev) for graph visualization
 - [xterm.js](https://xtermjs.org) for terminal emulation
-
 
 
