@@ -22,6 +22,16 @@ function computePanelRects(terminals, containerW, containerH) {
 }
 
 function createRuntimeTerminals(template) {
+  if (template?.runtimeLayout?.terminals?.length) {
+    return template.runtimeLayout.terminals.map((termConfig) => ({
+      id: `mux-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      config: { ...termConfig.config },
+      bounds: { ...termConfig.bounds },
+      mergePartnerId: null,
+      mergeBounds: null,
+    }));
+  }
+
   if (!template?.layout) return [];
 
   const { rows, cols, terminals = [] } = template.layout;
@@ -69,7 +79,29 @@ function getTemplateSpawnSignature(template) {
       name: term.config?.name || '',
       systemPrompt: term.config?.systemPrompt || '',
     })),
+    runtimeLayout: (template.runtimeLayout?.terminals || []).map((term) => ({
+      bounds: term.bounds,
+      cliType: term.config?.cliType || 'empty',
+      model: term.config?.model || '',
+      name: term.config?.name || '',
+      systemPrompt: term.config?.systemPrompt || '',
+    })),
   });
+}
+
+function serializeRuntimeLayout(terminals) {
+  return {
+    terminals: terminals.map((term, index) => ({
+      id: `runtime-${index + 1}`,
+      bounds: {
+        x: term.bounds.x,
+        y: term.bounds.y,
+        width: term.bounds.width,
+        height: term.bounds.height,
+      },
+      config: { ...term.config },
+    })),
+  };
 }
 
 function clearMergeMetadata(term) {
@@ -136,7 +168,13 @@ function rebalanceTerminals(terminals) {
   });
 }
 
-function MuxTerminalView({ template, active = true, onEditTemplate }) {
+function MuxTerminalView({
+  template,
+  active = true,
+  onEditTemplate,
+  onPersistRuntimeLayout,
+  onResetRuntimeLayout,
+}) {
   const [terminals, setTerminals] = useState([]);
   const [focusedTerminalId, setFocusedTerminalId] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -217,8 +255,7 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
         : null;
 
       if (mergePartner && terminalToClose.mergeBounds) {
-        setFocusedTerminalId(mergePartner.id);
-        return remaining.map((term) => (
+        const nextTerminals = remaining.map((term) => (
           term.id === mergePartner.id
             ? {
                 ...clearMergeMetadata(term),
@@ -226,12 +263,16 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
               }
             : clearMergeMetadata(term)
         ));
+        setFocusedTerminalId(mergePartner.id);
+        onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(nextTerminals));
+        return nextTerminals;
       }
 
       const rebalanced = rebalanceTerminals(remaining);
       setFocusedTerminalId((currentFocusedId) => (
         currentFocusedId === terminalId ? rebalanced[0]?.id || null : currentFocusedId
       ));
+      onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(rebalanced));
       return rebalanced;
     });
   };
@@ -275,7 +316,7 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
 
       setFocusedTerminalId(nextTerminal.id);
 
-      return prev.flatMap((term) => {
+      const nextTerminals = prev.flatMap((term) => {
         if (term.id === sourceTerminal.mergePartnerId) {
           return [clearMergeMetadata(term)];
         }
@@ -291,11 +332,14 @@ function MuxTerminalView({ template, active = true, onEditTemplate }) {
 
         return [term];
       });
+      onPersistRuntimeLayout?.(template.id, serializeRuntimeLayout(nextTerminals));
+      return nextTerminals;
     });
   };
 
   const handleConfirmReset = () => {
     setShowResetConfirm(false);
+    onResetRuntimeLayout?.(template.id);
     setResetVersion((prev) => prev + 1);
   };
 

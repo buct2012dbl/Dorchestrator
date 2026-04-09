@@ -61,6 +61,43 @@ function MuxWorkspace() {
     setEditingTemplate(null);
   };
 
+  const handlePersistRuntimeLayout = (templateId, runtimeLayout) => {
+    setTemplates((prev) => {
+      const nextTemplates = prev.map((template) => (
+        template.id === templateId
+          ? { ...template, runtimeLayout }
+          : template
+      ));
+
+      const nextTemplate = nextTemplates.find((template) => template.id === templateId);
+      if (nextTemplate) {
+        window.electronAPI.saveMuxTemplate(nextTemplate);
+      }
+
+      return nextTemplates;
+    });
+  };
+
+  const handleResetRuntimeLayout = (templateId) => {
+    setTemplates((prev) => {
+      const nextTemplates = prev.map((template) => {
+        if (template.id !== templateId || !template.runtimeLayout) {
+          return template;
+        }
+
+        const { runtimeLayout, ...rest } = template;
+        return rest;
+      });
+
+      const nextTemplate = nextTemplates.find((template) => template.id === templateId);
+      if (nextTemplate) {
+        window.electronAPI.saveMuxTemplate(nextTemplate);
+      }
+
+      return nextTemplates;
+    });
+  };
+
   const handleSelectTemplate = (id) => {
     setSelectedTemplate(id);
     if (window.electronAPI) {
@@ -140,6 +177,8 @@ function MuxWorkspace() {
             template={template}
             active={template.id === selectedTemplate}
             onEditTemplate={handleEditTemplate}
+            onPersistRuntimeLayout={handlePersistRuntimeLayout}
+            onResetRuntimeLayout={handleResetRuntimeLayout}
           />
         ))
       ) : (
@@ -147,6 +186,8 @@ function MuxWorkspace() {
           template={currentTemplate}
           active
           onEditTemplate={handleEditTemplate}
+          onPersistRuntimeLayout={handlePersistRuntimeLayout}
+          onResetRuntimeLayout={handleResetRuntimeLayout}
         />
       )}
       {showEditor && (
