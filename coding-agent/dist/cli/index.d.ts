@@ -1,3 +1,3 @@
 #!/usr/bin/env node
-export {};
+export declare function registerAgentFactories(): void;
 //# sourceMappingURL=index.d.ts.map

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { configLoader } from '../config/loader.js';
 import { Orchestrator } from '../core/orchestrator.js';
 import { agentRegistry } from '../core/agent-registry.js';
 import { CodingAgent } from '../agent/coding-agent.js';
-//import { ExplorerAgent } from '../agent/explorer-agent.js';
-//import { PlannerAgent } from '../agent/planner-agent.js';
-//import { ReviewerAgent } from '../agent/reviewer-agent.js';
+import { ExplorerAgent } from '../agent/explorer-agent.js';
+import { PlannerAgent } from '../agent/planner-agent.js';
+import { ReviewerAgent } from '../agent/reviewer-agent.js';
 import { providerRegistry } from '../llm/provider.js';
 import { toolRegistry } from '../tools/tool-registry.js';
 import { readTool, writeTool, editTool, globTool, grepTool } from '../tools/file-tools.js';
@@ -62,6 +64,13 @@ function addToolsToAgents(agentConfigs: Array<{ tools: string[] }>, toolIds: str
       }
     }
   }
+}
+
+export function registerAgentFactories(): void {
+  agentRegistry.registerFactory('coding', (config) => new CodingAgent(config));
+  agentRegistry.registerFactory('explorer', (config) => new ExplorerAgent(config));
+  agentRegistry.registerFactory('planner', (config) => new PlannerAgent(config));
+  agentRegistry.registerFactory('reviewer', (config) => new ReviewerAgent(config));
 }
 
 function buildDynamicAgentConfig(
@@ -154,10 +163,7 @@ program
       addToolsToAgents(config.agents, mcpToolIds);
 
       // Register agent factories
-      agentRegistry.registerFactory('coding', (config) => new CodingAgent(config));
-      agentRegistry.registerFactory('explorer', (config) => new CodingAgent(config));
-      agentRegistry.registerFactory('planner', (config) => new CodingAgent(config));
-      agentRegistry.registerFactory('reviewer', (config) => new CodingAgent(config));
+      registerAgentFactories();
 
       // Initialize orchestrator
       const orchestrator = new Orchestrator({
@@ -290,4 +296,10 @@ program
     indexer.close();
   });
 
-program.parse();
+const isDirectExecution = process.argv[1]
+  ? resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  : false;
+
+if (isDirectExecution) {
+  program.parse();
+}
