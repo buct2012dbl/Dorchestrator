@@ -239,12 +239,13 @@ program
     console.log(chalk.bold('Anthropic:'));
     console.log('  - claude-opus-4-6');
     console.log('  - claude-sonnet-4-6');
-    console.log('  - claude-haiku-4-5');
+    console.log('  - claude-haiku-4-5-20251001');
 
     console.log(chalk.bold('\nOpenAI:'));
-    console.log('  - gpt-4-turbo');
-    console.log('  - gpt-4');
-    console.log('  - gpt-3.5-turbo');
+    console.log('  - gpt-5.1');
+    console.log('  - gpt-5.2');
+    console.log('  - gpt-5.3');
+    console.log('  - gpt-5.4');
 
     console.log(chalk.bold('\nOllama (local):'));
     console.log('  - codellama:13b');
