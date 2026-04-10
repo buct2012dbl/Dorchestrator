@@ -91,6 +91,24 @@
 .terminal-portal {
   position: absolute;
   overflow: hidden;
+  transform-origin: 0 0;
+  transition:
+    left 220ms ease,
+    top 220ms ease,
+    width 220ms ease,
+    height 220ms ease,
+    transform 220ms ease,
+    opacity 180ms ease;
+  will-change: left, top, width, height, transform;
+}
+
+.terminal-grid-dnd-wrapper:has(.terminal-portal) .terminal-portal {
+  transform: scale(1);
+}
+
+.terminal-grid-dnd-wrapper:has(.terminal-portal:hover) .terminal-portal:hover,
+.terminal-grid-dnd-wrapper:has(.terminal-panel.terminal-selected) .terminal-panel.terminal-selected {
+  transform: scale(1.012);
 }
 
 .terminal-portal .terminal-panel {
