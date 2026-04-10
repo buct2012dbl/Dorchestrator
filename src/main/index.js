@@ -696,6 +696,50 @@ function saveSettings(settings) {
   fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2));
 }
 
+function normalizeOptionalString(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function validateBaseURL(value) {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) return null;
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(normalized);
+  } catch {
+    throw new Error('Base URL must be a valid absolute URL');
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error('Base URL must use http or https');
+  }
+
+  return parsedUrl.toString().replace(/\/$/, '');
+}
+
+function validateWorkspacePath(value) {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    throw new Error('Workspace path is required');
+  }
+
+  let stats;
+  try {
+    stats = fs.statSync(normalized);
+  } catch {
+    throw new Error('Workspace path does not exist');
+  }
+
+  if (!stats.isDirectory()) {
+    throw new Error('Workspace path must be a directory');
+  }
+
+  return normalized;
+}
+
 function encryptSetting(value) {
   if (!value || !safeStorage.isEncryptionAvailable()) return null;
   return safeStorage.encryptString(value).toString('base64');
@@ -852,10 +896,19 @@ app.on('before-quit', () => {
 
 // Configure auth token and base URL at runtime
 ipcMain.handle('configure', async (event, { authToken, baseURL }) => {
-  authConfig = { authToken, baseURL };
-  writeSecureAuthSettings(settings, authToken, baseURL);
+  const normalizedAuthToken = normalizeOptionalString(authToken);
+  const normalizedBaseURL = validateBaseURL(baseURL);
+
+  authConfig = {
+    authToken: normalizedAuthToken,
+    baseURL: normalizedBaseURL,
+  };
+  writeSecureAuthSettings(settings, normalizedAuthToken, normalizedBaseURL);
   saveSettings(settings);
-  orchestrator.configure({ authToken, baseURL });
+  orchestrator.configure({
+    authToken: normalizedAuthToken,
+    baseURL: normalizedBaseURL,
+  });
   return { success: true };
 });
 
@@ -863,12 +916,14 @@ ipcMain.handle('configure', async (event, { authToken, baseURL }) => {
 ipcMain.handle('get-workspace', () => workspace);
 
 ipcMain.handle('set-workspace', (event, { workspacePath }) => {
-  workspace = workspacePath;
-  settings.workspace = workspacePath;
+  const validatedWorkspacePath = validateWorkspacePath(workspacePath);
+
+  workspace = validatedWorkspacePath;
+  settings.workspace = validatedWorkspacePath;
   saveSettings(settings);
-  graphConfigManager.setWorkspace(workspacePath);
-  swarmManager.setWorkspace(workspacePath);
-  templateManager.setWorkspace(workspacePath);
+  graphConfigManager.setWorkspace(validatedWorkspacePath);
+  swarmManager.setWorkspace(validatedWorkspacePath);
+  templateManager.setWorkspace(validatedWorkspacePath);
   return { success: true };
 });
 
