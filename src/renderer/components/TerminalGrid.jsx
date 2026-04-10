@@ -65,7 +65,7 @@ function computeManualRects(agents, cols, containerW, containerH) {
 
 const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent, onSelectAgent }, ref) {
   const [layout, setLayout] = useState('auto');
-  const [terminalOrder, setTerminalOrder] = useState(() => [agents.map((a) => a.id)]);
+  const [terminalOrder, setTerminalOrder] = useState(() => buildOrder(agents, []));
   const termRefs = useRef({});
   const dragInfo = useRef(null);
   const containerRef = useRef(null);
@@ -150,15 +150,17 @@ const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent, o
 
   // Always compute rects — never split into two render trees
   const layoutCols = { '1col': 1, '2col': 2, '3col': 3 };
+  const normalizedTerminalOrder = terminalOrder.filter((row) => row.length > 0);
   const rects = layout === 'auto'
-    ? computeRects(terminalOrder, containerSize.w, containerSize.h)
+    ? computeRects(normalizedTerminalOrder, containerSize.w, containerSize.h)
     : computeManualRects(agents, layoutCols[layout] ?? 2, containerSize.w, containerSize.h);
 
-  const numRows = terminalOrder.length;
+  const numRows = normalizedTerminalOrder.length;
+  const canRenderDropZones = layout === 'auto' && ready && containerSize.w > 0 && containerSize.h > 0 && numRows > 0;
 
   // Row drop zones (auto mode only)
   const rowDropZones = [];
-  if (layout === 'auto') {
+  if (canRenderDropZones) {
     for (let i = 0; i <= numRows; i++) {
       const top = i === 0 ? 0 : GAP + (i - 1) * ((containerSize.h - GAP * (numRows + 1)) / numRows + GAP);
       rowDropZones.push({ insertBefore: i, top, height: GAP });
@@ -197,7 +199,7 @@ const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent, o
         })}
 
         {/* Drop zones — auto mode only */}
-        {layout === 'auto' && terminalOrder.map((row, rowIdx) => {
+        {canRenderDropZones && normalizedTerminalOrder.map((row, rowIdx) => {
           const numCols = row.length;
           const rowH = (containerSize.h - GAP * (numRows + 1)) / numRows;
           const colW = (containerSize.w - GAP * (numCols + 1)) / numCols;
@@ -217,7 +219,7 @@ const TerminalGrid = forwardRef(function TerminalGrid({ agents, selectedAgent, o
             />,
           ];
         })}
-        {layout === 'auto' && rowDropZones.map((zone) => (
+        {canRenderDropZones && rowDropZones.map((zone) => (
           <RowDropZone
             key={`row-${zone.insertBefore}`}
             style={{ left: 0, top: zone.top, width: containerSize.w, height: zone.height }}
