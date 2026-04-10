@@ -1,0 +1,148 @@
+.swarm-sidebar {
+  width: 280px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.swarm-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.swarm-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.swarm-new-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--background);
+  border: none;
+  border-radius: 0;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.swarm-new-btn:hover {
+  opacity: 0.8;
+}
+
+.swarm-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.swarm-sidebar-item {
+  position: relative;
+  padding: 12px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.swarm-sidebar-item:hover {
+  background: rgba(0, 255, 136, 0.05);
+  border-color: var(--border);
+}
+
+.swarm-sidebar-item.active {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+}
+
+.swarm-sidebar-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.swarm-sidebar-item-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.swarm-sidebar-item.active .swarm-sidebar-item-number {
+  background: var(--accent);
+  color: var(--background);
+  border-color: var(--accent);
+}
+
+.swarm-sidebar-item-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.swarm-sidebar-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.swarm-sidebar-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.swarm-sidebar-item:hover .swarm-sidebar-delete {
+  opacity: 1;
+}
+
+.swarm-sidebar-delete:hover {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: white;
+}

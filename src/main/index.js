@@ -10,6 +10,7 @@ const WhisperManager = require('./whisperManager');
 const pty = require('node-pty');
 const commConfig = require('./communication-config');
 const graphConfigManager = require('./graphConfigManager');
+const swarmManager = require('./swarmManager');
 const templateManager = require('./templateManager');
 
 // Setup logging to file in production
@@ -814,6 +815,7 @@ app.whenReady().then(async () => {
   // Initialize graph config manager with workspace
   if (workspace) {
     graphConfigManager.setWorkspace(workspace);
+    swarmManager.setWorkspace(workspace);
     templateManager.setWorkspace(workspace);
   }
 
@@ -865,6 +867,7 @@ ipcMain.handle('set-workspace', (event, { workspacePath }) => {
   settings.workspace = workspacePath;
   saveSettings(settings);
   graphConfigManager.setWorkspace(workspacePath);
+  swarmManager.setWorkspace(workspacePath);
   templateManager.setWorkspace(workspacePath);
   return { success: true };
 });
@@ -886,6 +889,26 @@ ipcMain.handle('is-configured', async () => {
 // Load graph config from workspace
 ipcMain.handle('load-graph-config', async () => {
   return graphConfigManager.loadGraphConfig();
+});
+
+ipcMain.handle('load-swarms', async () => {
+  return swarmManager.loadSwarms();
+});
+
+ipcMain.handle('save-swarm', async (event, swarm) => {
+  return swarmManager.saveSwarm(swarm);
+});
+
+ipcMain.handle('delete-swarm', async (event, id) => {
+  return swarmManager.deleteSwarm(id);
+});
+
+ipcMain.handle('get-selected-swarm', async () => {
+  return swarmManager.getSelectedSwarmId();
+});
+
+ipcMain.handle('set-selected-swarm', async (event, id) => {
+  return swarmManager.setSelectedSwarmId(id);
 });
 
 // Mux template management

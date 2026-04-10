@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWorkspace: (data) => ipcRenderer.invoke('set-workspace', data),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   loadGraphConfig: () => ipcRenderer.invoke('load-graph-config'),
+  loadSwarms: () => ipcRenderer.invoke('load-swarms'),
+  saveSwarm: (swarm) => ipcRenderer.invoke('save-swarm', swarm),
+  deleteSwarm: (id) => ipcRenderer.invoke('delete-swarm', id),
+  getSelectedSwarm: () => ipcRenderer.invoke('get-selected-swarm'),
+  setSelectedSwarm: (id) => ipcRenderer.invoke('set-selected-swarm', id),
 
   // PTY (claude CLI sessions)
   spawnAgent: (data) => ipcRenderer.invoke('pty-spawn', data),

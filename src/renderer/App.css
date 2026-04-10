@@ -292,6 +292,115 @@
   z-index: 1;
 }
 
+.swarm-sidebar-shell {
+  position: relative;
+  display: flex;
+  width: 292px;
+  min-width: 292px;
+  flex-shrink: 0;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+.swarm-sidebar-shell.collapsed {
+  width: 0;
+  min-width: 0;
+}
+
+.swarm-sidebar-panel {
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.swarm-sidebar-shell.collapsed .swarm-sidebar-panel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swarm-sidebar-divider-hitbox {
+  position: relative;
+  width: 12px;
+  min-width: 12px;
+  height: 100%;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.swarm-sidebar-divider-hitbox::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-right: 1px solid var(--border);
+  opacity: 0.7;
+}
+
+.swarm-sidebar-shell.collapsed .swarm-sidebar-divider-hitbox {
+  width: 0;
+  min-width: 0;
+}
+
+.swarm-sidebar-shell.collapsed .swarm-sidebar-divider-hitbox::before {
+  opacity: 0;
+}
+
+.swarm-sidebar-reopen-hitbox {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 100%;
+  z-index: 5;
+}
+
+.swarm-sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  color: var(--accent);
+  font-size: 18px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.swarm-sidebar-toggle:hover {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.swarm-sidebar-toggle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.swarm-sidebar-close-toggle {
+  right: -14px;
+}
+
+.swarm-sidebar-open-toggle {
+  left: -6px;
+}
+
+.swarm-sidebar-divider-hitbox:hover .swarm-sidebar-close-toggle,
+.swarm-sidebar-reopen-hitbox:hover .swarm-sidebar-open-toggle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .center-panel {
   display: flex;
   flex-direction: column;
@@ -319,6 +428,18 @@
 .graph-section {
   overflow: hidden;
   min-height: 200px;
+}
+
+.swarm-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 .split-handle {

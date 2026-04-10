@@ -1,10 +1,11 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import GraphView from './components/GraphView';
 import TerminalGrid from './components/TerminalGrid';
 import AgentConfigPanel from './components/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
 import MuxWorkspace from './components/mux/MuxWorkspace';
-import { useAgents } from './hooks/useAgents';
+import SwarmSidebar from './components/swarm/SwarmSidebar';
+import { createDefaultSwarmGraph, useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
 import './App.css';
 
@@ -38,6 +39,35 @@ function ViewToggleLabel({ icon, label, expanded }) {
   );
 }
 
+function cloneGraphData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function buildSwarmId() {
+  return `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildNextSwarmName(swarms) {
+  const maxNumber = swarms.reduce((max, swarm) => {
+    const match = swarm.name?.match(/^Swarm (\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `Swarm ${maxNumber + 1}`;
+}
+
+function createSwarmRecord(name, id = buildSwarmId()) {
+  const graph = createDefaultSwarmGraph(id);
+  const now = new Date().toISOString();
+  return {
+    id,
+    name,
+    agents: graph.agents,
+    edges: graph.edges,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function App() {
   const {
     agents,
@@ -65,36 +95,82 @@ function App() {
   const [baseURLInput, setBaseURLInput] = useState('');
   const [workspace, setWorkspace] = useState(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [swarmLoading, setSwarmLoading] = useState(false);
   const [terminalKey, setTerminalKey] = useState(0);
-  const [mode, setMode] = useState('swarm'); // 'swarm' or 'mux'
+  const [mode, setMode] = useState('swarm');
+  const [swarms, setSwarms] = useState([]);
+  const [selectedSwarmId, setSelectedSwarmId] = useState(null);
+  const [isSwarmSidebarCollapsed, setIsSwarmSidebarCollapsed] = useState(false);
+  const [showDeleteSwarmConfirm, setShowDeleteSwarmConfirm] = useState(false);
+  const [deleteSwarmId, setDeleteSwarmId] = useState(null);
   const termGridRef = useRef(null);
+  const activeSwarmRef = useRef(null);
 
-  // Keyboard shortcuts for Mux mode
+  const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
+
+  useEffect(() => {
+    activeSwarmRef.current = activeSwarm;
+  }, [activeSwarm]);
+
+  const loadSwarmsForWorkspace = useCallback(async () => {
+    if (!window.electronAPI || !workspace) {
+      setSwarms([]);
+      setSelectedSwarmId(null);
+      setSwarmLoading(false);
+      return;
+    }
+
+    setSwarmLoading(true);
+
+    try {
+      const [loadedSwarms, savedSelectedSwarmId] = await Promise.all([
+        window.electronAPI.loadSwarms(),
+        window.electronAPI.getSelectedSwarm(),
+      ]);
+
+      let nextSwarms = loadedSwarms || [];
+      if (nextSwarms.length === 0) {
+        const initialSwarm = createSwarmRecord('Swarm 1');
+        await window.electronAPI.saveSwarm(initialSwarm);
+        nextSwarms = [initialSwarm];
+      }
+
+      const nextSelectedSwarmId = nextSwarms.some((swarm) => swarm.id === savedSelectedSwarmId)
+        ? savedSelectedSwarmId
+        : nextSwarms[0].id;
+
+      await window.electronAPI.setSelectedSwarm(nextSelectedSwarmId);
+      setSwarms(nextSwarms);
+      setSelectedSwarmId(nextSelectedSwarmId);
+    } catch (err) {
+      console.error('[App] Failed to load swarms:', err);
+      setSwarms([]);
+      setSelectedSwarmId(null);
+    } finally {
+      setSwarmLoading(false);
+    }
+  }, [workspace]);
+
   useEffect(() => {
     if (mode !== 'mux') return;
 
     const handleKeyDown = (e) => {
-      // Cmd+1-9: Jump to agent 1-9
       if (e.metaKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
-        const index = parseInt(e.key) - 1;
+        const index = parseInt(e.key, 10) - 1;
         if (agents[index]) {
           setSelectedAgent(agents[index].id);
         }
-      }
-      // Cmd+Shift+]: Next agent
-      else if (e.metaKey && e.shiftKey && e.key === ']') {
+      } else if (e.metaKey && e.shiftKey && e.key === ']') {
         e.preventDefault();
-        const currentIndex = agents.findIndex(a => a.id === selectedAgent);
+        const currentIndex = agents.findIndex((agent) => agent.id === selectedAgent);
         const nextIndex = (currentIndex + 1) % agents.length;
         if (agents[nextIndex]) {
           setSelectedAgent(agents[nextIndex].id);
         }
-      }
-      // Cmd+Shift+[: Previous agent
-      else if (e.metaKey && e.shiftKey && e.key === '[') {
+      } else if (e.metaKey && e.shiftKey && e.key === '[') {
         e.preventDefault();
-        const currentIndex = agents.findIndex(a => a.id === selectedAgent);
+        const currentIndex = agents.findIndex((agent) => agent.id === selectedAgent);
         const prevIndex = (currentIndex - 1 + agents.length) % agents.length;
         if (agents[prevIndex]) {
           setSelectedAgent(agents[prevIndex].id);
@@ -106,10 +182,12 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, agents, selectedAgent, setSelectedAgent]);
 
-
-  // Load workspace + config on mount
   useEffect(() => {
-    if (!window.electronAPI) { setWorkspaceLoading(false); return; }
+    if (!window.electronAPI) {
+      setWorkspaceLoading(false);
+      return;
+    }
+
     Promise.all([
       window.electronAPI.getWorkspace(),
       window.electronAPI.isConfigured(),
@@ -120,14 +198,49 @@ function App() {
     });
   }, []);
 
-  // Sync agents and edges to main process whenever they change
   useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.syncAgents({ agents, edges });
+    if (!workspace) {
+      setSwarmLoading(false);
+      return;
     }
-  }, [agents, edges]);
+    loadSwarmsForWorkspace();
+  }, [workspace, loadSwarmsForWorkspace]);
 
-  // Listen for PTY events (claude CLI sessions)
+  useEffect(() => {
+    if (!activeSwarm) {
+      setAgents([]);
+      setEdges([]);
+      setSelectedAgent(null);
+      return;
+    }
+
+    setAgents(cloneGraphData(activeSwarm.agents || []));
+    setEdges(cloneGraphData(activeSwarm.edges || []));
+    setSelectedAgent(null);
+    setShowConfig(false);
+    setTerminalKey((key) => key + 1);
+  }, [activeSwarm?.id, setAgents, setEdges, setSelectedAgent]);
+
+  useEffect(() => {
+    if (!window.electronAPI || !selectedSwarmId || swarmLoading) {
+      return;
+    }
+
+    const existingSwarm = activeSwarmRef.current;
+    const nextSwarm = {
+      ...(existingSwarm || { id: selectedSwarmId, name: 'Swarm' }),
+      agents: cloneGraphData(agents),
+      edges: cloneGraphData(edges),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setSwarms((prev) => prev.map((swarm) => (
+      swarm.id === selectedSwarmId ? nextSwarm : swarm
+    )));
+    window.electronAPI.saveSwarm(nextSwarm);
+    window.electronAPI.syncAgents({ agents, edges });
+  }, [agents, edges, selectedSwarmId, swarmLoading]);
+
   useEffect(() => {
     if (!window.electronAPI) return;
 
@@ -138,7 +251,6 @@ function App() {
       const term = termGridRef.current?.getTerminal(agentId);
       term?.write(data);
 
-      // Debounce status updates to avoid rapid re-renders during initial load
       if (statusUpdateTimers[agentId]) {
         clearTimeout(statusUpdateTimers[agentId]);
       }
@@ -152,13 +264,11 @@ function App() {
       const term = termGridRef.current?.getTerminal(agentId);
       term?.notifyExit();
 
-      // Clear any pending status update
       if (statusUpdateTimers[agentId]) {
         clearTimeout(statusUpdateTimers[agentId]);
         delete statusUpdateTimers[agentId];
       }
 
-      // Update status to idle when PTY exits (disconnected)
       updateAgentStatus(agentId, NODE_STATUS.IDLE);
     }));
 
@@ -168,7 +278,6 @@ function App() {
     }));
 
     return () => {
-      // Clear all timers on cleanup
       Object.values(statusUpdateTimers).forEach(clearTimeout);
       unsubs.forEach((unsub) => unsub());
     };
@@ -177,18 +286,11 @@ function App() {
   const handleSelectFolder = useCallback(async () => {
     const folderPath = await window.electronAPI.selectFolder();
     if (!folderPath) return;
+
     await window.electronAPI.setWorkspace({ workspacePath: folderPath });
     setWorkspace(folderPath);
-    setTerminalKey((k) => k + 1); // remount all terminals with new cwd
-
-    // Load graph config for the new workspace
-    const config = await window.electronAPI.loadGraphConfig();
-    if (config && config.agents && config.edges) {
-      console.log('[App] Loaded graph config for new workspace');
-      setAgents(config.agents);
-      setEdges(config.edges);
-    }
-  }, [setAgents, setEdges]);
+    setTerminalKey((key) => key + 1);
+  }, []);
 
   const handleNodeSelect = useCallback((id) => {
     setSelectedAgent(id);
@@ -199,9 +301,9 @@ function App() {
     setShowConfig(false);
   }, []);
 
-
   const handleSaveSettings = useCallback(async () => {
     if (!authTokenInput.trim()) return;
+
     try {
       if (window.electronAPI) {
         await window.electronAPI.configure({
@@ -219,28 +321,68 @@ function App() {
   }, [authTokenInput, baseURLInput]);
 
   const handleMouseDown = useCallback(() => setIsDragging(true), []);
-  const handleMouseMove = useCallback(
-    (e) => {
-      if (!isDragging || !showGraph || !showTerminal) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      setSplitRatio(Math.max(20, Math.min(80, ((e.clientY - rect.top) / rect.height) * 100)));
-    },
-    [isDragging, showGraph, showTerminal]
-  );
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !showGraph || !showTerminal) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setSplitRatio(Math.max(20, Math.min(80, ((e.clientY - rect.top) / rect.height) * 100)));
+  }, [isDragging, showGraph, showTerminal]);
+
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   const handleVoiceTranscript = useCallback((text) => {
-    // Send transcribed text to the focused terminal
     if (termGridRef.current) {
       termGridRef.current.sendTextToFocused(text);
     }
   }, []);
 
-  const selectedAgentData = agents.find((a) => a.id === selectedAgent);
+  const handleSelectSwarm = useCallback(async (id) => {
+    setSelectedSwarmId(id);
+    await window.electronAPI?.setSelectedSwarm(id);
+  }, []);
+
+  const handleCreateSwarm = useCallback(async () => {
+    const newSwarm = createSwarmRecord(buildNextSwarmName(swarms));
+    await window.electronAPI?.saveSwarm(newSwarm);
+    setSwarms((prev) => [...prev, newSwarm]);
+    setSelectedSwarmId(newSwarm.id);
+    await window.electronAPI?.setSelectedSwarm(newSwarm.id);
+  }, [swarms]);
+
+  const handleDeleteSwarm = useCallback((id) => {
+    setDeleteSwarmId(id);
+    setShowDeleteSwarmConfirm(true);
+  }, []);
+
+  const confirmDeleteSwarm = useCallback(async () => {
+    const swarmId = deleteSwarmId;
+    if (!swarmId) return;
+
+    const remainingSwarms = swarms.filter((swarm) => swarm.id !== swarmId);
+    await window.electronAPI?.deleteSwarm(swarmId);
+
+    let nextSwarms = remainingSwarms;
+    if (remainingSwarms.length === 0) {
+      const replacementSwarm = createSwarmRecord('Swarm 1');
+      await window.electronAPI?.saveSwarm(replacementSwarm);
+      nextSwarms = [replacementSwarm];
+    }
+
+    const nextSelectedSwarmId = selectedSwarmId === swarmId
+      ? nextSwarms[0]?.id || null
+      : selectedSwarmId;
+
+    setSwarms(nextSwarms);
+    setSelectedSwarmId(nextSelectedSwarmId);
+    await window.electronAPI?.setSelectedSwarm(nextSelectedSwarmId);
+    setShowDeleteSwarmConfirm(false);
+    setDeleteSwarmId(null);
+  }, [deleteSwarmId, selectedSwarmId, swarms]);
+
+  const selectedAgentData = agents.find((agent) => agent.id === selectedAgent);
 
   if (workspaceLoading) return null;
 
-  // Block the UI until workspace is chosen
   if (!workspace) {
     return (
       <div className="workspace-picker-overlay">
@@ -278,6 +420,9 @@ function App() {
             <span className="workspace-icon">▸</span>
             <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
           </button>
+          {mode === 'swarm' && activeSwarm && (
+            <span className="header-info-text">Active {activeSwarm.name}</span>
+          )}
           {mode === 'swarm' && <span className="header-info-text">{agents.length} agents</span>}
           {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
           {mode === 'swarm' && (
@@ -298,91 +443,98 @@ function App() {
               <ViewToggleLabel icon={<TerminalIcon />} label="TERM" expanded={showTerminal} />
             </button>
           )}
-          {/* <button
-            className={`api-key-btn ${isConfigured ? 'has-key' : 'no-key'}`}
-            onClick={() => setShowSettings(!showSettings)}
-            title={isConfigured ? 'Configured' : 'Set Auth Token & Base URL'}
-          >
-            {isConfigured ? 'Configured' : 'Settings'}
-          </button> */}
         </div>
       </div>
 
-      {/* {showSettings && (
-        <div className="settings-bar">
-          <div className="settings-field">
-            <label>Auth Token</label>
-            <input
-              type="password"
-              placeholder="Your auth token"
-              value={authTokenInput}
-              onChange={(e) => setAuthTokenInput(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div className="settings-field">
-            <label>Base URL</label>
-            <input
-              type="text"
-              placeholder="https://api.example.com (optional)"
-              value={baseURLInput}
-              onChange={(e) => setBaseURLInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSaveSettings()}
-            />
-          </div>
-          <div className="settings-actions">
-            <button onClick={handleSaveSettings}>Save</button>
-            <button onClick={() => setShowSettings(false)}>Cancel</button>
-          </div>
-        </div>
-      )} */}
-
       <div className="main-layout">
         {mode === 'swarm' ? (
-          <div className="center-panel">
-            <div
-              className="graph-section"
-              style={{
-                height: showTerminal ? `${splitRatio}%` : '100%',
-                display: showGraph ? 'block' : 'none'
-              }}
-            >
-              <GraphView
-                agents={agents}
-                edges={edges}
-                onAgentsChange={setAgents}
-                onEdgesChange={setEdges}
-                onNodeSelect={handleNodeSelect}
-                onAddAgent={addAgent}
-                onRemoveAgent={removeAgent}
-              />
+          <>
+            <div className={`swarm-sidebar-shell ${isSwarmSidebarCollapsed ? 'collapsed' : ''}`}>
+              <div className="swarm-sidebar-divider-hitbox">
+                <button
+                  type="button"
+                  className="swarm-sidebar-toggle swarm-sidebar-close-toggle"
+                  aria-label="Close swarms sidebar"
+                  onClick={() => setIsSwarmSidebarCollapsed(true)}
+                >
+                  &lt;
+                </button>
+              </div>
+              <div className="swarm-sidebar-panel">
+                <SwarmSidebar
+                  swarms={swarms}
+                  selectedSwarmId={selectedSwarmId}
+                  onSelectSwarm={handleSelectSwarm}
+                  onNewSwarm={handleCreateSwarm}
+                  onDeleteSwarm={handleDeleteSwarm}
+                />
+              </div>
             </div>
-            {showGraph && showTerminal && (
-              <div
-                className={`split-handle ${isDragging ? 'dragging' : ''}`}
-                onMouseDown={handleMouseDown}
-              />
+            {isSwarmSidebarCollapsed && (
+              <div className="swarm-sidebar-reopen-hitbox">
+                <button
+                  type="button"
+                  className="swarm-sidebar-toggle swarm-sidebar-open-toggle"
+                  aria-label="Open swarms sidebar"
+                  onClick={() => setIsSwarmSidebarCollapsed(false)}
+                >
+                  &gt;
+                </button>
+              </div>
             )}
-            <div
-              className="terminal-section"
-              style={{
-                height: showGraph ? `${100 - splitRatio}%` : '100%',
-                display: showTerminal ? 'block' : 'none'
-              }}
-            >
-              <TerminalGrid
-                key={terminalKey}
-                ref={termGridRef}
-                agents={agents}
-                selectedAgent={selectedAgent}
-                onSelectAgent={setSelectedAgent}
-              />
+            <div className="center-panel">
+              {swarmLoading ? (
+                <div className="swarm-empty-state">Loading swarm workspace...</div>
+              ) : activeSwarm ? (
+                <>
+                  <div
+                    className="graph-section"
+                    style={{
+                      height: showTerminal ? `${splitRatio}%` : '100%',
+                      display: showGraph ? 'block' : 'none',
+                    }}
+                  >
+                    <GraphView
+                      agents={agents}
+                      edges={edges}
+                      onAgentsChange={setAgents}
+                      onEdgesChange={setEdges}
+                      onNodeSelect={handleNodeSelect}
+                      onAddAgent={addAgent}
+                      onRemoveAgent={removeAgent}
+                    />
+                  </div>
+                  {showGraph && showTerminal && (
+                    <div
+                      className={`split-handle ${isDragging ? 'dragging' : ''}`}
+                      onMouseDown={handleMouseDown}
+                    />
+                  )}
+                  <div
+                    className="terminal-section"
+                    style={{
+                      height: showGraph ? `${100 - splitRatio}%` : '100%',
+                      display: showTerminal ? 'block' : 'none',
+                    }}
+                  >
+                    <TerminalGrid
+                      key={terminalKey}
+                      ref={termGridRef}
+                      agents={agents}
+                      selectedAgent={selectedAgent}
+                      onSelectAgent={setSelectedAgent}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="swarm-empty-state">Create a swarm to start working in this workspace.</div>
+              )}
             </div>
-          </div>
+          </>
         ) : (
           <MuxWorkspace />
         )}
-        {showConfig && selectedAgentData && (
+        {mode === 'swarm' && showConfig && selectedAgentData && (
           <div className="config-sidebar">
             <AgentConfigPanel
               agent={selectedAgentData}
@@ -393,6 +545,19 @@ function App() {
           </div>
         )}
       </div>
+
+      {showDeleteSwarmConfirm && (
+        <div className="config-confirm-overlay">
+          <div className="config-confirm-dialog">
+            <h4>Delete this swarm?</h4>
+            <div className="config-confirm-actions">
+              <button className="btn-cancel" onClick={() => setShowDeleteSwarmConfirm(false)}>Cancel</button>
+              <button className="btn-confirm" onClick={confirmDeleteSwarm}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <VoiceAssistant onTranscript={handleVoiceTranscript} />
     </div>
   );
@@ -402,7 +567,6 @@ function formatWorkspacePath(fullPath) {
   if (!fullPath) return '';
   const home = fullPath.match(/^\/Users\/([^/]+)/)?.[0];
   const display = home ? fullPath.replace(home, '~') : fullPath;
-  // Truncate from left if too long
   if (display.length > 40) return '...' + display.slice(-37);
   return display;
 }
