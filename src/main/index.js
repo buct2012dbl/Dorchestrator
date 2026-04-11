@@ -113,6 +113,14 @@ function getCodingAgentCliPath() {
   return path.join(__dirname, '../../coding-agent/dist/cli/index.js');
 }
 
+function getCodexAutoApproveArgs() {
+  return [
+    '--sandbox', 'workspace-write',
+    '--ask-for-approval', 'never',
+    '-c', 'default_tools_approval_mode="approve"',
+  ];
+}
+
 function buildTerminalCommand(config = {}, options = {}) {
   const {
     allowShell = false,
@@ -131,7 +139,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     args = [];
   } else if (terminalType === 'codex') {
     command = process.env.CODEX_PATH || 'codex';
-    args = ['--full-auto'];
+    args = getCodexAutoApproveArgs();
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
     if (config.name) {
@@ -231,14 +239,110 @@ function getMcpBridgePath(tmpDir, logPrefix) {
   return targetPath;
 }
 
-function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPrefix) {
-  if (bridgePort <= 0) {
-    return () => {};
+function getCodexConfigPath() {
+  return path.join(os.homedir(), '.codex', 'config.toml');
+}
+
+function getCodexAuthPath() {
+  return path.join(os.homedir(), '.codex', 'auth.json');
+}
+
+function getCodexBridgeServerName(agentId) {
+  return `agent-bridge-${agentId}`;
+}
+
+function getCodexAgentHome(agentId) {
+  return path.join(os.tmpdir(), 'ao-codex-home', agentId);
+}
+
+function stripCodexMcpSections(content) {
+  const lines = content.split('\n');
+  const kept = [];
+  let skipSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      skipSection = trimmed.startsWith('[mcp_servers.');
+    }
+
+    if (!skipSection) {
+      kept.push(line);
+    }
   }
 
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
+function ensureCodexMcpToolApprovals(content, mcpServerName) {
+  const tools = ['send_message', 'send_response'];
+  let nextContent = content;
+
+  for (const toolName of tools) {
+    const header = `[mcp_servers.${mcpServerName}.tools.${toolName}]`;
+    const blockRegex = new RegExp(
+      `(^|\\n)\\[mcp_servers\\.${mcpServerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.tools\\.${toolName}\\]\\n(?:[^\\[]*\\n)*?approval_mode = "([^"]+)"`,
+      'm'
+    );
+
+    if (blockRegex.test(nextContent)) {
+      nextContent = nextContent.replace(blockRegex, (match, prefix) => {
+        if (match.includes('approval_mode = "approve"')) {
+          return match;
+        }
+        return `${prefix}${header}\napproval_mode = "approve"`;
+      });
+      continue;
+    }
+
+    if (!nextContent.endsWith('\n')) {
+      nextContent += '\n';
+    }
+    nextContent += `\n${header}\napproval_mode = "approve"\n`;
+  }
+
+  return nextContent;
+}
+
+function configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, env, logPrefix) {
+  const mcpServerName = getCodexBridgeServerName(agentId);
+  const agentHome = getCodexAgentHome(agentId);
+  const configPath = path.join(agentHome, 'config.toml');
+  const authPath = getCodexAuthPath();
+  const globalConfigPath = getCodexConfigPath();
+
+  fs.mkdirSync(agentHome, { recursive: true });
+
+  if (fs.existsSync(authPath)) {
+    fs.copyFileSync(authPath, path.join(agentHome, 'auth.json'));
+  }
+
+  let configContent = '';
+  if (fs.existsSync(globalConfigPath)) {
+    configContent = fs.readFileSync(globalConfigPath, 'utf8');
+  }
+
+  configContent = stripCodexMcpSections(configContent);
+  if (configContent && !configContent.endsWith('\n')) {
+    configContent += '\n';
+  }
+
+  configContent += `\n[mcp_servers.${mcpServerName}]\n`;
+  configContent += `command = ${JSON.stringify(NODE_PATH)}\n`;
+  configContent += `args = [${JSON.stringify(mcpBridgePath)}, ${JSON.stringify(bridgeConfigPath)}]\n`;
+  configContent = ensureCodexMcpToolApprovals(configContent, mcpServerName);
+
+  fs.writeFileSync(configPath, configContent);
+  env.CODEX_HOME = agentHome;
+  console.log(`${logPrefix} Prepared isolated Codex home for ${agentId}: ${agentHome}`);
+
+  return agentHome;
+}
+
+function writeBridgeConfig(agentId, logPrefix) {
   const connectedAgents = getConnectedAgents(agentId);
   if (connectedAgents.length === 0) {
-    return () => {};
+    return null;
   }
 
   const tmpDir = os.tmpdir();
@@ -246,36 +350,32 @@ function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPr
   const bridgeConfigPath = path.join(tmpDir, `ao-bridge-cfg-${agentId}.json`);
   const bridgeConfig = { agentId, bridgePort, connectedAgents };
 
-  try {
-    fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
-    console.log(`${logPrefix} Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
-  } catch (err) {
-    console.error(`${logPrefix} Failed to write bridge config:`, err.message);
+  fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
+  console.log(`${logPrefix} Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
+
+  return { connectedAgents, mcpBridgePath, bridgeConfigPath };
+}
+
+function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPrefix) {
+  if (bridgePort <= 0) {
+    return () => {};
   }
 
+  const bridgeInfo = writeBridgeConfig(agentId, logPrefix);
+  if (!bridgeInfo) {
+    return () => {};
+  }
+  const tmpDir = os.tmpdir();
+  const { mcpBridgePath, bridgeConfigPath } = bridgeInfo;
+
   if (terminalType === 'codex') {
-    const mcpServerName = `agent-bridge-${agentId}`;
-
     try {
-      execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
-    } catch {}
-
-    try {
-      const addCmd = `${command} mcp add ${mcpServerName} -- ${NODE_PATH} ${mcpBridgePath} ${bridgeConfigPath}`;
-      execSync(addCmd, { stdio: 'pipe', timeout: 5000 });
-      console.log(`${logPrefix} Added MCP server for Codex ${agentId}: ${mcpServerName}`);
+      configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, env, logPrefix);
+      return () => {};
     } catch (err) {
-      console.error(`${logPrefix} Failed to add MCP server for Codex:`, err.message);
+      console.error(`${logPrefix} Failed to prepare isolated Codex MCP config:`, err.message);
+      return () => {};
     }
-
-    return () => {
-      try {
-        execSync(`${command} mcp remove ${mcpServerName}`, { stdio: 'ignore', timeout: 2000 });
-        console.log(`${logPrefix} Removed MCP server for Codex ${agentId}: ${mcpServerName}`);
-      } catch (err) {
-        console.log(`${logPrefix} MCP server cleanup skipped (may not exist): ${err.message}`);
-      }
-    };
   }
 
   const mcpConfig = {
@@ -502,15 +602,25 @@ function getAgentResponse(agentId, message) {
       ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
 
       const codexPath = process.env.CODEX_PATH || 'codex';
-      const args = ['exec', '--full-auto', '--skip-git-repo-check'];
+      const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check'];
       if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
       if (targetAgent?.data?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(targetAgent.data.systemPrompt)}`);
       args.push(message);
+      const codexEnv = { ...process.env };
+
+      try {
+        const bridgeInfo = writeBridgeConfig(agentId, '[Bridge]');
+        if (bridgeInfo) {
+          configureCodexBridgeServer(agentId, bridgeInfo.mcpBridgePath, bridgeInfo.bridgeConfigPath, codexEnv, '[Bridge]');
+        }
+      } catch (err) {
+        console.error(`[Bridge] Failed to configure Codex MCP server for ${agentId}:`, err.message);
+      }
 
       const { spawn } = require('child_process');
       const execProcess = spawn(codexPath, args, {
         cwd: workspace || process.env.HOME || '/',
-        env: process.env,
+        env: codexEnv,
       });
 
       let output = '';
