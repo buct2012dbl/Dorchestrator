@@ -116,10 +116,10 @@
   font-family: 'Share Tech Mono', monospace;
 }
 
+.swarm-sidebar-edit,
 .swarm-sidebar-delete {
   position: absolute;
   top: 8px;
-  right: 8px;
   width: 20px;
   height: 20px;
   display: flex;
@@ -130,15 +130,46 @@
   border-radius: 0;
   color: var(--muted-foreground);
   cursor: pointer;
-  font-size: 16px;
   line-height: 1;
   padding: 0;
   opacity: 0;
   transition: all 0.2s;
 }
 
+.swarm-sidebar-edit {
+  right: 32px;
+}
+
+.swarm-sidebar-edit svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  pointer-events: none;
+}
+
+.swarm-sidebar-delete {
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.swarm-sidebar-item:hover .swarm-sidebar-edit,
 .swarm-sidebar-item:hover .swarm-sidebar-delete {
   opacity: 1;
+}
+
+.swarm-sidebar-edit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
 }
 
 .swarm-sidebar-delete:hover {

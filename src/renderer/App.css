@@ -442,6 +442,11 @@
   text-transform: uppercase;
 }
 
+.swarm-empty-state-action {
+  flex-direction: column;
+  gap: 20px;
+}
+
 .split-handle {
   height: 3px;
   background: var(--border);
@@ -574,6 +579,95 @@
   background: var(--accent);
   color: var(--background);
   box-shadow: var(--box-shadow-neon);
+}
+
+.swarm-name-modal {
+  width: min(460px, calc(100vw - 40px));
+  background: var(--card);
+  border: 2px solid var(--accent);
+  box-shadow: var(--box-shadow-neon-lg);
+  padding: 28px;
+  position: relative;
+}
+
+.swarm-name-modal::before,
+.swarm-name-modal::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent);
+}
+
+.swarm-name-modal::before {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.swarm-name-modal::after {
+  right: -2px;
+  bottom: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+.swarm-name-modal-header h4 {
+  margin: 0 0 10px;
+  font-family: 'Orbitron', monospace;
+  font-size: 20px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.swarm-name-modal-header p {
+  margin: 0 0 22px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+.swarm-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.swarm-name-form label {
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.swarm-name-input {
+  width: 100%;
+  background: var(--input);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: 'Share Tech Mono', monospace;
+  outline: none;
+  border-radius: 0;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.swarm-name-input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+}
+
+.swarm-name-error {
+  min-height: 18px;
+  color: var(--destructive);
+  font-size: 11px;
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.5px;
 }
 
 /* Workspace button in header */

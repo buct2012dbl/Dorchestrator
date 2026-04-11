@@ -68,6 +68,51 @@ function createSwarmRecord(name, id = buildSwarmId()) {
   };
 }
 
+function normalizeSwarmName(value) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function SwarmNameModal({
+  mode,
+  value,
+  error,
+  onChange,
+  onClose,
+  onSubmit,
+}) {
+  const title = mode === 'rename' ? 'Rename Swarm' : 'Create Swarm';
+  const description = mode === 'rename'
+    ? 'Update the swarm label shown in the sidebar and header.'
+    : 'Choose a name for the new swarm before it is created.';
+
+  return (
+    <div className="config-confirm-overlay" onClick={onClose}>
+      <div className="swarm-name-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="swarm-name-modal-header">
+          <h4>{title}</h4>
+          <p>{description}</p>
+        </div>
+        <form className="swarm-name-form" onSubmit={onSubmit}>
+          <label htmlFor="swarm-name-input">Name</label>
+          <input
+            id="swarm-name-input"
+            className="swarm-name-input"
+            value={value}
+            maxLength={80}
+            autoFocus
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {error && <div className="swarm-name-error">{error}</div>}
+          <div className="config-confirm-actions">
+            <button type="button" className="btn-cancel" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-confirm">{mode === 'rename' ? 'Save' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const {
     agents,
@@ -103,6 +148,9 @@ function App() {
   const [isSwarmSidebarCollapsed, setIsSwarmSidebarCollapsed] = useState(false);
   const [showDeleteSwarmConfirm, setShowDeleteSwarmConfirm] = useState(false);
   const [deleteSwarmId, setDeleteSwarmId] = useState(null);
+  const [swarmModalState, setSwarmModalState] = useState(null);
+  const [swarmNameInput, setSwarmNameInput] = useState('');
+  const [swarmNameError, setSwarmNameError] = useState('');
   const termGridRef = useRef(null);
   const activeSwarmRef = useRef(null);
 
@@ -128,16 +176,11 @@ function App() {
         window.electronAPI.getSelectedSwarm(),
       ]);
 
-      let nextSwarms = loadedSwarms || [];
-      if (nextSwarms.length === 0) {
-        const initialSwarm = createSwarmRecord('Swarm 1');
-        await window.electronAPI.saveSwarm(initialSwarm);
-        nextSwarms = [initialSwarm];
-      }
+      const nextSwarms = loadedSwarms || [];
 
       const nextSelectedSwarmId = nextSwarms.some((swarm) => swarm.id === savedSelectedSwarmId)
         ? savedSelectedSwarmId
-        : nextSwarms[0].id;
+        : nextSwarms[0]?.id || null;
 
       await window.electronAPI.setSelectedSwarm(nextSelectedSwarmId);
       setSwarms(nextSwarms);
@@ -341,13 +384,72 @@ function App() {
     await window.electronAPI?.setSelectedSwarm(id);
   }, []);
 
-  const handleCreateSwarm = useCallback(async () => {
-    const newSwarm = createSwarmRecord(buildNextSwarmName(swarms));
+  const openCreateSwarmModal = useCallback(() => {
+    setSwarmModalState({ mode: 'create', swarmId: null });
+    setSwarmNameInput(buildNextSwarmName(swarms));
+    setSwarmNameError('');
+  }, [swarms]);
+
+  const openRenameSwarmModal = useCallback((id) => {
+    const swarm = swarms.find((item) => item.id === id);
+    if (!swarm) return;
+    setSwarmModalState({ mode: 'rename', swarmId: id });
+    setSwarmNameInput(swarm.name || '');
+    setSwarmNameError('');
+  }, [swarms]);
+
+  const closeSwarmModal = useCallback(() => {
+    setSwarmModalState(null);
+    setSwarmNameInput('');
+    setSwarmNameError('');
+  }, []);
+
+  const handleSubmitSwarmModal = useCallback(async (e) => {
+    e.preventDefault();
+
+    if (!swarmModalState) return;
+
+    const nextName = normalizeSwarmName(swarmNameInput);
+    if (!nextName) {
+      setSwarmNameError('Swarm name is required.');
+      return;
+    }
+
+    const duplicate = swarms.find((swarm) => (
+      swarm.id !== swarmModalState.swarmId
+      && swarm.name?.trim().toLowerCase() === nextName.toLowerCase()
+    ));
+    if (duplicate) {
+      setSwarmNameError('Swarm name must be unique in this workspace.');
+      return;
+    }
+
+    if (swarmModalState.mode === 'rename') {
+      const existingSwarm = swarms.find((swarm) => swarm.id === swarmModalState.swarmId);
+      if (!existingSwarm) {
+        closeSwarmModal();
+        return;
+      }
+
+      const renamedSwarm = {
+        ...existingSwarm,
+        name: nextName,
+      };
+      await window.electronAPI?.saveSwarm(renamedSwarm);
+      setSwarms((prev) => prev.map((swarm) => (
+        swarm.id === renamedSwarm.id ? renamedSwarm : swarm
+      )));
+      closeSwarmModal();
+      return;
+    }
+
+    const newSwarm = createSwarmRecord(nextName);
     await window.electronAPI?.saveSwarm(newSwarm);
     setSwarms((prev) => [...prev, newSwarm]);
     setSelectedSwarmId(newSwarm.id);
     await window.electronAPI?.setSelectedSwarm(newSwarm.id);
-  }, [swarms]);
+    closeSwarmModal();
+  }, [closeSwarmModal, swarmModalState, swarmNameInput, swarms]);
 
   const handleDeleteSwarm = useCallback((id) => {
     setDeleteSwarmId(id);
@@ -361,12 +463,7 @@ function App() {
     const remainingSwarms = swarms.filter((swarm) => swarm.id !== swarmId);
     await window.electronAPI?.deleteSwarm(swarmId);
 
-    let nextSwarms = remainingSwarms;
-    if (remainingSwarms.length === 0) {
-      const replacementSwarm = createSwarmRecord('Swarm 1');
-      await window.electronAPI?.saveSwarm(replacementSwarm);
-      nextSwarms = [replacementSwarm];
-    }
+    const nextSwarms = remainingSwarms;
 
     const nextSelectedSwarmId = selectedSwarmId === swarmId
       ? nextSwarms[0]?.id || null
@@ -465,7 +562,8 @@ function App() {
                   swarms={swarms}
                   selectedSwarmId={selectedSwarmId}
                   onSelectSwarm={handleSelectSwarm}
-                  onNewSwarm={handleCreateSwarm}
+                  onNewSwarm={openCreateSwarmModal}
+                  onRenameSwarm={openRenameSwarmModal}
                   onDeleteSwarm={handleDeleteSwarm}
                 />
               </div>
@@ -527,7 +625,10 @@ function App() {
                   </div>
                 </>
               ) : (
-                <div className="swarm-empty-state">Create a swarm to start working in this workspace.</div>
+                <div className="swarm-empty-state swarm-empty-state-action">
+                  <span>Create a swarm to start working in this workspace.</span>
+                  <button className="workspace-browse-btn" onClick={openCreateSwarmModal}>Create Swarm</button>
+                </div>
               )}
             </div>
           </>
@@ -556,6 +657,22 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {swarmModalState && (
+        <SwarmNameModal
+          mode={swarmModalState.mode}
+          value={swarmNameInput}
+          error={swarmNameError}
+          onChange={(value) => {
+            setSwarmNameInput(value);
+            if (swarmNameError) {
+              setSwarmNameError('');
+            }
+          }}
+          onClose={closeSwarmModal}
+          onSubmit={handleSubmitSwarmModal}
+        />
       )}
 
       <VoiceAssistant onTranscript={handleVoiceTranscript} />
