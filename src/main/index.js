@@ -17,6 +17,10 @@ const templateManager = require('./templateManager');
 const logFile = path.join(app.getPath('userData'), 'app.log');
 const logStream = fs.createWriteStream(logFile, { flags: 'a' });
 
+function formatAgentLogLabel(agentId, logPrefix = '[PTY]') {
+  return `${logPrefix} agent=${agentId || 'unknown'}`;
+}
+
 function log(...args) {
   const message = `[${new Date().toISOString()}] ${args.join(' ')}`;
   console.log(...args);
@@ -47,7 +51,7 @@ console.error = (...args) => {
 };
 
 log('App starting...');
-log('Log file location:', logFile);
+log('Packaged file logging initialized');
 log('App version:', app.getVersion());
 log('Electron version:', process.versions.electron);
 log('Node version:', process.versions.node);
@@ -165,9 +169,6 @@ function buildTerminalCommand(config = {}, options = {}) {
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) {
       args.push('--append-system-prompt', config.systemPrompt);
-      if (logId) {
-        console.log(`${logPrefix} Setting system prompt for ${logId}: "${config.systemPrompt}"`);
-      }
     }
     if (config.name) {
       console.log(`${logPrefix} Agent name: ${config.name}`);
@@ -230,7 +231,7 @@ function getMcpBridgePath(tmpDir, logPrefix) {
     if (!fs.existsSync(targetPath)) {
       const bridgeContent = fs.readFileSync(sourcePath, 'utf8');
       fs.writeFileSync(targetPath, bridgeContent);
-      console.log(`${logPrefix} Copied MCP bridge to: ${targetPath}`);
+      console.log(`${logPrefix} Copied MCP bridge helper into temporary app storage`);
     }
   } catch (err) {
     console.error(`${logPrefix} Failed to copy MCP bridge:`, err.message);
@@ -334,7 +335,7 @@ function configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, en
 
   fs.writeFileSync(configPath, configContent);
   env.CODEX_HOME = agentHome;
-  console.log(`${logPrefix} Prepared isolated Codex home for ${agentId}: ${agentHome}`);
+  console.log(`${formatAgentLogLabel(agentId, logPrefix)} prepared isolated Codex home`);
 
   return agentHome;
 }
@@ -351,7 +352,7 @@ function writeBridgeConfig(agentId, logPrefix) {
   const bridgeConfig = { agentId, bridgePort, connectedAgents };
 
   fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig));
-  console.log(`${logPrefix} Wrote bridge config for ${agentId}: ${bridgeConfigPath}`);
+  console.log(`${formatAgentLogLabel(agentId, logPrefix)} wrote bridge config for ${connectedAgents.length} connected agents`);
 
   return { connectedAgents, mcpBridgePath, bridgeConfigPath };
 }
@@ -392,7 +393,7 @@ function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPr
     try {
       fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
       env.CODING_AGENT_MCP_CONFIG = mcpConfigPath;
-      console.log(`${logPrefix} Wrote MCP config for coding-agent ${agentId}: ${mcpConfigPath}`);
+      console.log(`${formatAgentLogLabel(agentId, logPrefix)} wrote coding-agent MCP config`);
     } catch (err) {
       console.error(`${logPrefix} Failed to write MCP config for coding-agent:`, err.message);
     }
@@ -403,7 +404,7 @@ function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPr
   try {
     fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
     args.push('--mcp-config', mcpConfigPath);
-    console.log(`${logPrefix} Wrote MCP config for ${agentId}: ${mcpConfigPath}`);
+    console.log(`${formatAgentLogLabel(agentId, logPrefix)} wrote MCP config`);
   } catch (err) {
     console.error(`${logPrefix} Failed to write MCP config:`, err.message);
   }
@@ -427,8 +428,7 @@ function spawnTrackedPty({
   onData,
   onExit,
 }) {
-  console.log(`${logPrefix} Spawning: ${command} ${args.join(' ')}`);
-  console.log(`${logPrefix} CWD: ${getPtyWorkingDirectory()}`);
+  console.log(`${formatAgentLogLabel(ptyId, logPrefix)} spawning terminalType command=${path.basename(command)} argCount=${args.length}`);
 
   const ptyProcess = pty.spawn(command, args, {
     name: 'xterm-256color',
@@ -470,7 +470,7 @@ function forwardAgentPtyData(agentId, data) {
   const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
   if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
     const notification = oscMatch[1];
-    console.log(`[Notification] ${agentId}: ${notification}`);
+    console.log(`[Notification] agent=${agentId} terminal notification received (${notification.length} chars)`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('agent-notification', { agentId, message: notification });
     }
@@ -526,7 +526,7 @@ function startBridgeServer() {
 
       const { fromAgentId, targetAgentId, message, kind = 'message' } = msg;
       const normalizedTargetAgentId = normalizeBridgeAgentId(targetAgentId);
-      console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}): ${message ? message.slice(0, 80) : '(empty message)'}`);
+      console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}, ${message ? message.length : 0} chars)`);
 
       const fromAgent = agentGraph.agents.find((a) => a.id === fromAgentId);
       const fromName = fromAgent?.data?.name || fromAgentId;
@@ -554,7 +554,7 @@ function startBridgeServer() {
           // Reuse the dedicated exec path so the message is actually handled.
           void getAgentResponse(normalizedTargetAgentId, fullMessage)
             .then((response) => {
-              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId}: ${String(response).slice(0, 200)}`);
+              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(response || '').length} chars)`);
             })
             .catch((err) => {
               console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
@@ -596,7 +596,7 @@ function getAgentResponse(agentId, message) {
 
     // For Codex agents, use exec command to process the message
     if (terminalType === 'codex') {
-      console.log(`[Bridge] Codex agent detected - spawning exec command for: ${message}`);
+      console.log(`[Bridge] Codex agent detected for ${agentId}; spawning exec command (${message.length} chars)`);
 
       // Show incoming message in terminal
       ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
@@ -645,7 +645,7 @@ function getAgentResponse(agentId, message) {
           .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
           .replace(/\x1b[()][0-9A-Za-z]/g, '')
           .trim();
-        console.log(`[Bridge] Codex exec completed with code ${code}, output: ${clean.slice(0, 200)}...`);
+        console.log(`[Bridge] Codex exec completed with code ${code}, outputLength=${clean.length}`);
         resolve(clean || '(no response)');
       });
 
@@ -681,7 +681,7 @@ function getAgentResponse(agentId, message) {
 
       // Extract final response (look for ⏺ marker or text after "thought for Xs")
       const finalResponse = extractFinalResponse(clean);
-      console.log(`[Bridge] Extracted final response: ${finalResponse.slice(0, 200)}...`);
+      console.log(`[Bridge] Extracted final response length for ${agentId}: ${finalResponse.length}`);
 
       resolve(finalResponse || '(no response)');
     };
@@ -712,7 +712,7 @@ function getAgentResponse(agentId, message) {
     });
 
     // Write message to PTY stdin (works for Claude Code with MCP)
-    console.log(`[Bridge] Sending message to Claude Code agent ${agentId}: ${message}`);
+    console.log(`[Bridge] Sending message to Claude Code agent ${agentId} (${message.length} chars)`);
     ptyProcess.write(message + '\r');
     resetIdle();
 
@@ -979,7 +979,7 @@ app.whenReady().then(async () => {
   whisperManager = new WhisperManager();
   whisperManager.initialize();
 
-  log(`Log file location: ${logFile}`);
+  log('Packaged file logging initialized');
   createWindow();
 });
 
@@ -1140,7 +1140,7 @@ ipcMain.handle('clear-history', async (event, { agentId }) => {
 // ---- PTY Handlers ----
 
 function spawnPty(agentId, agentData, cols = 80, rows = 24) {
-  console.log(`[PTY] spawnPty called for ${agentId}, agentData:`, JSON.stringify(agentData, null, 2));
+  console.log(`[PTY] spawnPty called for ${agentId} (terminalType=${agentData?.terminalType || agentData?.cliType || 'claude-code'})`);
 
   killTrackedPty(ptys, ptyDims, agentId);
 
@@ -1183,7 +1183,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
 }
 
 ipcMain.handle('pty-spawn', async (event, { agentId, agentData, cols, rows }) => {
-  console.log(`[IPC] pty-spawn received for ${agentId}`, { agentData, cols, rows });
+  console.log(`[IPC] pty-spawn received for ${agentId} (${cols || 80}x${rows || 24})`);
   return spawnPty(agentId, agentData, cols, rows);
 });
 
@@ -1213,7 +1213,7 @@ ipcMain.handle('pty-kill', async (event, { agentId }) => {
 
 // Mux PTY management
 ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }) => {
-  console.log(`[MuxPTY] Spawning terminal ${terminalId}`, config);
+  console.log(`[MuxPTY] Spawning terminal ${terminalId} (${cols || 80}x${rows || 24}, terminalType=${config?.terminalType || config?.cliType || 'claude-code'})`);
 
   killTrackedPty(muxPtys, muxPtyDims, terminalId);
 
