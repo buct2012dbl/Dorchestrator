@@ -15,6 +15,11 @@ const VoiceAssistant = ({ onTranscript }) => {
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
   const mediaStreamRef = useRef(null);
+  const onTranscriptRef = useRef(onTranscript);
+
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
 
   // Check if Whisper model is available
   useEffect(() => {
@@ -251,7 +256,7 @@ const VoiceAssistant = ({ onTranscript }) => {
 
       if (result.success && result.text) {
         setTranscript(result.text);
-        onTranscript?.(result.text);
+        onTranscriptRef.current?.(result.text);
 
         // Clear transcript after a delay
         setTimeout(() => {
