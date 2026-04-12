@@ -35,6 +35,11 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
   useImperativeHandle(ref, () => ({
     resize: () => fitAddonRef.current?.fit(),
     focus: () => termRef.current?.focus(),
+    writeText: (text) => {
+      if (termRef.current && ptyAliveRef.current) {
+        window.electronAPI?.muxPtyInput({ terminalId, data: text });
+      }
+    },
   }));
 
   useEffect(() => {

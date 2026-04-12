@@ -152,6 +152,7 @@ function App() {
   const [swarmNameInput, setSwarmNameInput] = useState('');
   const [swarmNameError, setSwarmNameError] = useState('');
   const termGridRef = useRef(null);
+  const muxWorkspaceRef = useRef(null);
   const activeSwarmRef = useRef(null);
 
   const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
@@ -374,10 +375,15 @@ function App() {
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   const handleVoiceTranscript = useCallback((text) => {
+    if (mode === 'mux') {
+      muxWorkspaceRef.current?.sendTextToFocused(text);
+      return;
+    }
+
     if (termGridRef.current) {
       termGridRef.current.sendTextToFocused(text);
     }
-  }, []);
+  }, [mode]);
 
   const handleSelectSwarm = useCallback(async (id) => {
     setSelectedSwarmId(id);
@@ -633,7 +639,7 @@ function App() {
             </div>
           </>
         ) : (
-          <MuxWorkspace />
+          <MuxWorkspace ref={muxWorkspaceRef} />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (
           <div className="config-sidebar">
