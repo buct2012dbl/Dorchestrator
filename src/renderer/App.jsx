@@ -375,15 +375,13 @@ function App() {
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   const handleVoiceTranscript = useCallback((text) => {
-    if (mode === 'mux') {
-      window.electronAPI?.deliverVoiceTranscriptToMux({
-        terminalId: activeMuxTerminalId,
-        text,
-      });
-      return;
-    }
+    window.electronAPI?.handleVoiceTranscript({
+      mode,
+      text,
+      activeMuxTerminalId,
+    });
 
-    if (termGridRef.current) {
+    if (mode !== 'mux' && termGridRef.current) {
       console.log('[VoiceAssistant] Routing transcript to swarm mode:', text);
       termGridRef.current.sendTextToFocused(text);
     }

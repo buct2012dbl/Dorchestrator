@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   whisperTranscribe: (audioPath) => ipcRenderer.invoke('whisper:transcribe', audioPath),
   whisperTranscribeBlob: (audioBuffer) => ipcRenderer.invoke('whisper:transcribeBlob', audioBuffer),
   whisperInstallWhisper: () => ipcRenderer.invoke('whisper:installWhisper'),
+  handleVoiceTranscript: (data) => ipcRenderer.invoke('voice-transcript', data),
   onWhisperDownloadProgress: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('whisper:downloadProgress', listener);
