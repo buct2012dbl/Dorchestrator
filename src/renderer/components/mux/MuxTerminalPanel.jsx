@@ -27,6 +27,9 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
         rows: terminal.rows,
       });
     },
+    onFocus: () => {
+      onFocus?.();
+    },
     onCleanup: () => {
       window.electronAPI?.killMuxTerminal({ terminalId });
     },
