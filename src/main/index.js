@@ -12,6 +12,11 @@ const commConfig = require('./communication-config');
 const graphConfigManager = require('./graphConfigManager');
 const swarmManager = require('./swarmManager');
 const templateManager = require('./templateManager');
+const {
+  syncAgentsAndRespawn,
+  resizeTrackedPty,
+  killTrackedPtyById,
+} = require('./ptyLifecycle');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -1100,24 +1105,16 @@ ipcMain.handle('set-selected-mux-template', async (event, id) => {
 
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges }) => {
-  const prevEdges = JSON.stringify(agentGraph.edges);
-  agentGraph = { agents, edges };
-  orchestrator.syncAgents(agents);
-  orchestrator.syncEdges(edges);
-
-  // Save to workspace config
-  graphConfigManager.saveGraphConfig(agents, edges);
-
-  // If edges changed, respawn affected PTYs so they get the updated MCP tool list
-  if (JSON.stringify(edges) !== prevEdges) {
-    for (const agent of agents) {
-      if (ptys.has(agent.id)) {
-        const dims = ptyDims.get(agent.id) || { cols: 80, rows: 24 };
-        spawnPty(agent.id, agent.data, dims.cols, dims.rows);
-      }
-    }
-  }
-
+  agentGraph = syncAgentsAndRespawn({
+    agentGraph,
+    agents,
+    edges,
+    orchestrator,
+    graphConfigManager,
+    ptys,
+    ptyDims,
+    spawnPty,
+  });
   return { success: true };
 });
 
@@ -1194,20 +1191,12 @@ ipcMain.on('pty-input', (event, { agentId, data }) => {
 });
 
 ipcMain.handle('pty-resize', async (event, { agentId, cols, rows }) => {
-  const ptyProcess = ptys.get(agentId);
-  if (ptyProcess) {
-    try { ptyProcess.resize(Math.max(1, cols), Math.max(1, rows)); } catch {}
-    ptyDims.set(agentId, { cols, rows });
-  }
+  resizeTrackedPty(ptys, ptyDims, agentId, cols, rows, true);
   return { success: true };
 });
 
 ipcMain.handle('pty-kill', async (event, { agentId }) => {
-  if (ptys.has(agentId)) {
-    try { ptys.get(agentId).kill(); } catch {}
-    ptys.delete(agentId);
-    ptyDims.delete(agentId);
-  }
+  killTrackedPtyById(ptys, ptyDims, agentId);
   return { success: true };
 });
 
@@ -1259,20 +1248,12 @@ ipcMain.on('mux-pty-input', (event, { terminalId, data }) => {
 });
 
 ipcMain.handle('mux-pty-resize', async (event, { terminalId, cols, rows }) => {
-  const ptyProcess = muxPtys.get(terminalId);
-  if (ptyProcess) {
-    ptyProcess.resize(cols, rows);
-    muxPtyDims.set(terminalId, { cols, rows });
-  }
+  resizeTrackedPty(muxPtys, muxPtyDims, terminalId, cols, rows, false);
   return { success: true };
 });
 
 ipcMain.handle('mux-pty-kill', async (event, { terminalId }) => {
-  if (muxPtys.has(terminalId)) {
-    try { muxPtys.get(terminalId).kill(); } catch {}
-    muxPtys.delete(terminalId);
-    muxPtyDims.delete(terminalId);
-  }
+  killTrackedPtyById(muxPtys, muxPtyDims, terminalId);
   return { success: true };
 });
 

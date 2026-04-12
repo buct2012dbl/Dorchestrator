@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { getTerminalInputAction } from './terminalSessionBehavior.mjs';
 
 export const TERMINAL_THEME = {
   background: '#1a1a1a',
@@ -152,16 +153,21 @@ export default function useTerminalSession({
     resizeObserver.observe(el);
 
     const inputDisposable = terminal.onData((data) => {
-      if (!ptyAliveRef.current) {
-        if (!restartOnExit || !canSpawn) {
-          return;
-        }
+      const action = getTerminalInputAction({
+        ptyAlive: ptyAliveRef.current,
+        restartOnExit,
+        canSpawn,
+        data,
+        shouldIgnoreInput: handlersRef.current.shouldIgnoreInput,
+      });
+
+      if (action.type === 'restart') {
         terminal.clear();
         spawnSession();
         return;
       }
 
-      if (handlersRef.current.shouldIgnoreInput?.(data)) {
+      if (action.type !== 'input') {
         return;
       }
 

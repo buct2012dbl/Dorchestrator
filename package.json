@@ -7,6 +7,7 @@
     "start": "electron .",
     "dev": "concurrently \"npm run dev:react\" \"wait-on http://localhost:3000 && electron .\"",
     "dev:react": "vite",
+    "test": "node --test tests/**/*.test.cjs tests/**/*.test.mjs",
     "build": "npm --prefix coding-agent run build && vite build && electron-builder",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
