@@ -40,10 +40,17 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
     focus: () => termRef.current?.focus(),
     writeText: (text) => {
       if (!termRef.current) {
+        console.warn('[VoiceAssistant][Mux] writeText skipped because terminal ref is missing', { terminalId, text });
         return;
       }
 
       termRef.current.focus();
+      console.log('[VoiceAssistant][Mux] writeText called', {
+        terminalId,
+        cliType: config.cliType,
+        ptyAlive: ptyAliveRef.current,
+        text,
+      });
 
       if (ptyAliveRef.current) {
         // Route through xterm's paste path so mux sessions receive the same

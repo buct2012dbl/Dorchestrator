@@ -121,9 +121,16 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
 
     const targetId = focusedTerminalId || terminals[0]?.id;
     if (!targetId) {
+      console.warn('[VoiceAssistant][Mux] No target terminal available for transcript:', transcriptEvent.text);
       return;
     }
 
+    console.log('[VoiceAssistant][Mux] Delivering transcript to terminal:', {
+      targetId,
+      focusedTerminalId,
+      terminalCount: terminals.length,
+      text: transcriptEvent.text,
+    });
     terminalRefs.current[targetId]?.writeText(transcriptEvent.text);
     terminalRefs.current[targetId]?.focus();
   }, [active, focusedTerminalId, terminals, transcriptEvent]);

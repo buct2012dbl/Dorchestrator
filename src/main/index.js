@@ -1242,6 +1242,12 @@ ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }
 
 ipcMain.on('mux-pty-input', (event, { terminalId, data }) => {
   const ptyProcess = muxPtys.get(terminalId);
+  console.log('[MuxPTY] Input received', {
+    terminalId,
+    hasPty: Boolean(ptyProcess),
+    length: typeof data === 'string' ? data.length : 0,
+    preview: typeof data === 'string' ? data.slice(0, 80) : '',
+  });
   if (ptyProcess) {
     ptyProcess.write(data);
   }

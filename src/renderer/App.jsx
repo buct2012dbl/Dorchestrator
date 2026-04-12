@@ -376,6 +376,7 @@ function App() {
 
   const handleVoiceTranscript = useCallback((text) => {
     if (mode === 'mux') {
+      console.log('[VoiceAssistant] Routing transcript to mux mode:', text);
       setMuxTranscriptEvent({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text,
@@ -384,6 +385,7 @@ function App() {
     }
 
     if (termGridRef.current) {
+      console.log('[VoiceAssistant] Routing transcript to swarm mode:', text);
       termGridRef.current.sendTextToFocused(text);
     }
   }, [mode]);
