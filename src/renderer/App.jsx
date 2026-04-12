@@ -375,14 +375,14 @@ function App() {
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   const handleVoiceTranscript = useCallback((text) => {
-    window.electronAPI?.handleVoiceTranscript({
-      mode,
-      text,
-      activeMuxTerminalId,
-    });
+    if (mode === 'mux') {
+      if (activeMuxTerminalId) {
+        window.electronAPI?.muxPtyInput({ terminalId: activeMuxTerminalId, data: text });
+      }
+      return;
+    }
 
-    if (mode !== 'mux' && termGridRef.current) {
-      console.log('[VoiceAssistant] Routing transcript to swarm mode:', text);
+    if (termGridRef.current) {
       termGridRef.current.sendTextToFocused(text);
     }
   }, [activeMuxTerminalId, mode]);

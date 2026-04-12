@@ -85,8 +85,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   muxPtyInput: (data) => ipcRenderer.send('mux-pty-input', data),
   muxPtyResize: (data) => ipcRenderer.invoke('mux-pty-resize', data),
   killMuxTerminal: (data) => ipcRenderer.invoke('mux-pty-kill', data),
-  setActiveMuxTerminal: (terminalId) => ipcRenderer.invoke('mux-set-active-terminal', terminalId),
-  deliverVoiceTranscriptToMux: (data) => ipcRenderer.invoke('mux-deliver-voice-transcript', data),
   onMuxPtyData: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('mux-pty-data', listener);
@@ -104,7 +102,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   whisperTranscribe: (audioPath) => ipcRenderer.invoke('whisper:transcribe', audioPath),
   whisperTranscribeBlob: (audioBuffer) => ipcRenderer.invoke('whisper:transcribeBlob', audioBuffer),
   whisperInstallWhisper: () => ipcRenderer.invoke('whisper:installWhisper'),
-  handleVoiceTranscript: (data) => ipcRenderer.invoke('voice-transcript', data),
   onWhisperDownloadProgress: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('whisper:downloadProgress', listener);

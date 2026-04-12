@@ -101,7 +101,6 @@ function MuxTerminalView({
     }
     const terminalId = focusedTerminalId || terminals[0]?.id || null;
     onActiveTerminalChange?.(terminalId);
-    window.electronAPI?.setActiveMuxTerminal(terminalId);
   }, [active, focusedTerminalId, onActiveTerminalChange, terminals]);
 
   const handleFocusTerminal = (terminalId) => {

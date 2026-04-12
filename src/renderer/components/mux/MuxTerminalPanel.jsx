@@ -1,14 +1,14 @@
-import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import './MuxTerminalPanel.css';
 import useTerminalSession from '../useTerminalSession';
 
 const FOCUS_REPORT_PATTERN = /^\x1b\[[IO]$/;
 
-const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, config, rect, onClose, onFocus, isFocused = false }, ref) {
+function MuxTerminalPanel({ terminalId, config, rect, onClose, onFocus, isFocused = false }) {
   const canSpawn = config.cliType !== 'empty';
   const sessionKey = `${terminalId}:${JSON.stringify(config)}`;
-  const { containerRef, termRef, fitAddonRef, ptyAliveRef } = useTerminalSession({
+  const { containerRef, termRef, ptyAliveRef } = useTerminalSession({
     sessionKey,
     canSpawn,
     onSpawn: ({ terminal }) => {
@@ -37,31 +37,6 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
     },
     shouldIgnoreInput: (data) => FOCUS_REPORT_PATTERN.test(data),
   });
-
-  useImperativeHandle(ref, () => ({
-    resize: () => fitAddonRef.current?.fit(),
-    focus: () => termRef.current?.focus(),
-    writeText: (text) => {
-      if (!termRef.current) {
-        console.warn('[VoiceAssistant][Mux] writeText skipped because terminal ref is missing', { terminalId, text });
-        return;
-      }
-
-      console.log('[VoiceAssistant][Mux] writeText called', {
-        terminalId,
-        cliType: config.cliType,
-        ptyAlive: ptyAliveRef.current,
-        text,
-      });
-
-      if (ptyAliveRef.current) {
-        // Match Swarm behavior: write directly to the backing PTY.
-        window.electronAPI?.muxPtyInput({ terminalId, data: text });
-      }
-
-      termRef.current.focus();
-    },
-  }));
 
   useEffect(() => {
     if (isFocused) {
@@ -108,6 +83,6 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
       <div className="mux-terminal-content" ref={containerRef} />
     </div>
   );
-});
+}
 
 export default MuxTerminalPanel;
