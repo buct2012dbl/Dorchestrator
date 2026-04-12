@@ -3,6 +3,8 @@ import '@xterm/xterm/css/xterm.css';
 import './MuxTerminalPanel.css';
 import useTerminalSession from '../useTerminalSession';
 
+const FOCUS_REPORT_PATTERN = /^\x1b\[[IO]$/;
+
 const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, config, rect, onClose, onFocus, isFocused = false }, ref) {
   const canSpawn = config.cliType !== 'empty';
   const sessionKey = `${terminalId}:${JSON.stringify(config)}`;
@@ -33,6 +35,7 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
     onCleanup: () => {
       window.electronAPI?.killMuxTerminal({ terminalId });
     },
+    shouldIgnoreInput: (data) => FOCUS_REPORT_PATTERN.test(data),
   });
 
   useImperativeHandle(ref, () => ({
@@ -44,7 +47,6 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
         return;
       }
 
-      termRef.current.focus();
       console.log('[VoiceAssistant][Mux] writeText called', {
         terminalId,
         cliType: config.cliType,
@@ -53,10 +55,11 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
       });
 
       if (ptyAliveRef.current) {
-        // Route through xterm's paste path so mux sessions receive the same
-        // bracketed-paste/user-input behavior as manual text entry.
-        termRef.current.paste(text);
+        // Match Swarm behavior: write directly to the backing PTY.
+        window.electronAPI?.muxPtyInput({ terminalId, data: text });
       }
+
+      termRef.current.focus();
     },
   }));
 
