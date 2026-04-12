@@ -376,15 +376,10 @@ function App() {
 
   const handleVoiceTranscript = useCallback((text) => {
     if (mode === 'mux') {
-      console.log('[VoiceAssistant] Routing transcript to mux mode:', {
-        activeMuxTerminalId,
+      window.electronAPI?.deliverVoiceTranscriptToMux({
+        terminalId: activeMuxTerminalId,
         text,
       });
-      if (activeMuxTerminalId) {
-        window.electronAPI?.muxPtyInput({ terminalId: activeMuxTerminalId, data: text });
-      } else {
-        console.warn('[VoiceAssistant][Mux] No active terminal selected for transcript:', text);
-      }
       return;
     }
 

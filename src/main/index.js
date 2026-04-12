@@ -1201,6 +1201,8 @@ ipcMain.handle('pty-kill', async (event, { agentId }) => {
 });
 
 // Mux PTY management
+let activeMuxTerminalId = null;
+
 ipcMain.handle('mux-pty-spawn', async (event, { terminalId, config, cols, rows }) => {
   console.log(`[MuxPTY] Spawning terminal ${terminalId} (${cols || 80}x${rows || 24}, terminalType=${config?.terminalType || config?.cliType || 'claude-code'})`);
 
@@ -1251,6 +1253,36 @@ ipcMain.on('mux-pty-input', (event, { terminalId, data }) => {
   if (ptyProcess) {
     ptyProcess.write(data);
   }
+});
+
+ipcMain.handle('mux-set-active-terminal', async (event, terminalId) => {
+  activeMuxTerminalId = terminalId || null;
+  console.log('[MuxPTY] Active terminal set', { terminalId: activeMuxTerminalId });
+  return { success: true, terminalId: activeMuxTerminalId };
+});
+
+ipcMain.handle('mux-deliver-voice-transcript', async (event, { terminalId, text }) => {
+  const targetTerminalId = terminalId || activeMuxTerminalId;
+  const ptyProcess = targetTerminalId ? muxPtys.get(targetTerminalId) : null;
+
+  console.log('[MuxPTY] Voice transcript delivery requested', {
+    requestedTerminalId: terminalId || null,
+    activeMuxTerminalId,
+    targetTerminalId,
+    hasPty: Boolean(ptyProcess),
+    text,
+  });
+
+  if (!targetTerminalId) {
+    return { success: false, error: 'No active mux terminal selected' };
+  }
+
+  if (!ptyProcess) {
+    return { success: false, error: `Mux PTY not found for terminal ${targetTerminalId}` };
+  }
+
+  ptyProcess.write(text);
+  return { success: true, terminalId: targetTerminalId };
 });
 
 ipcMain.handle('mux-pty-resize', async (event, { terminalId, cols, rows }) => {
