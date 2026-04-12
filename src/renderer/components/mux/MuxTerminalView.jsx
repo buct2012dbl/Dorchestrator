@@ -18,6 +18,7 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
   onEditTemplate,
   onPersistRuntimeLayout,
   onResetRuntimeLayout,
+  transcriptEvent = null,
 }, ref) {
   const [terminals, setTerminals] = useState([]);
   const [focusedTerminalId, setFocusedTerminalId] = useState(null);
@@ -112,6 +113,20 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
       terminalRefs.current[targetId]?.focus();
     },
   }), [focusedTerminalId, terminals]);
+
+  useEffect(() => {
+    if (!active || !transcriptEvent?.text) {
+      return;
+    }
+
+    const targetId = focusedTerminalId || terminals[0]?.id;
+    if (!targetId) {
+      return;
+    }
+
+    terminalRefs.current[targetId]?.writeText(transcriptEvent.text);
+    terminalRefs.current[targetId]?.focus();
+  }, [active, focusedTerminalId, terminals, transcriptEvent]);
 
   const handleFocusTerminal = (terminalId) => {
     setFocusedTerminalId(terminalId);

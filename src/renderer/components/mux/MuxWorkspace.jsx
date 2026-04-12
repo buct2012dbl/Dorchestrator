@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useImperativeHandle, useRef, forwardRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import MuxSidebar from './MuxSidebar';
 import MuxTerminalView from './MuxTerminalView';
 import TemplateEditorModal from './TemplateEditorModal';
 import { DEFAULT_TEMPLATES } from '../../store/defaultTemplates';
 import './MuxWorkspace.css';
 
-const MuxWorkspace = forwardRef(function MuxWorkspace(_, ref) {
+function MuxWorkspace({ transcriptEvent = null }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -14,7 +14,6 @@ const MuxWorkspace = forwardRef(function MuxWorkspace(_, ref) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [visitedTemplateIds, setVisitedTemplateIds] = useState([]);
-  const viewRefs = useRef({});
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -136,13 +135,6 @@ const MuxWorkspace = forwardRef(function MuxWorkspace(_, ref) {
     .map((id) => templates.find((template) => template.id === id))
     .filter(Boolean);
 
-  useImperativeHandle(ref, () => ({
-    sendTextToFocused: (text) => {
-      if (!selectedTemplate) return;
-      viewRefs.current[selectedTemplate]?.sendTextToFocused(text);
-    },
-  }), [selectedTemplate]);
-
   return (
     <div className="mux-workspace">
       <div className={`mux-sidebar-shell ${isSidebarCollapsed ? 'collapsed' : ''}`}>
@@ -182,36 +174,22 @@ const MuxWorkspace = forwardRef(function MuxWorkspace(_, ref) {
         visibleTemplates.map((template) => (
           <MuxTerminalView
             key={template.id}
-            ref={(instance) => {
-              if (instance) {
-                viewRefs.current[template.id] = instance;
-                return;
-              }
-              delete viewRefs.current[template.id];
-            }}
             template={template}
             active={template.id === selectedTemplate}
             onEditTemplate={handleEditTemplate}
             onPersistRuntimeLayout={handlePersistRuntimeLayout}
             onResetRuntimeLayout={handleResetRuntimeLayout}
+            transcriptEvent={template.id === selectedTemplate ? transcriptEvent : null}
           />
         ))
       ) : (
         <MuxTerminalView
-          ref={(instance) => {
-            if (currentTemplate?.id && instance) {
-              viewRefs.current[currentTemplate.id] = instance;
-              return;
-            }
-            if (currentTemplate?.id) {
-              delete viewRefs.current[currentTemplate.id];
-            }
-          }}
           template={currentTemplate}
           active
           onEditTemplate={handleEditTemplate}
           onPersistRuntimeLayout={handlePersistRuntimeLayout}
           onResetRuntimeLayout={handleResetRuntimeLayout}
+          transcriptEvent={transcriptEvent}
         />
       )}
       {showEditor && (
@@ -234,6 +212,6 @@ const MuxWorkspace = forwardRef(function MuxWorkspace(_, ref) {
       )}
     </div>
   );
-});
+}
 
 export default MuxWorkspace;

@@ -151,8 +151,8 @@ function App() {
   const [swarmModalState, setSwarmModalState] = useState(null);
   const [swarmNameInput, setSwarmNameInput] = useState('');
   const [swarmNameError, setSwarmNameError] = useState('');
+  const [muxTranscriptEvent, setMuxTranscriptEvent] = useState(null);
   const termGridRef = useRef(null);
-  const muxWorkspaceRef = useRef(null);
   const activeSwarmRef = useRef(null);
 
   const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
@@ -376,7 +376,10 @@ function App() {
 
   const handleVoiceTranscript = useCallback((text) => {
     if (mode === 'mux') {
-      muxWorkspaceRef.current?.sendTextToFocused(text);
+      setMuxTranscriptEvent({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text,
+      });
       return;
     }
 
@@ -639,7 +642,7 @@ function App() {
             </div>
           </>
         ) : (
-          <MuxWorkspace ref={muxWorkspaceRef} />
+          <MuxWorkspace transcriptEvent={muxTranscriptEvent} />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (
           <div className="config-sidebar">
