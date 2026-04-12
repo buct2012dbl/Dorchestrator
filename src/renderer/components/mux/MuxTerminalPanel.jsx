@@ -36,8 +36,16 @@ const MuxTerminalPanel = forwardRef(function MuxTerminalPanel({ terminalId, conf
     resize: () => fitAddonRef.current?.fit(),
     focus: () => termRef.current?.focus(),
     writeText: (text) => {
-      if (termRef.current && ptyAliveRef.current) {
-        window.electronAPI?.muxPtyInput({ terminalId, data: text });
+      if (!termRef.current) {
+        return;
+      }
+
+      termRef.current.focus();
+
+      if (ptyAliveRef.current) {
+        // Route through xterm's paste path so mux sessions receive the same
+        // bracketed-paste/user-input behavior as manual text entry.
+        termRef.current.paste(text);
       }
     },
   }));
