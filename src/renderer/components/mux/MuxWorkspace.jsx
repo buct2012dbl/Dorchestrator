@@ -5,7 +5,7 @@ import TemplateEditorModal from './TemplateEditorModal';
 import { DEFAULT_TEMPLATES } from '../../store/defaultTemplates';
 import './MuxWorkspace.css';
 
-function MuxWorkspace({ transcriptEvent = null }) {
+function MuxWorkspace({ onActiveTerminalChange }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -179,7 +179,7 @@ function MuxWorkspace({ transcriptEvent = null }) {
             onEditTemplate={handleEditTemplate}
             onPersistRuntimeLayout={handlePersistRuntimeLayout}
             onResetRuntimeLayout={handleResetRuntimeLayout}
-            transcriptEvent={template.id === selectedTemplate ? transcriptEvent : null}
+            onActiveTerminalChange={template.id === selectedTemplate ? onActiveTerminalChange : undefined}
           />
         ))
       ) : (
@@ -189,7 +189,7 @@ function MuxWorkspace({ transcriptEvent = null }) {
           onEditTemplate={handleEditTemplate}
           onPersistRuntimeLayout={handlePersistRuntimeLayout}
           onResetRuntimeLayout={handleResetRuntimeLayout}
-          transcriptEvent={transcriptEvent}
+          onActiveTerminalChange={onActiveTerminalChange}
         />
       )}
       {showEditor && (

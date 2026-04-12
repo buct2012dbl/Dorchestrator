@@ -151,7 +151,7 @@ function App() {
   const [swarmModalState, setSwarmModalState] = useState(null);
   const [swarmNameInput, setSwarmNameInput] = useState('');
   const [swarmNameError, setSwarmNameError] = useState('');
-  const [muxTranscriptEvent, setMuxTranscriptEvent] = useState(null);
+  const [activeMuxTerminalId, setActiveMuxTerminalId] = useState(null);
   const termGridRef = useRef(null);
   const activeSwarmRef = useRef(null);
 
@@ -376,11 +376,15 @@ function App() {
 
   const handleVoiceTranscript = useCallback((text) => {
     if (mode === 'mux') {
-      console.log('[VoiceAssistant] Routing transcript to mux mode:', text);
-      setMuxTranscriptEvent({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      console.log('[VoiceAssistant] Routing transcript to mux mode:', {
+        activeMuxTerminalId,
         text,
       });
+      if (activeMuxTerminalId) {
+        window.electronAPI?.muxPtyInput({ terminalId: activeMuxTerminalId, data: text });
+      } else {
+        console.warn('[VoiceAssistant][Mux] No active terminal selected for transcript:', text);
+      }
       return;
     }
 
@@ -388,7 +392,7 @@ function App() {
       console.log('[VoiceAssistant] Routing transcript to swarm mode:', text);
       termGridRef.current.sendTextToFocused(text);
     }
-  }, [mode]);
+  }, [activeMuxTerminalId, mode]);
 
   const handleSelectSwarm = useCallback(async (id) => {
     setSelectedSwarmId(id);
@@ -644,7 +648,7 @@ function App() {
             </div>
           </>
         ) : (
-          <MuxWorkspace transcriptEvent={muxTranscriptEvent} />
+          <MuxWorkspace onActiveTerminalChange={setActiveMuxTerminalId} />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (
           <div className="config-sidebar">

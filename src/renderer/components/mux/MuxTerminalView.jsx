@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useImperativeHandle, useRef, forwardRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MuxTerminalPanel from './MuxTerminalPanel';
 import './MuxTerminalView.css';
 import {
@@ -12,32 +12,22 @@ import {
   clearMergeMetadata,
 } from './muxLayout.mjs';
 
-const MuxTerminalView = forwardRef(function MuxTerminalView({
+function MuxTerminalView({
   template,
   active = true,
   onEditTemplate,
   onPersistRuntimeLayout,
   onResetRuntimeLayout,
-  transcriptEvent = null,
-}, ref) {
+  onActiveTerminalChange,
+}) {
   const [terminals, setTerminals] = useState([]);
   const [focusedTerminalId, setFocusedTerminalId] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetVersion, setResetVersion] = useState(0);
   const containerRef = useRef(null);
-  const terminalRefs = useRef({});
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const pendingRuntimeLayoutRef = useRef(null);
   const spawnSignature = getTemplateSpawnSignature(template);
-
-  const setTerminalRef = (terminalId, instance) => {
-    if (instance) {
-      terminalRefs.current[terminalId] = instance;
-      return;
-    }
-
-    delete terminalRefs.current[terminalId];
-  };
 
   useEffect(() => {
     if (!template) {
@@ -105,35 +95,12 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
     }
   }, [focusedTerminalId, terminals]);
 
-  useImperativeHandle(ref, () => ({
-    sendTextToFocused: (text) => {
-      const targetId = focusedTerminalId || terminals[0]?.id;
-      if (!targetId) return;
-      terminalRefs.current[targetId]?.writeText(text);
-      terminalRefs.current[targetId]?.focus();
-    },
-  }), [focusedTerminalId, terminals]);
-
   useEffect(() => {
-    if (!active || !transcriptEvent?.text) {
+    if (!active) {
       return;
     }
-
-    const targetId = focusedTerminalId || terminals[0]?.id;
-    if (!targetId) {
-      console.warn('[VoiceAssistant][Mux] No target terminal available for transcript:', transcriptEvent.text);
-      return;
-    }
-
-    console.log('[VoiceAssistant][Mux] Delivering transcript to terminal:', {
-      targetId,
-      focusedTerminalId,
-      terminalCount: terminals.length,
-      text: transcriptEvent.text,
-    });
-    terminalRefs.current[targetId]?.writeText(transcriptEvent.text);
-    terminalRefs.current[targetId]?.focus();
-  }, [active, focusedTerminalId, terminals, transcriptEvent]);
+    onActiveTerminalChange?.(focusedTerminalId || terminals[0]?.id || null);
+  }, [active, focusedTerminalId, onActiveTerminalChange, terminals]);
 
   const handleFocusTerminal = (terminalId) => {
     setFocusedTerminalId(terminalId);
@@ -311,7 +278,6 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
         {terminals.map(term => (
           <MuxTerminalPanel
             key={term.id}
-            ref={(instance) => setTerminalRef(term.id, instance)}
             terminalId={term.id}
             config={term.config}
             rect={rects[term.id] || { left: 0, top: 0, width: 0, height: 0 }}
@@ -335,6 +301,6 @@ const MuxTerminalView = forwardRef(function MuxTerminalView({
       )}
     </div>
   );
-});
+}
 
 export default MuxTerminalView;
