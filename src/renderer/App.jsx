@@ -153,13 +153,9 @@ function App() {
   const [swarmNameError, setSwarmNameError] = useState('');
   const [activeMuxTerminalId, setActiveMuxTerminalId] = useState(null);
   const termGridRef = useRef(null);
-  const activeSwarmRef = useRef(null);
+  const hydratingSwarmIdRef = useRef(null);
 
   const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
-
-  useEffect(() => {
-    activeSwarmRef.current = activeSwarm;
-  }, [activeSwarm]);
 
   const loadSwarmsForWorkspace = useCallback(async () => {
     if (!window.electronAPI || !workspace) {
@@ -252,12 +248,14 @@ function App() {
 
   useEffect(() => {
     if (!activeSwarm) {
+      hydratingSwarmIdRef.current = null;
       setAgents([]);
       setEdges([]);
       setSelectedAgent(null);
       return;
     }
 
+    hydratingSwarmIdRef.current = activeSwarm.id;
     setAgents(cloneGraphData(activeSwarm.agents || []));
     setEdges(cloneGraphData(activeSwarm.edges || []));
     setSelectedAgent(null);
@@ -270,18 +268,34 @@ function App() {
       return;
     }
 
-    const existingSwarm = activeSwarmRef.current;
-    const nextSwarm = {
-      ...(existingSwarm || { id: selectedSwarmId, name: 'Swarm' }),
-      agents: cloneGraphData(agents),
-      edges: cloneGraphData(edges),
-      updatedAt: new Date().toISOString(),
-    };
+    if (hydratingSwarmIdRef.current === selectedSwarmId) {
+      hydratingSwarmIdRef.current = null;
+      return;
+    }
 
-    setSwarms((prev) => prev.map((swarm) => (
-      swarm.id === selectedSwarmId ? nextSwarm : swarm
-    )));
-    window.electronAPI.saveSwarm(nextSwarm);
+    const nextAgents = cloneGraphData(agents);
+    const nextEdges = cloneGraphData(edges);
+    const updatedAt = new Date().toISOString();
+    let nextSwarm = null;
+
+    setSwarms((prev) => prev.map((swarm) => {
+      if (swarm.id !== selectedSwarmId) {
+        return swarm;
+      }
+
+      nextSwarm = {
+        ...swarm,
+        agents: nextAgents,
+        edges: nextEdges,
+        updatedAt,
+      };
+
+      return nextSwarm;
+    }));
+
+    if (nextSwarm) {
+      window.electronAPI.saveSwarm(nextSwarm);
+    }
     window.electronAPI.syncAgents({ agents, edges });
   }, [agents, edges, selectedSwarmId, swarmLoading]);
 
@@ -601,6 +615,7 @@ function App() {
                     }}
                   >
                     <GraphView
+                      key={activeSwarm.id}
                       agents={agents}
                       edges={edges}
                       onAgentsChange={setAgents}
