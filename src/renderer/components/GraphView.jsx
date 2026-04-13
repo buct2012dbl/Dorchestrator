@@ -4,8 +4,8 @@ import {
   MiniMap,
   Controls,
   Background,
-  useNodesState,
-  useEdgesState,
+  applyNodeChanges,
+  applyEdgeChanges,
   addEdge,
   Panel,
 } from '@xyflow/react';
@@ -17,19 +17,28 @@ import './GraphView.css';
 const nodeTypes = { agentNode: AgentNode };
 
 function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect, onAddAgent, onRemoveAgent }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(agents);
-  const [edgesState, setEdges, onEdgesChangeInternal] = useEdgesState(edges);
   const [contextMenu, setContextMenu] = useState(null);
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
-
-  // Sync external changes (but avoid resetting during drag operations)
-  const isDraggingRef = useRef(false);
+  const lastFitSizeRef = useRef({ width: 0, height: 0 });
 
   // Force ReactFlow to recalculate viewport when container resizes
   React.useEffect(() => {
     if (!reactFlowInstance) return;
     const observer = new ResizeObserver(() => {
+      const width = reactFlowWrapper.current?.clientWidth || 0;
+      const height = reactFlowWrapper.current?.clientHeight || 0;
+
+      if (
+        width === 0
+        || height === 0
+        || (lastFitSizeRef.current.width === width && lastFitSizeRef.current.height === height)
+      ) {
+        return;
+      }
+
+      lastFitSizeRef.current = { width, height };
+
       // Let React Flow recalculate after layout changes like opening the config sidebar.
       window.requestAnimationFrame(() => {
         reactFlowInstance.fitView({
@@ -42,32 +51,12 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
     return () => observer.disconnect();
   }, [reactFlowInstance]);
 
-  React.useEffect(() => {
-    if (isDraggingRef.current) {
-      // During drag, only update node data (status, etc), not positions
-      setNodes((currentNodes) =>
-        currentNodes.map((node) => {
-          const updatedAgent = agents.find((a) => a.id === node.id);
-          return updatedAgent ? { ...node, data: updatedAgent.data } : node;
-        })
-      );
-    } else {
-      // When not dragging, sync everything
-      setNodes(agents);
-    }
-  }, [agents, setNodes]);
-
-  React.useEffect(() => {
-    setEdges(edges);
-  }, [edges, setEdges]);
-
   const onConnect = useCallback(
     (params) => {
       const newEdge = { ...params, animated: true, style: { stroke: '#4a4a4a' } };
-      setEdges((eds) => addEdge(newEdge, eds));
       onEdgesChange((prev) => addEdge(newEdge, prev));
     },
-    [setEdges, onEdgesChange]
+    [onEdgesChange]
   );
 
   const onNodeClick = useCallback(
@@ -79,42 +68,20 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
 
   const handleNodesChange = useCallback(
     (changes) => {
-      // Track drag state
-      const isDragging = changes.some((c) => c.type === 'position' && c.dragging);
-      const dragEnded = changes.some((c) => c.type === 'position' && c.dragging === false);
-
-      if (isDragging) {
-        isDraggingRef.current = true;
-      } else if (dragEnded) {
-        isDraggingRef.current = false;
-      }
-
-      onNodesChange(changes);
-
-      // Sync position changes back only when drag ends
-      const posChanges = changes.filter((c) => c.type === 'position' && c.position && c.dragging === false);
-      if (posChanges.length > 0) {
-        onAgentsChange((prev) =>
-          prev.map((a) => {
-            const change = posChanges.find((c) => c.id === a.id);
-            return change ? { ...a, position: change.position } : a;
-          })
-        );
-      }
+      const persistentChanges = changes.filter((change) => change.type !== 'select');
+      if (persistentChanges.length === 0) return;
+      onAgentsChange((prev) => applyNodeChanges(persistentChanges, prev));
     },
-    [onNodesChange, onAgentsChange]
+    [onAgentsChange]
   );
 
   const handleEdgesChange = useCallback(
     (changes) => {
-      onEdgesChangeInternal(changes);
-      const removals = changes.filter((c) => c.type === 'remove');
-      if (removals.length > 0) {
-        const removeIds = removals.map((r) => r.id);
-        onEdgesChange((prev) => prev.filter((e) => !removeIds.includes(e.id)));
-      }
+      const persistentChanges = changes.filter((change) => change.type !== 'select');
+      if (persistentChanges.length === 0) return;
+      onEdgesChange((prev) => applyEdgeChanges(persistentChanges, prev));
     },
-    [onEdgesChangeInternal, onEdgesChange]
+    [onEdgesChange]
   );
 
   const onPaneContextMenu = useCallback(
@@ -172,8 +139,8 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   return (
     <div className="graph-view" ref={reactFlowWrapper}>
       <ReactFlow
-        nodes={nodes}
-        edges={edgesState}
+        nodes={agents}
+        edges={edges}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
