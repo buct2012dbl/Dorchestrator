@@ -43,11 +43,21 @@ function cloneGraphData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function buildPersistedAgents(agents = []) {
+  return cloneGraphData(agents).map((agent) => ({
+    ...agent,
+    data: {
+      ...agent.data,
+      status: NODE_STATUS.IDLE,
+    },
+  }));
+}
+
 function buildSwarmSnapshotMap(swarms) {
   const snapshots = {};
   for (const swarm of swarms || []) {
     snapshots[swarm.id] = {
-      agents: cloneGraphData(swarm.agents || []),
+      agents: buildPersistedAgents(swarm.agents || []),
       edges: cloneGraphData(swarm.edges || []),
     };
   }
@@ -288,7 +298,7 @@ function App() {
       return;
     }
 
-    const clonedAgents = cloneGraphData(nextAgents);
+    const clonedAgents = buildPersistedAgents(nextAgents);
     const clonedEdges = cloneGraphData(nextEdges);
     swarmSnapshotsRef.current[swarmId] = {
       agents: clonedAgents,
@@ -503,7 +513,7 @@ function App() {
         name: nextName,
       };
       swarmSnapshotsRef.current[renamedSwarm.id] = {
-        agents: cloneGraphData(renamedSwarm.agents || []),
+        agents: buildPersistedAgents(renamedSwarm.agents || []),
         edges: cloneGraphData(renamedSwarm.edges || []),
       };
       await window.electronAPI?.saveSwarm(renamedSwarm);
@@ -516,7 +526,7 @@ function App() {
 
     const newSwarm = createSwarmRecord(nextName);
     swarmSnapshotsRef.current[newSwarm.id] = {
-      agents: cloneGraphData(newSwarm.agents || []),
+      agents: buildPersistedAgents(newSwarm.agents || []),
       edges: cloneGraphData(newSwarm.edges || []),
     };
     await window.electronAPI?.saveSwarm(newSwarm);

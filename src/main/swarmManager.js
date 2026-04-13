@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const DEFAULT_AGENT_STATUS = 'idle';
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -10,6 +12,7 @@ function sanitizeAgents(agents = []) {
     ...agent,
     data: {
       ...agent.data,
+      status: DEFAULT_AGENT_STATUS,
       unreadCount: 0,
       latestNotification: null,
     },
