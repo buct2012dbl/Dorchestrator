@@ -154,6 +154,7 @@ function App() {
   const [activeMuxTerminalId, setActiveMuxTerminalId] = useState(null);
   const termGridRef = useRef(null);
   const hydratingSwarmIdRef = useRef(null);
+  const graphStateSwarmIdRef = useRef(null);
 
   const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
 
@@ -249,6 +250,7 @@ function App() {
   useEffect(() => {
     if (!activeSwarm) {
       hydratingSwarmIdRef.current = null;
+      graphStateSwarmIdRef.current = null;
       setAgents([]);
       setEdges([]);
       setSelectedAgent(null);
@@ -256,6 +258,7 @@ function App() {
     }
 
     hydratingSwarmIdRef.current = activeSwarm.id;
+    graphStateSwarmIdRef.current = activeSwarm.id;
     setAgents(cloneGraphData(activeSwarm.agents || []));
     setEdges(cloneGraphData(activeSwarm.edges || []));
     setSelectedAgent(null);
@@ -263,30 +266,25 @@ function App() {
     setTerminalKey((key) => key + 1);
   }, [activeSwarm?.id, setAgents, setEdges, setSelectedAgent]);
 
-  useEffect(() => {
-    if (!window.electronAPI || !selectedSwarmId || swarmLoading) {
+  const persistSwarmGraph = useCallback((swarmId, nextAgents, nextEdges) => {
+    if (!window.electronAPI || !swarmId) {
       return;
     }
 
-    if (hydratingSwarmIdRef.current === selectedSwarmId) {
-      hydratingSwarmIdRef.current = null;
-      return;
-    }
-
-    const nextAgents = cloneGraphData(agents);
-    const nextEdges = cloneGraphData(edges);
+    const clonedAgents = cloneGraphData(nextAgents);
+    const clonedEdges = cloneGraphData(nextEdges);
     const updatedAt = new Date().toISOString();
     let nextSwarm = null;
 
     setSwarms((prev) => prev.map((swarm) => {
-      if (swarm.id !== selectedSwarmId) {
+      if (swarm.id !== swarmId) {
         return swarm;
       }
 
       nextSwarm = {
         ...swarm,
-        agents: nextAgents,
-        edges: nextEdges,
+        agents: clonedAgents,
+        edges: clonedEdges,
         updatedAt,
       };
 
@@ -296,8 +294,23 @@ function App() {
     if (nextSwarm) {
       window.electronAPI.saveSwarm(nextSwarm);
     }
+  }, []);
+
+  useEffect(() => {
+    const graphSwarmId = graphStateSwarmIdRef.current;
+
+    if (!window.electronAPI || !graphSwarmId || swarmLoading) {
+      return;
+    }
+
+    if (hydratingSwarmIdRef.current === graphSwarmId) {
+      hydratingSwarmIdRef.current = null;
+      return;
+    }
+
+    persistSwarmGraph(graphSwarmId, agents, edges);
     window.electronAPI.syncAgents({ agents, edges });
-  }, [agents, edges, selectedSwarmId, swarmLoading]);
+  }, [agents, edges, persistSwarmGraph, swarmLoading]);
 
   useEffect(() => {
     if (!window.electronAPI) return;
@@ -402,9 +415,20 @@ function App() {
   }, [activeMuxTerminalId, mode]);
 
   const handleSelectSwarm = useCallback(async (id) => {
+    const currentGraphSwarmId = graphStateSwarmIdRef.current;
+
+    if (id === currentGraphSwarmId) {
+      await window.electronAPI?.setSelectedSwarm(id);
+      return;
+    }
+
+    if (currentGraphSwarmId) {
+      persistSwarmGraph(currentGraphSwarmId, agents, edges);
+    }
+
     setSelectedSwarmId(id);
     await window.electronAPI?.setSelectedSwarm(id);
-  }, []);
+  }, [agents, edges, persistSwarmGraph]);
 
   const openCreateSwarmModal = useCallback(() => {
     setSwarmModalState({ mode: 'create', swarmId: null });
