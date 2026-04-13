@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -238,4 +238,4 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
   );
 }
 
-export default GraphView;
+export default memo(GraphView);

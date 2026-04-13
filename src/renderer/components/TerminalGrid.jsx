@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useImperativeHandle, forwardRef, useEffect } from 'react';
+import React, { memo, useState, useRef, useCallback, useImperativeHandle, forwardRef, useEffect } from 'react';
 import TerminalPanel from './TerminalPanel';
 import './TerminalGrid.css';
 
@@ -274,4 +274,4 @@ function ColDropZone({ style, onDrop }) {
   );
 }
 
-export default TerminalGrid;
+export default memo(TerminalGrid);

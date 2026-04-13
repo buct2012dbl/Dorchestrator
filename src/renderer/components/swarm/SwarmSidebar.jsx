@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import './SwarmSidebar.css';
 
 function EditIcon() {
@@ -66,4 +66,4 @@ function SwarmSidebar({
   );
 }
 
-export default SwarmSidebar;
+export default memo(SwarmSidebar);

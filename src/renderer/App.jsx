@@ -43,6 +43,17 @@ function cloneGraphData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function buildSwarmSnapshotMap(swarms) {
+  const snapshots = {};
+  for (const swarm of swarms || []) {
+    snapshots[swarm.id] = {
+      agents: cloneGraphData(swarm.agents || []),
+      edges: cloneGraphData(swarm.edges || []),
+    };
+  }
+  return snapshots;
+}
+
 function buildSwarmId() {
   return `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -155,6 +166,7 @@ function App() {
   const termGridRef = useRef(null);
   const hydratingSwarmIdRef = useRef(null);
   const graphStateSwarmIdRef = useRef(null);
+  const swarmSnapshotsRef = useRef({});
 
   const activeSwarm = swarms.find((swarm) => swarm.id === selectedSwarmId) || null;
 
@@ -175,6 +187,7 @@ function App() {
       ]);
 
       const nextSwarms = loadedSwarms || [];
+      swarmSnapshotsRef.current = buildSwarmSnapshotMap(nextSwarms);
 
       const nextSelectedSwarmId = nextSwarms.some((swarm) => swarm.id === savedSelectedSwarmId)
         ? savedSelectedSwarmId
@@ -259,42 +272,50 @@ function App() {
 
     hydratingSwarmIdRef.current = activeSwarm.id;
     graphStateSwarmIdRef.current = activeSwarm.id;
-    setAgents(cloneGraphData(activeSwarm.agents || []));
-    setEdges(cloneGraphData(activeSwarm.edges || []));
+    const snapshot = swarmSnapshotsRef.current[activeSwarm.id] || {
+      agents: activeSwarm.agents || [],
+      edges: activeSwarm.edges || [],
+    };
+    setAgents(cloneGraphData(snapshot.agents || []));
+    setEdges(cloneGraphData(snapshot.edges || []));
     setSelectedAgent(null);
     setShowConfig(false);
     setTerminalKey((key) => key + 1);
   }, [activeSwarm?.id, setAgents, setEdges, setSelectedAgent]);
 
-  const persistSwarmGraph = useCallback((swarmId, nextAgents, nextEdges) => {
+  const persistSwarmGraph = useCallback((swarmId, nextAgents, nextEdges, options = {}) => {
     if (!window.electronAPI || !swarmId) {
       return;
     }
 
     const clonedAgents = cloneGraphData(nextAgents);
     const clonedEdges = cloneGraphData(nextEdges);
+    swarmSnapshotsRef.current[swarmId] = {
+      agents: clonedAgents,
+      edges: clonedEdges,
+    };
+
     const updatedAt = new Date().toISOString();
-    let nextSwarm = null;
-
-    setSwarms((prev) => prev.map((swarm) => {
-      if (swarm.id !== swarmId) {
-        return swarm;
-      }
-
-      nextSwarm = {
-        ...swarm,
-        agents: clonedAgents,
-        edges: clonedEdges,
-        updatedAt,
-      };
-
-      return nextSwarm;
-    }));
-
-    if (nextSwarm) {
-      window.electronAPI.saveSwarm(nextSwarm);
+    const currentSwarm = swarms.find((swarm) => swarm.id === swarmId);
+    if (!currentSwarm) {
+      return;
     }
-  }, []);
+
+    const nextSwarm = {
+      ...currentSwarm,
+      agents: clonedAgents,
+      edges: clonedEdges,
+      updatedAt,
+    };
+
+    if (options.updateList) {
+      setSwarms((prev) => prev.map((swarm) => (
+        swarm.id === swarmId ? nextSwarm : swarm
+      )));
+    }
+
+    window.electronAPI.saveSwarm(nextSwarm);
+  }, [swarms]);
 
   useEffect(() => {
     const graphSwarmId = graphStateSwarmIdRef.current;
@@ -423,7 +444,7 @@ function App() {
     }
 
     if (currentGraphSwarmId) {
-      persistSwarmGraph(currentGraphSwarmId, agents, edges);
+      persistSwarmGraph(currentGraphSwarmId, agents, edges, { updateList: true });
     }
 
     setSelectedSwarmId(id);
@@ -481,6 +502,10 @@ function App() {
         ...existingSwarm,
         name: nextName,
       };
+      swarmSnapshotsRef.current[renamedSwarm.id] = {
+        agents: cloneGraphData(renamedSwarm.agents || []),
+        edges: cloneGraphData(renamedSwarm.edges || []),
+      };
       await window.electronAPI?.saveSwarm(renamedSwarm);
       setSwarms((prev) => prev.map((swarm) => (
         swarm.id === renamedSwarm.id ? renamedSwarm : swarm
@@ -490,6 +515,10 @@ function App() {
     }
 
     const newSwarm = createSwarmRecord(nextName);
+    swarmSnapshotsRef.current[newSwarm.id] = {
+      agents: cloneGraphData(newSwarm.agents || []),
+      edges: cloneGraphData(newSwarm.edges || []),
+    };
     await window.electronAPI?.saveSwarm(newSwarm);
     setSwarms((prev) => [...prev, newSwarm]);
     setSelectedSwarmId(newSwarm.id);
@@ -510,6 +539,7 @@ function App() {
     await window.electronAPI?.deleteSwarm(swarmId);
 
     const nextSwarms = remainingSwarms;
+    delete swarmSnapshotsRef.current[swarmId];
 
     const nextSelectedSwarmId = selectedSwarmId === swarmId
       ? nextSwarms[0]?.id || null
