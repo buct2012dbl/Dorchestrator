@@ -173,7 +173,8 @@ function App() {
   const [swarmNameInput, setSwarmNameInput] = useState('');
   const [swarmNameError, setSwarmNameError] = useState('');
   const [activeMuxTerminalId, setActiveMuxTerminalId] = useState(null);
-  const termGridRef = useRef(null);
+  const [visitedSwarmIds, setVisitedSwarmIds] = useState([]);
+  const termGridRefs = useRef({});
   const hydratingSwarmIdRef = useRef(null);
   const graphStateSwarmIdRef = useRef(null);
   const swarmSnapshotsRef = useRef({});
@@ -290,8 +291,18 @@ function App() {
     setEdges(cloneGraphData(snapshot.edges || []));
     setSelectedAgent(null);
     setShowConfig(false);
-    setTerminalKey((key) => key + 1);
   }, [activeSwarm?.id, setAgents, setEdges, setSelectedAgent]);
+
+  useEffect(() => {
+    if (!selectedSwarmId) return;
+    setVisitedSwarmIds((prev) => (
+      prev.includes(selectedSwarmId) ? prev : [...prev, selectedSwarmId]
+    ));
+  }, [selectedSwarmId]);
+
+  useEffect(() => {
+    setVisitedSwarmIds((prev) => prev.filter((id) => swarms.some((swarm) => swarm.id === id)));
+  }, [swarms]);
 
   const persistSwarmGraph = useCallback((swarmId, nextAgents, nextEdges, options = {}) => {
     if (!window.electronAPI || !swarmId) {
@@ -350,7 +361,9 @@ function App() {
     const statusUpdateTimers = {};
 
     unsubs.push(window.electronAPI.onPtyData(({ agentId, data }) => {
-      const term = termGridRef.current?.getTerminal(agentId);
+      const term = Object.values(termGridRefs.current)
+        .map((grid) => grid?.getTerminal(agentId))
+        .find(Boolean);
       term?.write(data);
 
       if (statusUpdateTimers[agentId]) {
@@ -363,7 +376,9 @@ function App() {
     }));
 
     unsubs.push(window.electronAPI.onPtyExit(({ agentId }) => {
-      const term = termGridRef.current?.getTerminal(agentId);
+      const term = Object.values(termGridRefs.current)
+        .map((grid) => grid?.getTerminal(agentId))
+        .find(Boolean);
       term?.notifyExit();
 
       if (statusUpdateTimers[agentId]) {
@@ -440,10 +455,11 @@ function App() {
       return;
     }
 
-    if (termGridRef.current) {
-      termGridRef.current.sendTextToFocused(text);
+    const activeGrid = selectedSwarmId ? termGridRefs.current[selectedSwarmId] : null;
+    if (activeGrid) {
+      activeGrid.sendTextToFocused(text);
     }
-  }, [activeMuxTerminalId, mode]);
+  }, [activeMuxTerminalId, mode, selectedSwarmId]);
 
   const handleSelectSwarm = useCallback(async (id) => {
     const currentGraphSwarmId = graphStateSwarmIdRef.current;
@@ -563,6 +579,20 @@ function App() {
   }, [deleteSwarmId, selectedSwarmId, swarms]);
 
   const selectedAgentData = agents.find((agent) => agent.id === selectedAgent);
+  const visibleSwarmIds = visitedSwarmIds.filter((id) => swarms.some((swarm) => swarm.id === id));
+
+  const getSwarmAgentsForGrid = useCallback((swarmId) => {
+    if (swarmId === selectedSwarmId) {
+      return agents;
+    }
+
+    const snapshot = swarmSnapshotsRef.current[swarmId];
+    if (snapshot?.agents) {
+      return snapshot.agents;
+    }
+
+    return swarms.find((swarm) => swarm.id === swarmId)?.agents || [];
+  }, [agents, selectedSwarmId, swarms]);
 
   if (workspaceLoading) return null;
 
@@ -702,13 +732,26 @@ function App() {
                       display: showTerminal ? 'block' : 'none',
                     }}
                   >
-                    <TerminalGrid
-                      key={terminalKey}
-                      ref={termGridRef}
-                      agents={agents}
-                      selectedAgent={selectedAgent}
-                      onSelectAgent={setSelectedAgent}
-                    />
+                    {visibleSwarmIds.map((swarmId) => (
+                      <div
+                        key={`${swarmId}:${terminalKey}`}
+                        className={`swarm-terminal-grid-shell ${swarmId === selectedSwarmId ? 'active' : ''}`}
+                        style={{ display: swarmId === selectedSwarmId ? 'block' : 'none' }}
+                      >
+                        <TerminalGrid
+                          ref={(instance) => {
+                            if (instance) {
+                              termGridRefs.current[swarmId] = instance;
+                            } else {
+                              delete termGridRefs.current[swarmId];
+                            }
+                          }}
+                          agents={getSwarmAgentsForGrid(swarmId)}
+                          selectedAgent={swarmId === selectedSwarmId ? selectedAgent : null}
+                          onSelectAgent={swarmId === selectedSwarmId ? setSelectedAgent : undefined}
+                        />
+                      </div>
+                    ))}
                   </div>
                 </>
               ) : (

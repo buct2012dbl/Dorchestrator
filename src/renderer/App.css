@@ -477,6 +477,11 @@
 
 .terminal-section {
   overflow: hidden;
+  position: relative;
+}
+
+.swarm-terminal-grid-shell {
+  height: 100%;
 }
 
 .config-sidebar {
