@@ -1170,6 +1170,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         if (isCurrent) cleanupMcp();
       },
     });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty-started', { agentId });
+    }
     return { success: true };
   } catch (err) {
     cleanupMcp();
@@ -1198,6 +1201,10 @@ ipcMain.handle('pty-resize', async (event, { agentId, cols, rows }) => {
 ipcMain.handle('pty-kill', async (event, { agentId }) => {
   killTrackedPtyById(ptys, ptyDims, agentId);
   return { success: true };
+});
+
+ipcMain.handle('list-running-agents', async () => {
+  return Array.from(ptys.keys());
 });
 
 // Mux PTY management

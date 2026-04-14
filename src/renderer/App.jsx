@@ -93,10 +93,13 @@ function normalizeSwarmName(value) {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-function applyRuntimeStatuses(agents = [], runtimeStatuses = {}) {
+function applyRuntimeStatuses(agents = [], runtimeStatuses = {}, runningAgentIds = new Set()) {
   return agents.map((agent) => {
     const runtimeStatus = runtimeStatuses[agent.id];
-    if (!runtimeStatus || agent.data?.status === runtimeStatus) {
+    const nextStatus = runningAgentIds.has(agent.id)
+      ? (runtimeStatus || agent.data?.status || NODE_STATUS.IDLE)
+      : NODE_STATUS.IDLE;
+    if (agent.data?.status === nextStatus) {
       return agent;
     }
 
@@ -104,7 +107,7 @@ function applyRuntimeStatuses(agents = [], runtimeStatuses = {}) {
       ...agent,
       data: {
         ...agent.data,
-        status: runtimeStatus,
+        status: nextStatus,
       },
     };
   });
@@ -193,6 +196,7 @@ function App() {
   const [visitedSwarmIds, setVisitedSwarmIds] = useState([]);
   const [graphStateSwarmId, setGraphStateSwarmId] = useState(null);
   const [runtimeAgentStatuses, setRuntimeAgentStatuses] = useState({});
+  const [runningAgentIds, setRunningAgentIds] = useState(() => new Set());
   const termGridRefs = useRef({});
   const hydratingSwarmIdRef = useRef(null);
   const graphStateSwarmIdRef = useRef(null);
@@ -283,6 +287,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!window.electronAPI) return;
+
+    window.electronAPI.listRunningAgents().then((agentIds) => {
+      setRunningAgentIds(new Set(agentIds || []));
+    }).catch((err) => {
+      console.error('[App] Failed to list running PTYs:', err);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!workspace) {
       setSwarmLoading(false);
       return;
@@ -308,11 +322,15 @@ function App() {
       agents: activeSwarm.agents || [],
       edges: activeSwarm.edges || [],
     };
-    setAgents(applyRuntimeStatuses(cloneGraphData(snapshot.agents || []), runtimeAgentStatuses));
+    setAgents(applyRuntimeStatuses(
+      cloneGraphData(snapshot.agents || []),
+      runtimeAgentStatuses,
+      runningAgentIds
+    ));
     setEdges(cloneGraphData(snapshot.edges || []));
     setSelectedAgent(null);
     setShowConfig(false);
-  }, [activeSwarm?.id, runtimeAgentStatuses, setAgents, setEdges, setSelectedAgent]);
+  }, [activeSwarm?.id, runningAgentIds, runtimeAgentStatuses, setAgents, setEdges, setSelectedAgent]);
 
   useEffect(() => {
     if (!selectedSwarmId) return;
@@ -397,6 +415,15 @@ function App() {
       }, 500);
     }));
 
+    unsubs.push(window.electronAPI.onPtyStarted(({ agentId }) => {
+      setRunningAgentIds((prev) => {
+        const next = new Set(prev);
+        next.add(agentId);
+        return next;
+      });
+      setRuntimeAgentStatuses((prev) => ({ ...prev, [agentId]: NODE_STATUS.IDLE }));
+    }));
+
     unsubs.push(window.electronAPI.onPtyExit(({ agentId }) => {
       const term = Object.values(termGridRefs.current)
         .map((grid) => grid?.getTerminal(agentId))
@@ -408,6 +435,11 @@ function App() {
         delete statusUpdateTimers[agentId];
       }
 
+      setRunningAgentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(agentId);
+        return next;
+      });
       setRuntimeAgentStatuses((prev) => ({ ...prev, [agentId]: NODE_STATUS.IDLE }));
       updateAgentStatus(agentId, NODE_STATUS.IDLE);
     }));
@@ -611,19 +643,20 @@ function App() {
 
   const getSwarmAgentsForGrid = useCallback((swarmId) => {
     if (swarmId === graphStateSwarmId) {
-      return applyRuntimeStatuses(agents, runtimeAgentStatuses);
+      return applyRuntimeStatuses(agents, runtimeAgentStatuses, runningAgentIds);
     }
 
     const snapshot = swarmSnapshotsRef.current[swarmId];
     if (snapshot?.agents) {
-      return applyRuntimeStatuses(snapshot.agents, runtimeAgentStatuses);
+      return applyRuntimeStatuses(snapshot.agents, runtimeAgentStatuses, runningAgentIds);
     }
 
     return applyRuntimeStatuses(
       swarms.find((swarm) => swarm.id === swarmId)?.agents || [],
-      runtimeAgentStatuses
+      runtimeAgentStatuses,
+      runningAgentIds
     );
-  }, [agents, graphStateSwarmId, runtimeAgentStatuses, swarms]);
+  }, [agents, graphStateSwarmId, runningAgentIds, runtimeAgentStatuses, swarms]);
 
   if (workspaceLoading) return null;
 

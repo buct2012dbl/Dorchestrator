@@ -57,10 +57,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ptyInput: (data) => ipcRenderer.send('pty-input', data),
   ptyResize: (data) => ipcRenderer.invoke('pty-resize', data),
   killAgent: (data) => ipcRenderer.invoke('pty-kill', data),
+  listRunningAgents: () => ipcRenderer.invoke('list-running-agents'),
   onPtyData: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('pty-data', listener);
     return () => ipcRenderer.removeListener('pty-data', listener);
+  },
+  onPtyStarted: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('pty-started', listener);
+    return () => ipcRenderer.removeListener('pty-started', listener);
   },
   onPtyExit: (callback) => {
     const listener = (event, data) => callback(data);
