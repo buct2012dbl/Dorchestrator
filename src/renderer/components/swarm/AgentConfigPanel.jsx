@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { AGENT_TEMPLATES } from '../store/agentStore';
+import { AGENT_TEMPLATES } from '../../store/agentStore';
 import {
   getDefaultModelForTerminalType,
   getModelsForTerminalType,
-} from '../constants/models';
+} from '../../constants/models';
 import './AgentConfigPanel.css';
 
 function AgentConfigPanel({ agent, onUpdate, onClose, onRemove }) {

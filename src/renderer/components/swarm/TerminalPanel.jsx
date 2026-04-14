@@ -1,7 +1,7 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPanel.css';
-import useTerminalSession from './useTerminalSession';
+import useTerminalSession from '../useTerminalSession';
 
 const TERMINAL_OPTIONS = { allowProposedApi: true };
 

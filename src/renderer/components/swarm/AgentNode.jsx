@@ -1,6 +1,6 @@
 import React, { memo, useEffect } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react';
-import { STATUS_COLORS } from '../store/agentStore';
+import { STATUS_COLORS } from '../../store/agentStore';
 import './AgentNode.css';
 
 const AgentNode = memo(({ id, data, selected }) => {

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import GraphView from './components/GraphView';
-import TerminalGrid from './components/TerminalGrid';
-import AgentConfigPanel from './components/AgentConfigPanel';
+import GraphView from './components/swarm/GraphView';
+import TerminalGrid from './components/swarm/TerminalGrid';
+import AgentConfigPanel from './components/swarm/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
 import MuxWorkspace from './components/mux/MuxWorkspace';
 import SwarmSidebar from './components/swarm/SwarmSidebar';
