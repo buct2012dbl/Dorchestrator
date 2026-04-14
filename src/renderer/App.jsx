@@ -167,7 +167,6 @@ function App() {
     updateAgent,
     updateAgentStatus,
     addNotification,
-    clearNotifications,
   } = useAgents();
 
   const [showConfig, setShowConfig] = useState(false);
@@ -330,7 +329,7 @@ function App() {
     setEdges(cloneGraphData(snapshot.edges || []));
     setSelectedAgent(null);
     setShowConfig(false);
-  }, [activeSwarm?.id, runningAgentIds, runtimeAgentStatuses, setAgents, setEdges, setSelectedAgent]);
+  }, [activeSwarm?.id, setAgents, setEdges, setSelectedAgent]);
 
   useEffect(() => {
     if (!selectedSwarmId) return;
