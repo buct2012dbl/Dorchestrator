@@ -32,6 +32,7 @@ function syncAgentsAndRespawn({
 }) {
   const prevConnectionMap = buildConnectionMap(agentGraph.edges);
   const nextConnectionMap = buildConnectionMap(edges);
+  const previousAgentIds = new Set((agentGraph.agents || []).map((agent) => agent.id));
   const nextGraph = { agents, edges };
 
   orchestrator.syncAgents(agents);
@@ -40,6 +41,10 @@ function syncAgentsAndRespawn({
 
   for (const agent of agents) {
     if (!ptys.has(agent.id)) {
+      continue;
+    }
+
+    if (!previousAgentIds.has(agent.id)) {
       continue;
     }
 
