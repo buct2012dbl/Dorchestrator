@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   getDefaultModelForTerminalType,
   getModelsForTerminalType,
@@ -59,6 +59,8 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
     return generateTerminals(2, 2);
   });
   const [selectedCell, setSelectedCell] = useState(null);
+  const [nameError, setNameError] = useState('');
+  const nameInputRef = useRef(null);
 
   useEffect(() => {
     setRowInput(String(rows));
@@ -69,17 +71,20 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
   }, [cols]);
 
   const handleSave = () => {
-    if (!name.trim()) {
-      alert('Please enter a template name');
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      setNameError('Enter a template name to continue.');
+      nameInputRef.current?.focus();
       return;
     }
 
     const newTemplate = {
       id: template?.id || `template-${Date.now()}`,
-      name: name.trim(),
+      name: normalizedName,
       layout: { rows, cols, terminals: terminals.map(normalizeTerminalConfig) },
     };
 
+    setNameError('');
     onSave(newTemplate);
   };
 
@@ -174,12 +179,20 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
           <div className="form-group">
             <label>Template Name</label>
             <input
+              ref={nameInputRef}
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (nameError && e.target.value.trim()) {
+                  setNameError('');
+                }
+              }}
               placeholder="My Template"
               autoFocus
+              aria-invalid={nameError ? 'true' : 'false'}
             />
+            {nameError && <div className="form-error">{nameError}</div>}
           </div>
 
           <div className="form-row">

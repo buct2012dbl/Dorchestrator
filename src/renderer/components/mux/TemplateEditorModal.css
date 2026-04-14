@@ -97,6 +97,11 @@
   box-shadow: var(--box-shadow-neon-sm);
 }
 
+.form-group input[aria-invalid='true'] {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent);
+}
+
 .form-group select,
 .form-group textarea {
   width: 100%;
@@ -131,6 +136,14 @@
 
 .form-row .form-group {
   flex: 1;
+}
+
+.form-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--destructive);
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.02em;
 }
 
 .editor-layout {
