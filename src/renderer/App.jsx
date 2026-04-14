@@ -174,6 +174,7 @@ function App() {
   const [swarmNameError, setSwarmNameError] = useState('');
   const [activeMuxTerminalId, setActiveMuxTerminalId] = useState(null);
   const [visitedSwarmIds, setVisitedSwarmIds] = useState([]);
+  const [graphStateSwarmId, setGraphStateSwarmId] = useState(null);
   const termGridRefs = useRef({});
   const hydratingSwarmIdRef = useRef(null);
   const graphStateSwarmIdRef = useRef(null);
@@ -275,6 +276,7 @@ function App() {
     if (!activeSwarm) {
       hydratingSwarmIdRef.current = null;
       graphStateSwarmIdRef.current = null;
+      setGraphStateSwarmId(null);
       setAgents([]);
       setEdges([]);
       setSelectedAgent(null);
@@ -283,6 +285,7 @@ function App() {
 
     hydratingSwarmIdRef.current = activeSwarm.id;
     graphStateSwarmIdRef.current = activeSwarm.id;
+    setGraphStateSwarmId(activeSwarm.id);
     const snapshot = swarmSnapshotsRef.current[activeSwarm.id] || {
       agents: activeSwarm.agents || [],
       edges: activeSwarm.edges || [],
@@ -582,7 +585,7 @@ function App() {
   const visibleSwarmIds = visitedSwarmIds.filter((id) => swarms.some((swarm) => swarm.id === id));
 
   const getSwarmAgentsForGrid = useCallback((swarmId) => {
-    if (swarmId === selectedSwarmId) {
+    if (swarmId === graphStateSwarmId) {
       return agents;
     }
 
@@ -592,7 +595,7 @@ function App() {
     }
 
     return swarms.find((swarm) => swarm.id === swarmId)?.agents || [];
-  }, [agents, selectedSwarmId, swarms]);
+  }, [agents, graphStateSwarmId, swarms]);
 
   if (workspaceLoading) return null;
 
