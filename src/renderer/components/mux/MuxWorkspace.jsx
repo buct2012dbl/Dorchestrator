@@ -66,6 +66,8 @@ function MuxWorkspace({ onActiveTerminalChange }) {
   }, [templates]);
 
   const handleSaveTemplate = (template) => {
+    const isNewTemplate = !templates.some((item) => item.id === template.id);
+
     window.electronAPI.saveMuxTemplate(template);
     setTemplates(prev => {
       const existing = prev.find(t => t.id === template.id);
@@ -74,6 +76,15 @@ function MuxWorkspace({ onActiveTerminalChange }) {
       }
       return [...prev, template];
     });
+
+    if (isNewTemplate) {
+      setSelectedTemplate(template.id);
+      setVisitedTemplateIds((prev) => (
+        prev.includes(template.id) ? prev : [...prev, template.id]
+      ));
+      window.electronAPI.setSelectedMuxTemplate(template.id);
+    }
+
     setShowEditor(false);
     setEditingTemplate(null);
   };
