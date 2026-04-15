@@ -1,6 +1,7 @@
 .mux-workspace {
   display: flex;
   flex: 1;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   background: var(--background);
@@ -11,6 +12,7 @@
   display: flex;
   width: 292px;
   min-width: 292px;
+  min-height: 0;
   flex-shrink: 0;
   transition: width 0.2s ease, min-width 0.2s ease;
 }
@@ -24,6 +26,7 @@
   width: 280px;
   min-width: 280px;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 

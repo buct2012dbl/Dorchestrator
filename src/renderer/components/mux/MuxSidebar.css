@@ -1,9 +1,11 @@
 .mux-sidebar {
   width: 280px;
+  height: 100%;
   background: var(--card);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -46,8 +48,32 @@
 
 .mux-sidebar-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 78%, transparent) color-mix(in srgb, var(--background) 88%, transparent);
+}
+
+.mux-sidebar-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.mux-sidebar-list::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.mux-sidebar-list::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 82%, white 8%), color-mix(in srgb, var(--accent) 55%, black 20%));
+  border: 2px solid color-mix(in srgb, var(--background) 90%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.mux-sidebar-list::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 95%, white 5%), color-mix(in srgb, var(--accent) 68%, black 15%));
 }
 
 .mux-sidebar-item {
