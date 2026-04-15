@@ -826,7 +826,10 @@ function App() {
             </div>
           </>
         ) : (
-          <MuxWorkspace onActiveTerminalChange={setActiveMuxTerminalId} />
+          <MuxWorkspace
+            key={workspace || 'no-workspace'}
+            onActiveTerminalChange={setActiveMuxTerminalId}
+          />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (
           <div className="config-sidebar">
