@@ -1102,6 +1102,14 @@ ipcMain.handle('set-selected-mux-template', async (event, id) => {
   return templateManager.setSelectedTemplateId(id);
 });
 
+ipcMain.handle('get-mux-ui-state', async () => {
+  return templateManager.getUiState();
+});
+
+ipcMain.handle('set-mux-ui-state', async (event, state) => {
+  return templateManager.saveUiState(state);
+});
+
 
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges }) => {

@@ -18,23 +18,40 @@ function MuxWorkspace({ onActiveTerminalChange }) {
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    window.electronAPI.loadMuxTemplates().then(loadedTemplates => {
+    let cancelled = false;
+
+    Promise.all([
+      window.electronAPI.loadMuxTemplates(),
+      window.electronAPI.getSelectedMuxTemplate(),
+      window.electronAPI.getMuxUiState(),
+    ]).then(([loadedTemplates, savedId, savedUiState]) => {
+      if (cancelled) {
+        return;
+      }
+
       let finalTemplates;
       if (loadedTemplates.length === 0) {
         finalTemplates = DEFAULT_TEMPLATES;
-        DEFAULT_TEMPLATES.forEach(t => window.electronAPI.saveMuxTemplate(t));
+        DEFAULT_TEMPLATES.forEach((t) => window.electronAPI.saveMuxTemplate(t));
       } else {
         finalTemplates = loadedTemplates;
       }
-      setTemplates(finalTemplates);
 
-      window.electronAPI.getSelectedMuxTemplate().then(savedId => {
-        if (savedId && finalTemplates.find(t => t.id === savedId)) {
-          setSelectedTemplate(savedId);
-          setVisitedTemplateIds([savedId]);
-        }
-      });
+      const nextSelectedTemplate = savedId && finalTemplates.find((t) => t.id === savedId)
+        ? savedId
+        : finalTemplates[0]?.id || null;
+
+      setTemplates(finalTemplates);
+      setSelectedTemplate(nextSelectedTemplate);
+      setVisitedTemplateIds(nextSelectedTemplate ? [nextSelectedTemplate] : []);
+      setIsSidebarCollapsed(Boolean(savedUiState?.sidebarCollapsed));
+    }).catch((err) => {
+      console.error('[MuxWorkspace] Failed to load workspace state:', err);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -105,6 +122,11 @@ function MuxWorkspace({ onActiveTerminalChange }) {
     }
   };
 
+  const handleSetSidebarCollapsed = (collapsed) => {
+    setIsSidebarCollapsed(collapsed);
+    window.electronAPI?.setMuxUiState({ sidebarCollapsed: collapsed });
+  };
+
   const handleDeleteTemplate = (id) => {
     setDeleteId(id);
     setShowDeleteConfirm(true);
@@ -143,7 +165,7 @@ function MuxWorkspace({ onActiveTerminalChange }) {
             type="button"
             className="mux-sidebar-toggle mux-sidebar-close-toggle"
             aria-label="Close templates sidebar"
-            onClick={() => setIsSidebarCollapsed(true)}
+            onClick={() => handleSetSidebarCollapsed(true)}
           >
             &lt;
           </button>
@@ -164,7 +186,7 @@ function MuxWorkspace({ onActiveTerminalChange }) {
             type="button"
             className="mux-sidebar-toggle mux-sidebar-open-toggle"
             aria-label="Open templates sidebar"
-            onClick={() => setIsSidebarCollapsed(false)}
+            onClick={() => handleSetSidebarCollapsed(false)}
           >
             &gt;
           </button>
