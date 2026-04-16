@@ -296,8 +296,8 @@
 .swarm-sidebar-shell {
   position: relative;
   display: flex;
-  width: 292px;
-  min-width: 292px;
+  width: 204px;
+  min-width: 204px;
   min-height: 0;
   flex-shrink: 0;
   transition: width 0.2s ease, min-width 0.2s ease;
@@ -311,8 +311,8 @@
 }
 
 .swarm-sidebar-panel {
-  width: 280px;
-  min-width: 280px;
+  width: 192px;
+  min-width: 192px;
   height: 100%;
   min-height: 0;
   overflow: hidden;

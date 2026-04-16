@@ -1,77 +1,60 @@
 .mux-sidebar {
-  width: 280px;
+  width: 192px;
+  min-width: 192px;
   height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(0, 212, 255, 0.1), transparent 32%),
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-elevated) 94%, black), color-mix(in srgb, var(--panel) 98%, black));
   border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--background) 86%, black);
+  padding: 18px 14px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  gap: 10px;
   position: relative;
-  clip-path: polygon(
-    0 12px, 12px 0,
-    100% 0, 100% calc(100% - 12px),
-    calc(100% - 12px) 100%, 0 100%
-  );
-}
-
-.mux-sidebar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: var(--panel-grid);
-  background-size: 42px 42px;
-  opacity: 0.35;
+  z-index: 2;
+  overflow: hidden;
 }
 
 .mux-sidebar::after {
   content: '';
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-  background: linear-gradient(180deg, transparent, var(--accent-tertiary), transparent);
-  opacity: 0.5;
-  pointer-events: none;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(180deg, transparent, var(--accent), transparent);
+  opacity: 0.35;
 }
 
 .mux-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 16px 14px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(28, 28, 46, 0.94), rgba(16, 16, 25, 0.82));
-  position: relative;
-  z-index: 1;
+  gap: 10px;
 }
 
 .mux-sidebar-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-tertiary);
-  letter-spacing: 2.6px;
   font-family: 'Orbitron', monospace;
+  color: var(--accent);
   text-transform: uppercase;
-  text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
+  letter-spacing: 2.8px;
+  font-size: 13px;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
 }
 
 .mux-new-template-btn {
-  width: 30px;
-  height: 30px;
-  display: flex;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(0, 212, 255, 0.18), rgba(0, 212, 255, 0.06));
-  color: var(--accent-tertiary);
-  border: 1px solid color-mix(in srgb, var(--accent-tertiary) 45%, var(--border));
-  border-radius: 0;
-  font-size: 20px;
-  font-weight: 700;
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
-  transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, background 150ms ease, transform 150ms ease;
+  font-family: 'Share Tech Mono', monospace;
+  box-shadow: var(--box-shadow-neon-sm);
+  transition: all 120ms steps(4);
   clip-path: polygon(
     0 7px, 7px 0,
     calc(100% - 7px) 0, 100% 7px,
@@ -81,22 +64,21 @@
 }
 
 .mux-new-template-btn:hover {
-  background: var(--accent-tertiary);
+  background: var(--accent);
   color: var(--background);
-  border-color: var(--accent-tertiary);
-  box-shadow: var(--box-shadow-neon-tertiary);
-  transform: translateY(-1px);
+  box-shadow: var(--box-shadow-neon);
 }
 
 .mux-sidebar-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 78%, transparent) color-mix(in srgb, var(--background) 88%, transparent);
-  position: relative;
-  z-index: 1;
 }
 
 .mux-sidebar-list::-webkit-scrollbar {
@@ -115,76 +97,67 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
-.mux-sidebar-list::-webkit-scrollbar-thumb:hover {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 95%, white 5%), color-mix(in srgb, var(--accent) 68%, black 15%));
-}
-
 .mux-sidebar-item {
   position: relative;
-  padding: 14px 16px 14px 14px;
-  margin-bottom: 10px;
+  min-height: 44px;
+  background: linear-gradient(180deg, rgba(20, 20, 30, 0.9), rgba(12, 12, 18, 0.95));
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  text-align: left;
+  padding: 11px 40px 11px 14px;
   cursor: pointer;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, transform 150ms ease;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  background: linear-gradient(180deg, rgba(20, 20, 30, 0.88), rgba(11, 12, 18, 0.95));
+  transition: all 120ms steps(4);
   clip-path: polygon(
-    0 10px, 10px 0,
-    calc(100% - 10px) 0, 100% 10px,
-    100% calc(100% - 10px), calc(100% - 10px) 100%,
-    10px 100%, 0 calc(100% - 10px)
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
   );
-  overflow: hidden;
 }
 
-.mux-sidebar-item:hover {
-  background: linear-gradient(180deg, rgba(24, 28, 36, 0.92), rgba(11, 14, 20, 0.98));
-  border-color: color-mix(in srgb, var(--accent-tertiary) 42%, var(--border));
-  box-shadow: var(--box-shadow-neon-tertiary);
-  transform: translateX(1px);
+.mux-sidebar-item:hover,
+.mux-sidebar-item.active {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
 }
 
 .mux-sidebar-item.active {
-  background: linear-gradient(180deg, rgba(0, 212, 255, 0.12), rgba(6, 14, 22, 0.94));
-  border-color: var(--accent-tertiary);
-  box-shadow: var(--box-shadow-neon-tertiary);
+  color: var(--accent);
 }
 
 .mux-sidebar-item-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .mux-sidebar-item-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: rgba(8, 10, 14, 0.92);
+  width: 20px;
+  height: 20px;
   border: 1px solid var(--border);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--accent-tertiary);
+  color: var(--accent);
+  background: rgba(10, 10, 15, 0.72);
   font-family: 'Share Tech Mono', monospace;
-  letter-spacing: 0.8px;
 }
 
 .mux-sidebar-item.active .mux-sidebar-item-number {
-  background: var(--accent-tertiary);
+  background: var(--accent);
   color: var(--background);
-  border-color: var(--accent-tertiary);
+  border-color: var(--accent);
 }
 
 .mux-sidebar-item-name {
   flex: 1;
   font-size: 13px;
   font-weight: 600;
-  color: var(--foreground);
+  color: inherit;
   font-family: 'Share Tech Mono', monospace;
-  letter-spacing: 0.6px;
 }
 
 .mux-sidebar-item-meta {
@@ -192,57 +165,48 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 10px;
   color: var(--muted-foreground);
+  font-size: 10px;
   font-family: 'Share Tech Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .mux-sidebar-layout {
-  color: var(--accent-tertiary);
-  opacity: 0.82;
+  color: inherit;
 }
 
 .mux-sidebar-terminal-count {
-  opacity: 0.76;
+  opacity: 0.8;
 }
 
 .mux-sidebar-delete {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 22px;
-  height: 22px;
-  display: flex;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 12, 18, 0.82);
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
   color: var(--muted-foreground);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
   padding: 0;
   opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity 150ms ease, transform 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  transition: all 120ms steps(3);
 }
 
-.mux-sidebar-item:hover .mux-sidebar-delete {
+.mux-sidebar-item:hover .mux-sidebar-delete,
+.mux-sidebar-item.active .mux-sidebar-delete {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .mux-sidebar-delete:hover {
-  background: var(--destructive);
   border-color: var(--destructive);
   color: white;
-}
-
-@media (max-width: 960px) {
-  .mux-sidebar {
-    width: 260px;
-  }
+  background: var(--destructive);
 }
