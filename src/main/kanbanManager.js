@@ -3,6 +3,7 @@ const path = require('path');
 
 const DEFAULT_STATE = {
   selectedView: 'board',
+  sidebarCollapsed: false,
   tasks: [],
 };
 
@@ -109,6 +110,7 @@ class KanbanManager {
     const state = this.readRawState();
     return {
       selectedView: state.selectedView || 'board',
+      sidebarCollapsed: Boolean(state.sidebarCollapsed),
       tasks: Array.isArray(state.tasks) ? state.tasks.map((task) => normalizeTask(clone(task))) : [],
     };
   }
@@ -116,6 +118,7 @@ class KanbanManager {
   saveState(state) {
     return this.writeRawState({
       selectedView: state?.selectedView || 'board',
+      sidebarCollapsed: Boolean(state?.sidebarCollapsed),
       tasks: Array.isArray(state?.tasks) ? state.tasks.map((task) => normalizeTask(task)) : [],
     });
   }

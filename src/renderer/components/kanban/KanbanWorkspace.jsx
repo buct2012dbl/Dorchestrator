@@ -39,6 +39,7 @@ function KanbanWorkspace({
   swarms,
   kanbanState,
   onChangeSelectedView,
+  onSetSidebarCollapsed,
   onSaveAgent,
   onDeleteAgent,
   onCreateTask,
@@ -234,22 +235,46 @@ function KanbanWorkspace({
 
   return (
     <div className="kanban-workspace">
-      <aside className="kanban-sidebar">
-        <div className="kanban-sidebar-title">Kanban</div>
-        <div className="kanban-sidebar-subtitle">Neural Control</div>
-        <button
-          className={`kanban-sidebar-item ${kanbanState.selectedView === 'board' ? 'active' : ''}`}
-          onClick={() => onChangeSelectedView('board')}
-        >
-          Board
-        </button>
-        <button
-          className={`kanban-sidebar-item ${kanbanState.selectedView === 'agents' ? 'active' : ''}`}
-          onClick={() => onChangeSelectedView('agents')}
-        >
-          Agents
-        </button>
-      </aside>
+      <div className={`kanban-sidebar-shell ${kanbanState.sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="kanban-sidebar-divider-hitbox">
+          <button
+            type="button"
+            className="kanban-sidebar-toggle kanban-sidebar-close-toggle"
+            aria-label="Close kanban sidebar"
+            onClick={() => onSetSidebarCollapsed(true)}
+          >
+            &lt;
+          </button>
+        </div>
+        <aside className="kanban-sidebar">
+          <div className="kanban-sidebar-title">Kanban</div>
+          <div className="kanban-sidebar-subtitle">Neural Control</div>
+          <button
+            className={`kanban-sidebar-item ${kanbanState.selectedView === 'board' ? 'active' : ''}`}
+            onClick={() => onChangeSelectedView('board')}
+          >
+            Board
+          </button>
+          <button
+            className={`kanban-sidebar-item ${kanbanState.selectedView === 'agents' ? 'active' : ''}`}
+            onClick={() => onChangeSelectedView('agents')}
+          >
+            Agents
+          </button>
+        </aside>
+      </div>
+      {kanbanState.sidebarCollapsed && (
+        <div className="kanban-sidebar-reopen-hitbox">
+          <button
+            type="button"
+            className="kanban-sidebar-toggle kanban-sidebar-open-toggle"
+            aria-label="Open kanban sidebar"
+            onClick={() => onSetSidebarCollapsed(false)}
+          >
+            &gt;
+          </button>
+        </div>
+      )}
 
       <div className="kanban-content">
         {kanbanState.selectedView === 'agents' ? renderAgents() : renderBoard()}

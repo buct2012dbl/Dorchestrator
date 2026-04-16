@@ -186,7 +186,7 @@ function App() {
   const [mode, setMode] = useState('swarm');
   const [swarms, setSwarms] = useState([]);
   const [sharedAgents, setSharedAgents] = useState([]);
-  const [kanbanState, setKanbanState] = useState({ selectedView: 'board', tasks: [] });
+  const [kanbanState, setKanbanState] = useState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
   const [selectedSwarmId, setSelectedSwarmId] = useState(null);
   const [isSwarmSidebarCollapsed, setIsSwarmSidebarCollapsed] = useState(false);
   const [showDeleteSwarmConfirm, setShowDeleteSwarmConfirm] = useState(false);
@@ -244,7 +244,7 @@ function App() {
   const loadKanbanWorkspaceState = useCallback(async () => {
     if (!window.electronAPI || !workspace) {
       setSharedAgents([]);
-      setKanbanState({ selectedView: 'board', tasks: [] });
+      setKanbanState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
       return;
     }
 
@@ -254,11 +254,11 @@ function App() {
         window.electronAPI.loadKanbanState(),
       ]);
       setSharedAgents(loadedAgents || []);
-      setKanbanState(loadedKanbanState || { selectedView: 'board', tasks: [] });
+      setKanbanState(loadedKanbanState || { selectedView: 'board', sidebarCollapsed: false, tasks: [] });
     } catch (err) {
       console.error('[App] Failed to load Kanban state:', err);
       setSharedAgents([]);
-      setKanbanState({ selectedView: 'board', tasks: [] });
+      setKanbanState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
     }
   }, [workspace]);
 
@@ -673,6 +673,11 @@ function App() {
     await persistKanbanState(nextState);
   }, [kanbanState, persistKanbanState]);
 
+  const handleSetKanbanSidebarCollapsed = useCallback(async (sidebarCollapsed) => {
+    const nextState = { ...kanbanState, sidebarCollapsed };
+    await persistKanbanState(nextState);
+  }, [kanbanState, persistKanbanState]);
+
   const handleCreateKanbanTask = useCallback(async (taskInput) => {
     const now = new Date().toISOString();
     const nextTask = {
@@ -969,6 +974,7 @@ function App() {
             swarms={swarms}
             kanbanState={kanbanState}
             onChangeSelectedView={handleChangeKanbanSelectedView}
+            onSetSidebarCollapsed={handleSetKanbanSidebarCollapsed}
             onSaveAgent={handleSaveSharedAgent}
             onDeleteAgent={handleDeleteSharedAgent}
             onCreateTask={handleCreateKanbanTask}
