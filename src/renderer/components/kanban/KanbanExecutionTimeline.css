@@ -1,0 +1,84 @@
+.kanban-execution-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kanban-execution-timeline.empty {
+  min-height: 120px;
+  border: 1px dashed color-mix(in srgb, var(--border) 72%, var(--accent));
+  padding: 14px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  background: rgba(4, 8, 8, 0.6);
+}
+
+.kanban-timeline-event {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(12, 18, 18, 0.96), rgba(8, 12, 14, 0.92));
+  padding: 12px;
+}
+
+.kanban-timeline-event.kind-assistant {
+  border-color: color-mix(in srgb, var(--accent-secondary) 55%, var(--border));
+}
+
+.kanban-timeline-event.kind-command {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+}
+
+.kanban-timeline-event.kind-error {
+  border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
+  background: linear-gradient(180deg, rgba(32, 12, 18, 0.96), rgba(18, 8, 10, 0.94));
+}
+
+.kanban-timeline-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.kanban-timeline-event-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--foreground);
+}
+
+.kanban-timeline-event-badge {
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-family: 'Share Tech Mono', monospace;
+  letter-spacing: 0.8px;
+}
+
+.kanban-timeline-event-badge.kind-assistant {
+  color: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+}
+
+.kanban-timeline-event-badge.kind-command {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.kanban-timeline-event-badge.kind-error {
+  color: #ffb7c8;
+  border-color: var(--destructive);
+}
+
+.kanban-timeline-event pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'IBM Plex Mono', 'Share Tech Mono', monospace;
+}

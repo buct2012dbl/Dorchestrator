@@ -1,0 +1,41 @@
+.kanban-transcript-terminal {
+  height: 320px;
+  min-height: 220px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(10, 10, 15, 0.98), rgba(16, 22, 18, 0.98)),
+    var(--background);
+  padding: 6px;
+  overflow: hidden;
+  position: relative;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+
+.kanban-transcript-terminal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.24) 2px,
+    rgba(0, 0, 0, 0.24) 4px
+  );
+  opacity: 0.35;
+}
+
+.kanban-transcript-terminal .xterm {
+  font-family: 'Share Tech Mono', 'Consolas', monospace !important;
+}
+
+.kanban-transcript-terminal .xterm-viewport,
+.kanban-transcript-terminal .xterm-screen {
+  background: transparent !important;
+}

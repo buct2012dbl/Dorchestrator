@@ -4,6 +4,7 @@ import TerminalGrid from './components/swarm/TerminalGrid';
 import AgentConfigPanel from './components/swarm/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
 import MuxWorkspace from './components/mux/MuxWorkspace';
+import KanbanWorkspace from './components/kanban/KanbanWorkspace';
 import SwarmSidebar from './components/swarm/SwarmSidebar';
 import { createDefaultSwarmGraph, useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
@@ -184,6 +185,8 @@ function App() {
   const [terminalKey, setTerminalKey] = useState(0);
   const [mode, setMode] = useState('swarm');
   const [swarms, setSwarms] = useState([]);
+  const [sharedAgents, setSharedAgents] = useState([]);
+  const [kanbanState, setKanbanState] = useState({ selectedView: 'board', tasks: [] });
   const [selectedSwarmId, setSelectedSwarmId] = useState(null);
   const [isSwarmSidebarCollapsed, setIsSwarmSidebarCollapsed] = useState(false);
   const [showDeleteSwarmConfirm, setShowDeleteSwarmConfirm] = useState(false);
@@ -235,6 +238,27 @@ function App() {
       setSelectedSwarmId(null);
     } finally {
       setSwarmLoading(false);
+    }
+  }, [workspace]);
+
+  const loadKanbanWorkspaceState = useCallback(async () => {
+    if (!window.electronAPI || !workspace) {
+      setSharedAgents([]);
+      setKanbanState({ selectedView: 'board', tasks: [] });
+      return;
+    }
+
+    try {
+      const [loadedAgents, loadedKanbanState] = await Promise.all([
+        window.electronAPI.loadSharedAgents(),
+        window.electronAPI.loadKanbanState(),
+      ]);
+      setSharedAgents(loadedAgents || []);
+      setKanbanState(loadedKanbanState || { selectedView: 'board', tasks: [] });
+    } catch (err) {
+      console.error('[App] Failed to load Kanban state:', err);
+      setSharedAgents([]);
+      setKanbanState({ selectedView: 'board', tasks: [] });
     }
   }, [workspace]);
 
@@ -301,7 +325,8 @@ function App() {
       return;
     }
     loadSwarmsForWorkspace();
-  }, [workspace, loadSwarmsForWorkspace]);
+    loadKanbanWorkspaceState();
+  }, [workspace, loadKanbanWorkspaceState, loadSwarmsForWorkspace]);
 
   useEffect(() => {
     if (!activeSwarm) {
@@ -451,6 +476,16 @@ function App() {
     unsubs.push(window.electronAPI.onAgentNotification(({ agentId, message }) => {
       console.log(`[Notification] ${agentId}: ${message}`);
       addNotification(agentId, message);
+    }));
+
+    unsubs.push(window.electronAPI.onKanbanTaskUpdate(({ task }) => {
+      if (!task?.id) return;
+      setKanbanState((prev) => ({
+        ...prev,
+        tasks: prev.tasks.some((item) => item.id === task.id)
+          ? prev.tasks.map((item) => (item.id === task.id ? task : item))
+          : [...prev.tasks, task],
+      }));
     }));
 
     return () => {
@@ -616,6 +651,95 @@ function App() {
     setShowDeleteSwarmConfirm(true);
   }, []);
 
+  const handleSaveSharedAgent = useCallback(async (agent) => {
+    await window.electronAPI?.saveSharedAgent(agent);
+    const loadedAgents = await window.electronAPI?.loadSharedAgents();
+    setSharedAgents(loadedAgents || []);
+  }, []);
+
+  const handleDeleteSharedAgent = useCallback(async (id) => {
+    await window.electronAPI?.deleteSharedAgent(id);
+    const loadedAgents = await window.electronAPI?.loadSharedAgents();
+    setSharedAgents(loadedAgents || []);
+  }, []);
+
+  const persistKanbanState = useCallback(async (nextState) => {
+    setKanbanState(nextState);
+    await window.electronAPI?.saveKanbanState(nextState);
+  }, []);
+
+  const handleChangeKanbanSelectedView = useCallback(async (selectedView) => {
+    const nextState = { ...kanbanState, selectedView };
+    await persistKanbanState(nextState);
+  }, [kanbanState, persistKanbanState]);
+
+  const handleCreateKanbanTask = useCallback(async (taskInput) => {
+    const now = new Date().toISOString();
+    const nextTask = {
+      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: taskInput.title,
+      prompt: taskInput.prompt,
+      stage: 'todo',
+      targetType: taskInput.targetType,
+      targetId: taskInput.targetId,
+      entryAgentId: taskInput.entryAgentId || null,
+      createdAt: now,
+      updatedAt: now,
+      runStatus: 'idle',
+      lastError: null,
+      currentRunId: null,
+      history: [],
+      runs: [],
+    };
+    await persistKanbanState({
+      ...kanbanState,
+      tasks: [...kanbanState.tasks, nextTask],
+    });
+  }, [kanbanState, persistKanbanState]);
+
+  const handleUpdateKanbanTask = useCallback(async (taskId, updates) => {
+    const nextState = {
+      ...kanbanState,
+      tasks: kanbanState.tasks.map((task) => (
+        task.id === taskId ? { ...task, ...updates } : task
+      )),
+    };
+    await persistKanbanState(nextState);
+  }, [kanbanState, persistKanbanState]);
+
+  const handleMoveKanbanTask = useCallback(async (taskId, stage) => {
+    const task = kanbanState.tasks.find((item) => item.id === taskId);
+    if (!task || task.runStatus === 'running') {
+      return;
+    }
+
+    const nextTask = {
+      ...task,
+      stage,
+      updatedAt: new Date().toISOString(),
+    };
+    await persistKanbanState({
+      ...kanbanState,
+      tasks: kanbanState.tasks.map((item) => (item.id === taskId ? nextTask : item)),
+    });
+
+    if (stage === 'in_progress') {
+      await window.electronAPI?.startKanbanTask({ taskId });
+    }
+  }, [kanbanState, persistKanbanState]);
+
+  const handleDeleteKanbanTask = useCallback(async (taskId) => {
+    await window.electronAPI?.deleteKanbanTask({ taskId });
+    setKanbanState((prev) => ({
+      ...prev,
+      tasks: prev.tasks.filter((task) => task.id !== taskId),
+    }));
+  }, []);
+
+  const handleStartKanbanTask = useCallback(async (taskId, replyMessage) => {
+    await window.electronAPI?.startKanbanTask({ taskId, replyMessage });
+  }, []);
+
   const confirmDeleteSwarm = useCallback(async () => {
     const swarmId = deleteSwarmId;
     if (!swarmId) return;
@@ -691,6 +815,12 @@ function App() {
             >
               Mux
             </button>
+            <button
+              className={`mode-btn ${mode === 'kanban' ? 'active' : ''}`}
+              onClick={() => { setMode('kanban'); setShowConfig(false); }}
+            >
+              Kanban
+            </button>
           </div>
           <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
             <span className="workspace-icon">▸</span>
@@ -701,6 +831,8 @@ function App() {
           )}
           {mode === 'swarm' && <span className="header-info-text">{agents.length} agents</span>}
           {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
+          {mode === 'kanban' && <span className="header-info-text">{kanbanState.tasks.length} tasks</span>}
+          {mode === 'kanban' && <span className="header-info-text">{sharedAgents.length} shared agents</span>}
           {mode === 'swarm' && (
             <button
               className="view-toggle-btn"
@@ -780,6 +912,7 @@ function App() {
                       onNodeSelect={handleNodeSelect}
                       onAddAgent={addAgent}
                       onRemoveAgent={removeAgent}
+                      sharedAgents={sharedAgents}
                     />
                   </div>
                   {showGraph && showTerminal && (
@@ -825,10 +958,24 @@ function App() {
               )}
             </div>
           </>
-        ) : (
+        ) : mode === 'mux' ? (
           <MuxWorkspace
             key={workspace || 'no-workspace'}
             onActiveTerminalChange={setActiveMuxTerminalId}
+          />
+        ) : (
+          <KanbanWorkspace
+            sharedAgents={sharedAgents}
+            swarms={swarms}
+            kanbanState={kanbanState}
+            onChangeSelectedView={handleChangeKanbanSelectedView}
+            onSaveAgent={handleSaveSharedAgent}
+            onDeleteAgent={handleDeleteSharedAgent}
+            onCreateTask={handleCreateKanbanTask}
+            onMoveTask={handleMoveKanbanTask}
+            onDeleteTask={handleDeleteKanbanTask}
+            onStartTask={handleStartKanbanTask}
+            onUpdateTask={handleUpdateKanbanTask}
           />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (

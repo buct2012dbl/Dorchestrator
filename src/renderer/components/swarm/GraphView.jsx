@@ -16,7 +16,16 @@ import './GraphView.css';
 
 const nodeTypes = { agentNode: AgentNode };
 
-function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect, onAddAgent, onRemoveAgent }) {
+function GraphView({
+  agents,
+  edges,
+  onAgentsChange,
+  onEdgesChange,
+  onNodeSelect,
+  onAddAgent,
+  onRemoveAgent,
+  sharedAgents = [],
+}) {
   const [contextMenu, setContextMenu] = useState(null);
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -136,6 +145,10 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
     setContextMenu(null);
   }, []);
 
+  const availableAgents = sharedAgents.length > 0
+    ? sharedAgents
+    : Object.entries(AGENT_TEMPLATES).map(([key, tmpl]) => ({ id: key, ...tmpl }));
+
   return (
     <div className="graph-view" ref={reactFlowWrapper}>
       <ReactFlow
@@ -162,14 +175,14 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
         <Background variant="dots" gap={16} size={1} color="#333" />
         <Panel position="top-left">
           <div className="graph-toolbar">
-            {Object.entries(AGENT_TEMPLATES).map(([key, tmpl]) => (
+            {availableAgents.map((agent) => (
               <button
-                key={key}
+                key={agent.id}
                 className="toolbar-btn"
-                style={{ borderLeft: `3px solid ${tmpl.color}` }}
-                onClick={() => onAddAgent(key)}
+                style={{ borderLeft: `3px solid ${agent.color}` }}
+                onClick={() => onAddAgent(agent)}
               >
-                + {tmpl.role}
+                + {agent.name || agent.role}
               </button>
             ))}
           </div>
@@ -191,10 +204,10 @@ function GraphView({ agents, edges, onAgentsChange, onEdgesChange, onNodeSelect,
           ) : (
             <>
               <div className="context-menu-title">Add Agent</div>
-              {Object.entries(AGENT_TEMPLATES).map(([key, tmpl]) => (
-                <button key={key} onClick={() => handleAddAgent(key)}>
-                  <span className="ctx-dot" style={{ background: tmpl.color }} />
-                  {tmpl.role}
+              {availableAgents.map((agent) => (
+                <button key={agent.id} onClick={() => handleAddAgent(agent)}>
+                  <span className="ctx-dot" style={{ background: agent.color }} />
+                  {agent.name || agent.role}
                 </button>
               ))}
             </>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { AGENT_TEMPLATES, NODE_STATUS, STATUS_COLORS, generateId } from '../store/agentStore';
+import { AGENT_TEMPLATES, NODE_STATUS, generateId } from '../store/agentStore';
 
 export function createDefaultSwarmGraph(swarmId = 'swarm-default') {
   const agentIds = {
@@ -59,8 +59,11 @@ export function useAgents() {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const terminalLogs = useRef({});
 
-  const addAgent = useCallback((template, position) => {
-    const tmpl = AGENT_TEMPLATES[template] || AGENT_TEMPLATES.custom;
+  const addAgent = useCallback((templateOrDefinition, position) => {
+    const isDefinition = typeof templateOrDefinition === 'object' && templateOrDefinition !== null;
+    const tmpl = isDefinition
+      ? templateOrDefinition
+      : (AGENT_TEMPLATES[templateOrDefinition] || AGENT_TEMPLATES.custom);
     let newId = null;
     setAgents((prev) => {
       const id = generateId(new Set(prev.map((agent) => agent.id)));
@@ -75,7 +78,7 @@ export function useAgents() {
             ...tmpl,
             id,
             status: NODE_STATUS.IDLE,
-            name: tmpl.role,
+            name: tmpl.name || tmpl.role,
             unreadCount: 0,
             latestNotification: null,
             gitBranch: null,
