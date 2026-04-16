@@ -43,7 +43,7 @@
   font-family: 'Share Tech Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: all 150ms;
+  transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .layout-btn.active {
@@ -91,7 +91,9 @@
 .terminal-portal {
   position: absolute;
   overflow: hidden;
-  transition: all 200ms;
+  transition: transform 200ms ease, opacity 160ms ease;
+  will-change: transform, opacity;
+  contain: layout paint;
 }
 
 .terminal-portal .terminal-panel {

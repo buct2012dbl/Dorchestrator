@@ -4,8 +4,9 @@
   min-width: 200px;
   font-size: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  transition: all 200ms;
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   position: relative;
+  will-change: transform;
   clip-path: polygon(
     0 8px, 8px 0,
     calc(100% - 8px) 0, 100% 8px,
@@ -84,12 +85,6 @@
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 0 8px currentColor;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 
 .agent-node-body {
@@ -129,7 +124,7 @@
   background: var(--border);
   border: 2px solid var(--background);
   border-radius: 2px;
-  transition: all 150ms;
+  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .agent-handle:hover {

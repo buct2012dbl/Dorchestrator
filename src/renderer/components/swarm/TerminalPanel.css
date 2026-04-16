@@ -5,7 +5,7 @@
   border: 2px solid var(--border);
   overflow: hidden;
   min-height: 0;
-  transition: all 200ms;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
   clip-path: polygon(
     0 8px, 8px 0,
     calc(100% - 8px) 0, 100% 8px,
@@ -44,7 +44,6 @@
   border-radius: 50%;
   flex-shrink: 0;
   box-shadow: 0 0 6px currentColor;
-  animation: pulse 2s ease-in-out infinite;
 }
 
 .terminal-panel-title {

@@ -5,7 +5,7 @@
   border: 2px solid var(--border);
   overflow: hidden;
   min-height: 0;
-  transition: all 200ms;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
   clip-path: polygon(
     0 8px, 8px 0,
     calc(100% - 8px) 0, 100% 8px,
@@ -56,7 +56,7 @@
   font-size: 16px;
   line-height: 1;
   padding: 0;
-  transition: all 0.2s;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
 }
 
 .mux-terminal-close:hover {

@@ -43,7 +43,7 @@
   font-size: 12px;
   font-family: 'Share Tech Mono', monospace;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 200ms ease, color 200ms ease, box-shadow 200ms ease, opacity 200ms ease;
 }
 
 .mux-icon-btn svg {

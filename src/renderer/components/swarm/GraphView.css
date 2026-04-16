@@ -19,7 +19,7 @@
   padding: 6px 14px;
   font-size: 11px;
   cursor: pointer;
-  transition: all 150ms;
+  transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
   font-family: 'Share Tech Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -70,7 +70,7 @@
   cursor: pointer;
   text-align: left;
   font-family: 'Share Tech Mono', monospace;
-  transition: all 150ms;
+  transition: background 150ms ease, color 150ms ease, padding-left 150ms ease;
   position: relative;
 }
 
@@ -112,7 +112,7 @@
   background: var(--muted);
   border-bottom: 1px solid var(--border);
   fill: var(--foreground);
-  transition: all 150ms;
+  transition: background 150ms ease, fill 150ms ease;
 }
 
 .react-flow__controls-button:hover {
