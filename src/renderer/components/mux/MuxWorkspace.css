@@ -80,8 +80,8 @@
   justify-content: center;
   border: 1px solid var(--border);
   border-radius: 0;
-  background: color-mix(in srgb, var(--card) 92%, transparent);
-  color: var(--accent);
+  background: linear-gradient(180deg, rgba(18, 20, 30, 0.92), rgba(10, 10, 16, 0.92));
+  color: var(--accent-tertiary);
   font-size: 18px;
   font-family: 'Share Tech Mono', monospace;
   cursor: pointer;
@@ -89,19 +89,24 @@
   pointer-events: none;
   transform: translateY(-50%);
   transition: opacity 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    100% 0, 100% 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
 }
 
 .mux-sidebar-toggle:hover {
-  border-color: var(--accent);
-  box-shadow: var(--box-shadow-neon-sm);
+  border-color: var(--accent-tertiary);
+  box-shadow: var(--box-shadow-neon-tertiary);
 }
 
 .mux-sidebar-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
   outline: none;
-  border-color: var(--accent);
-  box-shadow: var(--box-shadow-neon-sm);
+  border-color: var(--accent-tertiary);
+  box-shadow: var(--box-shadow-neon-tertiary);
 }
 
 .mux-sidebar-close-toggle {
@@ -124,20 +129,29 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background:
+    radial-gradient(circle at top, rgba(0, 212, 255, 0.12), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(255, 0, 255, 0.08), transparent 32%),
+    var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
 }
 
 .config-confirm-dialog {
-  background: var(--card);
+  background: linear-gradient(180deg, rgba(24, 24, 38, 0.98), rgba(12, 12, 20, 0.98));
   border: 2px solid var(--accent);
   padding: 24px;
   min-width: 300px;
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  box-shadow: var(--box-shadow-neon-lg);
+  clip-path: polygon(
+    0 12px, 12px 0,
+    calc(100% - 12px) 0, 100% 12px,
+    100% calc(100% - 12px), calc(100% - 12px) 100%,
+    12px 100%, 0 calc(100% - 12px)
+  );
 }
 
 .config-confirm-dialog h4 {
@@ -168,6 +182,12 @@
   letter-spacing: 1px;
   transition: all 150ms;
   border: 2px solid;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
 }
 
 .btn-confirm {

@@ -52,6 +52,7 @@ function SwarmSidebar({
             </button>
             <button
               className="swarm-sidebar-delete"
+              title={`Delete ${swarm.name}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteSwarm(swarm.id);

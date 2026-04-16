@@ -6,7 +6,7 @@ function MuxSidebar({ templates, selectedTemplate, onSelectTemplate, onNewTempla
     <div className="mux-sidebar">
       <div className="mux-sidebar-header">
         <span className="mux-sidebar-title">TEMPLATES</span>
-        <button className="mux-new-template-btn" onClick={onNewTemplate}>+</button>
+        <button className="mux-new-template-btn" onClick={onNewTemplate} title="Create template">+</button>
       </div>
       <div className="mux-sidebar-list">
         {templates.map((template, idx) => (
@@ -25,6 +25,7 @@ function MuxSidebar({ templates, selectedTemplate, onSelectTemplate, onNewTempla
             </div>
             <button
               className="mux-sidebar-delete"
+              title={`Delete ${template.name}`}
               onClick={(e) => { e.stopPropagation(); onDeleteTemplate(template.id); }}
             >
               ×

@@ -366,7 +366,7 @@
   justify-content: center;
   border: 1px solid var(--border);
   border-radius: 0;
-  background: color-mix(in srgb, var(--card) 92%, transparent);
+  background: linear-gradient(180deg, rgba(18, 20, 30, 0.92), rgba(10, 10, 16, 0.92));
   color: var(--accent);
   font-size: 18px;
   font-family: 'Share Tech Mono', monospace;
@@ -375,6 +375,11 @@
   pointer-events: none;
   transform: translateY(-50%);
   transition: opacity 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    100% 0, 100% 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
 }
 
 .swarm-sidebar-toggle:hover {
@@ -592,11 +597,19 @@
 
 .swarm-name-modal {
   width: min(460px, calc(100vw - 40px));
-  background: var(--card);
+  background:
+    linear-gradient(180deg, rgba(24, 24, 38, 0.98), rgba(12, 12, 20, 0.98));
   border: 2px solid var(--accent);
   box-shadow: var(--box-shadow-neon-lg);
   padding: 28px;
   position: relative;
+  clip-path: polygon(
+    0 14px, 14px 0,
+    calc(100% - 14px) 0, 100% 14px,
+    100% calc(100% - 14px), calc(100% - 14px) 100%,
+    14px 100%, 0 calc(100% - 14px)
+  );
+  overflow: hidden;
 }
 
 .swarm-name-modal::before,
@@ -664,6 +677,12 @@
   outline: none;
   border-radius: 0;
   transition: border-color 150ms ease, box-shadow 150ms ease;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
 }
 
 .swarm-name-input:focus {
