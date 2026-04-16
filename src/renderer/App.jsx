@@ -901,25 +901,26 @@ function App() {
                 <div className="swarm-empty-state">Loading swarm workspace...</div>
               ) : activeSwarm ? (
                 <>
-                  <div
-                    className="graph-section"
-                    style={{
-                      height: showTerminal ? `${splitRatio}%` : '100%',
-                      display: showGraph ? 'block' : 'none',
-                    }}
-                  >
-                    <GraphView
-                      key={activeSwarm.id}
-                      agents={agents}
-                      edges={edges}
-                      onAgentsChange={setAgents}
-                      onEdgesChange={setEdges}
-                      onNodeSelect={handleNodeSelect}
-                      onAddAgent={addAgent}
-                      onRemoveAgent={removeAgent}
-                      sharedAgents={sharedAgents}
-                    />
-                  </div>
+                  {showGraph && (
+                    <div
+                      className="graph-section"
+                      style={{
+                        height: showTerminal ? `${splitRatio}%` : '100%',
+                      }}
+                    >
+                      <GraphView
+                        key={activeSwarm.id}
+                        agents={agents}
+                        edges={edges}
+                        onAgentsChange={setAgents}
+                        onEdgesChange={setEdges}
+                        onNodeSelect={handleNodeSelect}
+                        onAddAgent={addAgent}
+                        onRemoveAgent={removeAgent}
+                        sharedAgents={sharedAgents}
+                      />
+                    </div>
+                  )}
                   {showGraph && showTerminal && (
                     <div
                       className={`split-handle ${isDragging ? 'dragging' : ''}`}
