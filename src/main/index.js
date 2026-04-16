@@ -11,6 +11,8 @@ const pty = require('node-pty');
 const commConfig = require('./communication-config');
 const graphConfigManager = require('./graphConfigManager');
 const swarmManager = require('./swarmManager');
+const sharedAgentManager = require('./sharedAgentManager');
+const kanbanManager = require('./kanbanManager');
 const templateManager = require('./templateManager');
 const {
   syncAgentsAndRespawn,
@@ -125,7 +127,6 @@ function getCodingAgentCliPath() {
 function getCodexAutoApproveArgs() {
   return [
     '--sandbox', 'workspace-write',
-    '--ask-for-approval', 'never',
     '-c', 'default_tools_approval_mode="approve"',
   ];
 }
@@ -185,9 +186,28 @@ function buildTerminalCommand(config = {}, options = {}) {
 
 // ---- Agent graph (kept in sync for PTY spawning) ----
 let agentGraph = { agents: [], edges: [] };
+const runtimeTaskGraphs = new Map();
+const taskAgentIndex = new Map();
+const activeKanbanTasks = new Map();
+
+function getCombinedGraph() {
+  const agents = [...(agentGraph.agents || [])];
+  const edges = [...(agentGraph.edges || [])];
+
+  for (const runtimeGraph of runtimeTaskGraphs.values()) {
+    agents.push(...(runtimeGraph.agents || []));
+    edges.push(...(runtimeGraph.edges || []));
+  }
+
+  return { agents, edges };
+}
+
+function findAgentById(agentId) {
+  return getCombinedGraph().agents.find((agent) => agent.id === agentId) || null;
+}
 
 function getConnectedAgents(agentId) {
-  const { agents, edges } = agentGraph;
+  const { agents, edges } = getCombinedGraph();
   const connected = new Set();
   for (const edge of edges) {
     if (edge.source === agentId) connected.add(edge.target);
@@ -310,8 +330,7 @@ function ensureCodexMcpToolApprovals(content, mcpServerName) {
   return nextContent;
 }
 
-function configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, env, logPrefix) {
-  const mcpServerName = getCodexBridgeServerName(agentId);
+function prepareIsolatedCodexHome(agentId, env, logPrefix, bridgeInfo = null) {
   const agentHome = getCodexAgentHome(agentId);
   const configPath = path.join(agentHome, 'config.toml');
   const authPath = getCodexAuthPath();
@@ -333,10 +352,13 @@ function configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, en
     configContent += '\n';
   }
 
-  configContent += `\n[mcp_servers.${mcpServerName}]\n`;
-  configContent += `command = ${JSON.stringify(NODE_PATH)}\n`;
-  configContent += `args = [${JSON.stringify(mcpBridgePath)}, ${JSON.stringify(bridgeConfigPath)}]\n`;
-  configContent = ensureCodexMcpToolApprovals(configContent, mcpServerName);
+  if (bridgeInfo) {
+    const mcpServerName = getCodexBridgeServerName(agentId);
+    configContent += `\n[mcp_servers.${mcpServerName}]\n`;
+    configContent += `command = ${JSON.stringify(NODE_PATH)}\n`;
+    configContent += `args = [${JSON.stringify(bridgeInfo.mcpBridgePath)}, ${JSON.stringify(bridgeInfo.bridgeConfigPath)}]\n`;
+    configContent = ensureCodexMcpToolApprovals(configContent, mcpServerName);
+  }
 
   fs.writeFileSync(configPath, configContent);
   env.CODEX_HOME = agentHome;
@@ -363,6 +385,17 @@ function writeBridgeConfig(agentId, logPrefix) {
 }
 
 function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPrefix) {
+  if (terminalType === 'codex') {
+    try {
+      const bridgeInfo = bridgePort > 0 ? writeBridgeConfig(agentId, logPrefix) : null;
+      prepareIsolatedCodexHome(agentId, env, logPrefix, bridgeInfo);
+      return () => {};
+    } catch (err) {
+      console.error(`${logPrefix} Failed to prepare isolated Codex MCP config:`, err.message);
+      return () => {};
+    }
+  }
+
   if (bridgePort <= 0) {
     return () => {};
   }
@@ -373,16 +406,6 @@ function prepareAgentMcpSession(agentId, terminalType, command, args, env, logPr
   }
   const tmpDir = os.tmpdir();
   const { mcpBridgePath, bridgeConfigPath } = bridgeInfo;
-
-  if (terminalType === 'codex') {
-    try {
-      configureCodexBridgeServer(agentId, mcpBridgePath, bridgeConfigPath, env, logPrefix);
-      return () => {};
-    } catch (err) {
-      console.error(`${logPrefix} Failed to prepare isolated Codex MCP config:`, err.message);
-      return () => {};
-    }
-  }
 
   const mcpConfig = {
     mcpServers: {
@@ -472,6 +495,7 @@ function spawnTrackedPty({
 }
 
 function forwardAgentPtyData(agentId, data) {
+  appendKanbanSegment(agentId, data);
   const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
   if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
     const notification = oscMatch[1];
@@ -489,7 +513,7 @@ async function ensureAgentPtyRunning(agentId) {
   let ptyProcess = ptys.get(agentId);
   if (ptyProcess) return ptyProcess;
 
-  const targetAgent = agentGraph.agents.find((a) => a.id === agentId);
+  const targetAgent = findAgentById(agentId);
   if (!targetAgent?.data) {
     throw new Error(`Target agent ${agentId} not found in graph`);
   }
@@ -507,6 +531,59 @@ async function ensureAgentPtyRunning(agentId) {
   }
 
   throw new Error(`Target agent ${agentId} did not become ready`);
+}
+
+function waitForAgentPtyReady(agentId, options = {}) {
+  const {
+    minWaitMs = 800,
+    settleMs = 1200,
+    maxWaitMs = 8000,
+  } = options;
+
+  return new Promise((resolve) => {
+    const ptyProcess = ptys.get(agentId);
+    if (!ptyProcess) {
+      setTimeout(resolve, minWaitMs);
+      return;
+    }
+
+    let sawData = false;
+    let settled = false;
+    let settleTimer = null;
+    let maxTimer = null;
+    const startedAt = Date.now();
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      if (maxTimer) clearTimeout(maxTimer);
+      try { disposable.dispose(); } catch {}
+      const waited = Date.now() - startedAt;
+      const remainingMinWait = Math.max(0, minWaitMs - waited);
+      if (remainingMinWait > 0) {
+        setTimeout(resolve, remainingMinWait);
+      } else {
+        resolve();
+      }
+    };
+
+    const scheduleSettle = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        if (sawData) finish();
+      }, settleMs);
+    };
+
+    const disposable = ptyProcess.onData((data) => {
+      if (!data) return;
+      sawData = true;
+      scheduleSettle();
+    });
+
+    maxTimer = setTimeout(finish, maxWaitMs);
+    scheduleSettle();
+  });
 }
 
 function normalizeBridgeAgentId(rawAgentId) {
@@ -533,11 +610,11 @@ function startBridgeServer() {
       const normalizedTargetAgentId = normalizeBridgeAgentId(targetAgentId);
       console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}, ${message ? message.length : 0} chars)`);
 
-      const fromAgent = agentGraph.agents.find((a) => a.id === fromAgentId);
+      const fromAgent = findAgentById(fromAgentId);
       const fromName = fromAgent?.data?.name || fromAgentId;
 
       // Check target agent's terminal type
-      const targetAgent = agentGraph.agents.find((a) => a.id === normalizedTargetAgentId);
+      const targetAgent = findAgentById(normalizedTargetAgentId);
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
       try {
@@ -558,8 +635,8 @@ function startBridgeServer() {
           // Codex does not reliably process foreign input injected into the live PTY.
           // Reuse the dedicated exec path so the message is actually handled.
           void getAgentResponse(normalizedTargetAgentId, fullMessage)
-            .then((response) => {
-              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(response || '').length} chars)`);
+            .then((result) => {
+              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
             .catch((err) => {
               console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
@@ -587,16 +664,16 @@ function startBridgeServer() {
 }
 
 // ---- Get agent response by writing to its active PTY stdin and capturing output ----
-function getAgentResponse(agentId, message) {
+function getAgentResponse(agentId, message, options = {}) {
   return new Promise((resolve) => {
     const ptyProcess = ptys.get(agentId);
     if (!ptyProcess) {
-      resolve('(agent not running)');
+      resolve({ response: '(agent not running)', transcript: '' });
       return;
     }
 
     // Find the target agent to check its terminal type
-    const targetAgent = agentGraph.agents.find((a) => a.id === agentId);
+    const targetAgent = findAgentById(agentId);
     const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
     // For Codex agents, use exec command to process the message
@@ -607,7 +684,8 @@ function getAgentResponse(agentId, message) {
       ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
 
       const codexPath = process.env.CODEX_PATH || 'codex';
-      const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check'];
+      const codexOutputPath = path.join(os.tmpdir(), `ao-codex-last-message-${agentId}-${Date.now()}.txt`);
+      const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check', '--json', '--output-last-message', codexOutputPath];
       if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
       if (targetAgent?.data?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(targetAgent.data.systemPrompt)}`);
       args.push(message);
@@ -615,9 +693,7 @@ function getAgentResponse(agentId, message) {
 
       try {
         const bridgeInfo = writeBridgeConfig(agentId, '[Bridge]');
-        if (bridgeInfo) {
-          configureCodexBridgeServer(agentId, bridgeInfo.mcpBridgePath, bridgeInfo.bridgeConfigPath, codexEnv, '[Bridge]');
-        }
+        prepareIsolatedCodexHome(agentId, codexEnv, '[Bridge]', bridgeInfo);
       } catch (err) {
         console.error(`[Bridge] Failed to configure Codex MCP server for ${agentId}:`, err.message);
       }
@@ -629,35 +705,101 @@ function getAgentResponse(agentId, message) {
       });
 
       let output = '';
-      execProcess.stdout.on('data', (data) => {
-        output += data.toString();
-        // Show exec output in terminal in real-time
-        const lines = data.toString().split('\n');
-        for (const line of lines) {
-          if (line.trim()) {
-            ptyProcess.write(`\x1b[90m${line}\x1b[0m\r\n`);
-          }
-        }
-      });
-      execProcess.stderr.on('data', (data) => {
-        output += data.toString();
-      });
+      let renderedTranscript = '';
+      let stdoutBuffer = '';
+      let done = false;
+      let safetyTimer = null;
+      let finalMessageFromEvents = '';
+      let errorMessageFromEvents = '';
+      const onCodexEvent = typeof options.onCodexEvent === 'function' ? options.onCodexEvent : null;
 
-      execProcess.on('close', (code) => {
+      const finishCodexExec = (fallbackResponse = '(no response)') => {
+        if (done) return;
+        done = true;
+        if (safetyTimer) clearTimeout(safetyTimer);
         ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
+
+        let finalResponse = fallbackResponse;
+        try {
+          if (fs.existsSync(codexOutputPath)) {
+            const fileResponse = fs.readFileSync(codexOutputPath, 'utf8').trim();
+            if (fileResponse) {
+              finalResponse = fileResponse;
+            }
+            fs.unlinkSync(codexOutputPath);
+          }
+        } catch {}
 
         const clean = output
           .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
           .replace(/\x1b[()][0-9A-Za-z]/g, '')
+          .replace(/\r/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
           .trim();
-        console.log(`[Bridge] Codex exec completed with code ${code}, outputLength=${clean.length}`);
-        resolve(clean || '(no response)');
+        finalResponse = finalResponse || finalMessageFromEvents || extractFinalResponse(clean) || clean || fallbackResponse;
+        console.log(`[Bridge] Codex exec completed, outputLength=${clean.length}`);
+        resolve({
+          response: finalResponse,
+          transcript: renderedTranscript.trimEnd(),
+          error: errorMessageFromEvents || null,
+        });
+      };
+
+      execProcess.stdout.on('data', (data) => {
+        output += data.toString();
+        stdoutBuffer += data.toString();
+
+        const lines = stdoutBuffer.split('\n');
+        stdoutBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const timelineEvent = parseCodexTimelineEvent(line);
+          if (timelineEvent && onCodexEvent) {
+            onCodexEvent(timelineEvent);
+          }
+
+          const formatted = formatCodexJsonEvent(line);
+          if (formatted && formatted.trim()) {
+            ptyProcess.write(`${formatted}\r\n`);
+            renderedTranscript += `${formatted}\n`;
+          }
+
+          const finalCandidate = extractCodexFinalMessage(line);
+          if (finalCandidate) {
+            finalMessageFromEvents = finalCandidate;
+          }
+
+          const errorCandidate = extractCodexErrorMessage(line);
+          if (errorCandidate) {
+            errorMessageFromEvents = errorCandidate;
+            renderedTranscript += `[error] ${errorCandidate}\n`;
+            ptyProcess.write(`[error] ${errorCandidate}\r\n`);
+          }
+        }
+      });
+      execProcess.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        const normalized = text.trim();
+        if (
+          normalized
+          && !normalized.toLowerCase().includes('warning:')
+          && !normalized.includes('Reading additional input from stdin')
+        ) {
+          ptyProcess.write(`${normalized}\r\n`);
+          renderedTranscript += `${normalized}\n`;
+        }
       });
 
+      execProcess.on('close', () => {
+        finishCodexExec();
+      });
+
+      execProcess.stdin.end();
+
       // Safety timeout
-      setTimeout(() => {
-        execProcess.kill();
-        resolve('(timeout)');
+      safetyTimer = setTimeout(() => {
+        finishCodexExec('(timeout)');
       }, 180000);
 
       return;
@@ -688,7 +830,7 @@ function getAgentResponse(agentId, message) {
       const finalResponse = extractFinalResponse(clean);
       console.log(`[Bridge] Extracted final response length for ${agentId}: ${finalResponse.length}`);
 
-      resolve(finalResponse || '(no response)');
+      resolve({ response: finalResponse || '(no response)', transcript: captured });
     };
 
     const resetIdle = () => {
@@ -792,6 +934,156 @@ function extractFinalResponse(rawOutput) {
 
   // Fallback: return the original
   return rawOutput;
+}
+
+function stripAnsiAndControl(text) {
+  return String(text || '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b[()][0-9A-Za-z]/g, '')
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .replace(/\r/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function collectJsonStringValues(value, results = []) {
+  if (typeof value === 'string') {
+    results.push(value);
+    return results;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectJsonStringValues(item, results);
+    }
+    return results;
+  }
+  if (value && typeof value === 'object') {
+    for (const nested of Object.values(value)) {
+      collectJsonStringValues(nested, results);
+    }
+  }
+  return results;
+}
+
+function compactCodexCommand(command) {
+  const clean = stripAnsiAndControl(command || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return 'command';
+  return clean.length > 120 ? `${clean.slice(0, 117)}...` : clean;
+}
+
+function parseCodexTimelineEvent(line) {
+  if (!line.trim()) return null;
+
+  let event;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  const type = String(event.type || '');
+  const item = event.item || null;
+
+  if (type === 'item.started' && item?.type === 'command_execution') {
+    return {
+      kind: 'command',
+      phase: 'running',
+      title: 'Running command',
+      text: compactCodexCommand(item.command || item.cmd || item.input || ''),
+    };
+  }
+
+  if (type === 'item.completed' && item?.type === 'command_execution') {
+    return {
+      kind: 'command',
+      phase: 'completed',
+      title: `Command finished${Number.isInteger(item.exit_code) ? ` (${item.exit_code})` : ''}`,
+      text: compactCodexCommand(item.command || item.cmd || item.input || ''),
+      exitCode: Number.isInteger(item.exit_code) ? item.exit_code : null,
+    };
+  }
+
+  if (type === 'item.completed' && item?.type === 'agent_message') {
+    const text = stripAnsiAndControl(item.text || item.message || '').trim();
+    if (!text) return null;
+    return {
+      kind: 'assistant',
+      phase: 'completed',
+      title: 'Assistant',
+      text,
+    };
+  }
+
+  if (type.includes('error') || type.includes('failed')) {
+    const text = stripAnsiAndControl(
+      event.message
+      || event.error?.message
+      || collectJsonStringValues(event).find(Boolean)
+      || '',
+    ).trim();
+    if (!text) return null;
+    return {
+      kind: 'error',
+      phase: 'completed',
+      title: 'Error',
+      text,
+    };
+  }
+
+  return null;
+}
+
+function formatCodexJsonEvent(line) {
+  const timelineEvent = parseCodexTimelineEvent(line);
+  if (timelineEvent?.kind === 'assistant') {
+    return timelineEvent.text;
+  }
+  if (timelineEvent?.kind === 'error') {
+    return `[error] ${timelineEvent.text}`;
+  }
+  return null;
+}
+
+function extractCodexFinalMessage(line) {
+  if (!line.trim()) return null;
+
+  let event;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  const type = String(event.type || '');
+  if (!type.includes('message') && !type.includes('turn')) {
+    return null;
+  }
+
+  const candidates = collectJsonStringValues(event)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => !value.startsWith('{') && !value.includes('"type":'));
+
+  return candidates.find((value) => value.length > 1) || null;
+}
+
+function extractCodexErrorMessage(line) {
+  if (!line.trim()) return null;
+
+  let event;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  const type = String(event.type || '');
+  if (!type.includes('error') && !type.includes('failed')) {
+    return null;
+  }
+
+  return event.message || event.error?.message || collectJsonStringValues(event).find(Boolean) || null;
 }
 
 // ---- Persistent settings ----
@@ -919,6 +1211,428 @@ let authConfig = {
   baseURL: process.env.ANTHROPIC_BASE_URL || null,
 };
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function emitKanbanTaskUpdate(task) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('kanban-task-update', { task });
+  }
+}
+
+function loadKanbanState() {
+  return kanbanManager.loadState();
+}
+
+function saveKanbanState(state) {
+  return kanbanManager.saveState(state);
+}
+
+function queuePersistKanbanTask(taskId) {
+  const active = activeKanbanTasks.get(taskId);
+  if (!active) return;
+
+  if (active.persistTimer) {
+    clearTimeout(active.persistTimer);
+  }
+
+  active.persistTimer = setTimeout(() => {
+    const state = loadKanbanState();
+    const nextTasks = state.tasks.map((task) => (
+      task.id === taskId ? clone(active.task) : task
+    ));
+    saveKanbanState({ ...state, tasks: nextTasks });
+    active.persistTimer = null;
+  }, 150);
+}
+
+function persistKanbanTaskImmediately(taskId) {
+  const active = activeKanbanTasks.get(taskId);
+  if (!active) return;
+  if (active.persistTimer) {
+    clearTimeout(active.persistTimer);
+    active.persistTimer = null;
+  }
+  const state = loadKanbanState();
+  const nextTasks = state.tasks.map((task) => (
+    task.id === taskId ? clone(active.task) : task
+  ));
+  saveKanbanState({ ...state, tasks: nextTasks });
+}
+
+function setActiveKanbanTask(task) {
+  const existing = activeKanbanTasks.get(task.id);
+  activeKanbanTasks.set(task.id, {
+    ...existing,
+    task,
+  });
+  emitKanbanTaskUpdate(task);
+  queuePersistKanbanTask(task.id);
+}
+
+function updateKanbanTask(taskId, updater, options = {}) {
+  const state = loadKanbanState();
+  const tasks = state.tasks.map((task) => {
+    if (task.id !== taskId) return task;
+    const nextTask = updater(clone(task));
+    activeKanbanTasks.set(taskId, {
+      ...(activeKanbanTasks.get(taskId) || {}),
+      task: nextTask,
+    });
+    emitKanbanTaskUpdate(nextTask);
+    return nextTask;
+  });
+  saveKanbanState({ ...state, tasks });
+  if (options.refreshActive !== false) {
+    const nextTask = tasks.find((task) => task.id === taskId);
+    if (nextTask) {
+      activeKanbanTasks.set(taskId, {
+        ...(activeKanbanTasks.get(taskId) || {}),
+        task: nextTask,
+      });
+    }
+  }
+  return tasks.find((task) => task.id === taskId) || null;
+}
+
+function buildTaskScopedAgentId(taskId, agentId, index = 0) {
+  const safeAgentId = String(agentId || `agent-${index}`).replace(/[^a-zA-Z0-9_-]/g, '-');
+  return `kanban-${taskId}-${safeAgentId}`;
+}
+
+function buildTaskPrompt(task, replyMessage) {
+  const taskExecutionPreamble = [
+    'You are executing a Kanban task inside a GUI work board.',
+    'Treat the provided task as work to perform, not as small talk to mirror back.',
+    'Do not merely repeat or lightly paraphrase the task text.',
+    'Produce the concrete result of the task, or explain what you did and the outcome.',
+  ].join(' ');
+
+  if (!replyMessage) {
+    return [
+      taskExecutionPreamble,
+      `Task:\n${task.prompt}`,
+    ].join('\n\n');
+  }
+
+  const historyText = (task.runs || [])
+    .map((run, index) => {
+      const finalReply = stripAnsiAndControl(run.finalResponse || '').trim();
+      if (!finalReply) {
+        return null;
+      }
+      return `Run ${index + 1} reply:\n${finalReply}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  return [
+    taskExecutionPreamble,
+    `Original task:\n${task.prompt}`,
+    historyText ? `Previous execution history:\n${historyText}` : null,
+    `Reviewer feedback:\n${replyMessage}`,
+    'Continue the work from this context and address the reviewer feedback directly.',
+  ].filter(Boolean).join('\n\n');
+}
+
+function buildTaskTranscriptIntro(task, replyMessage) {
+  const parts = [
+    '> Task prompt',
+    replyMessage || task.prompt,
+  ];
+
+  if (replyMessage) {
+    parts.push('');
+    parts.push('> Reviewer feedback');
+    parts.push(replyMessage);
+  }
+
+  parts.push('');
+  return `${parts.join('\n')}\n`;
+}
+
+function registerRuntimeTaskGraph(taskId, runtimeGraph) {
+  runtimeTaskGraphs.set(taskId, runtimeGraph);
+  for (const agent of runtimeGraph.agents || []) {
+    taskAgentIndex.set(agent.id, {
+      taskId,
+      agentName: agent.data?.name || agent.id,
+      terminalType: agent.data?.terminalType || agent.data?.cliType || 'claude-code',
+    });
+  }
+}
+
+function unregisterRuntimeTaskGraph(taskId) {
+  const runtimeGraph = runtimeTaskGraphs.get(taskId);
+  if (runtimeGraph) {
+    for (const agent of runtimeGraph.agents || []) {
+      taskAgentIndex.delete(agent.id);
+      killTrackedPtyById(ptys, ptyDims, agent.id);
+    }
+  }
+  runtimeTaskGraphs.delete(taskId);
+}
+
+function createRuntimeGraphForTask(task) {
+  if (task.targetType === 'agent') {
+    const sharedAgents = sharedAgentManager.loadAgents();
+    const baseAgent = sharedAgents.find((agent) => agent.id === task.targetId);
+    if (!baseAgent) {
+      throw new Error('Assigned agent was not found.');
+    }
+
+    const scopedId = buildTaskScopedAgentId(task.id, baseAgent.id);
+    return {
+      entryAgentId: scopedId,
+      agents: [{
+        id: scopedId,
+        type: 'agentNode',
+        position: { x: 160, y: 120 },
+        data: {
+          ...baseAgent,
+          id: scopedId,
+          status: 'idle',
+        },
+      }],
+      edges: [],
+    };
+  }
+
+  const swarm = swarmManager.loadSwarms().find((item) => item.id === task.targetId);
+  if (!swarm) {
+    throw new Error('Assigned swarm was not found.');
+  }
+
+  const idMap = new Map();
+  const agents = (swarm.agents || []).map((agent, index) => {
+    const scopedId = buildTaskScopedAgentId(task.id, agent.id || index, index);
+    idMap.set(agent.id, scopedId);
+    return {
+      ...clone(agent),
+      id: scopedId,
+      data: {
+        ...clone(agent.data || {}),
+        id: scopedId,
+        status: 'idle',
+      },
+    };
+  });
+
+  const edges = (swarm.edges || []).map((edge) => ({
+    ...clone(edge),
+    id: buildTaskScopedAgentId(task.id, edge.id || `${edge.source}-${edge.target}`),
+    source: idMap.get(edge.source),
+    target: idMap.get(edge.target),
+  }));
+
+  const entryAgentId = idMap.get(task.entryAgentId) || agents[0]?.id;
+  if (!entryAgentId) {
+    throw new Error('Assigned swarm does not have an entry agent.');
+  }
+
+  return { agents, edges, entryAgentId };
+}
+
+function appendKanbanSegment(agentId, text) {
+  const taskInfo = taskAgentIndex.get(agentId);
+  if (!taskInfo || !text) return;
+  if (taskInfo.terminalType === 'codex') return;
+
+  const active = activeKanbanTasks.get(taskInfo.taskId);
+  if (!active?.task) return;
+
+  const task = clone(active.task);
+  const run = task.runs.find((item) => item.id === task.currentRunId);
+  if (!run) return;
+
+  run.transcript = `${run.transcript || ''}${text}`;
+
+  const lastSegment = run.segments[run.segments.length - 1];
+  if (lastSegment && lastSegment.agentId === agentId) {
+    lastSegment.text += text;
+    lastSegment.updatedAt = new Date().toISOString();
+  } else {
+    run.segments.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      agentId,
+      agentName: taskInfo.agentName,
+      text,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  active.task = task;
+  emitKanbanTaskUpdate(task);
+  queuePersistKanbanTask(task.id);
+}
+
+function appendKanbanTimelineEvent(taskId, runId, event) {
+  if (!event) return;
+
+  const active = activeKanbanTasks.get(taskId);
+  if (!active?.task) return;
+
+  const task = clone(active.task);
+  const run = task.runs.find((item) => item.id === runId);
+  if (!run) return;
+
+  run.timelineEvents = run.timelineEvents || [];
+  run.timelineEvents.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: event.kind || 'assistant',
+    phase: event.phase || 'completed',
+    title: stripAnsiAndControl(event.title || '').trim() || 'Update',
+    text: stripAnsiAndControl(event.text || '').trim(),
+    exitCode: Number.isInteger(event.exitCode) ? event.exitCode : null,
+    createdAt: new Date().toISOString(),
+  });
+
+  active.task = task;
+  emitKanbanTaskUpdate(task);
+  queuePersistKanbanTask(task.id);
+}
+
+async function runKanbanTask(taskId, replyMessage = '') {
+  const state = loadKanbanState();
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
+    throw new Error('Task not found.');
+  }
+  if (task.runStatus === 'running') {
+    return task;
+  }
+
+  const runtimeGraph = createRuntimeGraphForTask(task);
+  const entryAgent = runtimeGraph.agents?.find((agent) => agent.id === runtimeGraph.entryAgentId) || null;
+  const entryTerminalType = entryAgent?.data?.terminalType || entryAgent?.data?.cliType || 'claude-code';
+  unregisterRuntimeTaskGraph(taskId);
+  registerRuntimeTaskGraph(taskId, runtimeGraph);
+
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const nextPrompt = buildTaskPrompt(task, replyMessage);
+  const activeTask = updateKanbanTask(taskId, (currentTask) => {
+    currentTask.stage = 'in_progress';
+    currentTask.runStatus = 'running';
+    currentTask.lastError = null;
+    currentTask.currentRunId = runId;
+    currentTask.updatedAt = new Date().toISOString();
+    currentTask.history = currentTask.history || [];
+    currentTask.history.push({
+      id: `${runId}-prompt`,
+      type: replyMessage ? 'review-reply' : 'prompt',
+      text: replyMessage || currentTask.prompt,
+      createdAt: new Date().toISOString(),
+    });
+    currentTask.runs = currentTask.runs || [];
+    currentTask.runs.push({
+      id: runId,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      status: 'running',
+      prompt: nextPrompt,
+      displayPrompt: replyMessage || currentTask.prompt,
+      renderMode: entryTerminalType === 'codex' ? 'timeline' : 'terminal',
+      reply: replyMessage,
+      finalResponse: '',
+      transcript: entryTerminalType === 'codex' ? '' : buildTaskTranscriptIntro(currentTask, replyMessage),
+      timelineEvents: [],
+      segments: [],
+    });
+    return currentTask;
+  });
+  setActiveKanbanTask(activeTask);
+
+  try {
+    await ensureAgentPtyRunning(runtimeGraph.entryAgentId);
+    await waitForAgentPtyReady(runtimeGraph.entryAgentId);
+    const execution = await getAgentResponse(runtimeGraph.entryAgentId, nextPrompt, {
+      onCodexEvent: entryTerminalType === 'codex'
+        ? (event) => appendKanbanTimelineEvent(taskId, runId, event)
+        : null,
+    });
+    const response = execution?.response || '';
+    const capturedTranscript = execution?.transcript || '';
+    if (execution?.error && !response) {
+      throw new Error(execution.error);
+    }
+    if ((!response || response === '(no response)') && capturedTranscript && /\[error\]/i.test(capturedTranscript)) {
+      const transcriptError = capturedTranscript
+        .split('\n')
+        .filter((line) => /\[error\]/i.test(line))
+        .pop()
+        ?.replace(/^\[error\]\s*/i, '')
+        .trim();
+      throw new Error(transcriptError || 'Task failed before producing a final response.');
+    }
+    const completedTask = updateKanbanTask(taskId, (currentTask) => {
+      currentTask.stage = 'in_review';
+      currentTask.runStatus = 'awaiting_review';
+      currentTask.updatedAt = new Date().toISOString();
+      currentTask.currentRunId = null;
+      currentTask.history.push({
+        id: `${runId}-result`,
+        type: 'result',
+        text: response || '',
+        createdAt: new Date().toISOString(),
+      });
+      const run = currentTask.runs.find((item) => item.id === runId);
+      if (run) {
+        run.completedAt = new Date().toISOString();
+        run.status = 'success';
+        run.finalResponse = response || '';
+        if (capturedTranscript && !(run.transcript || '').includes(capturedTranscript)) {
+          run.transcript = `${run.transcript || ''}${capturedTranscript}`;
+        }
+        run.timelineEvents = run.timelineEvents || [];
+        const transcript = run.transcript || '';
+        const transcriptBody = transcript.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '').trim();
+        if ((!transcriptBody || transcriptBody === `> Task prompt\n${run.prompt}`) && response) {
+          run.transcript = `${transcript}\u001b[32m${response}\u001b[0m\r\n`;
+        }
+      }
+      return currentTask;
+    });
+    setActiveKanbanTask(completedTask);
+    persistKanbanTaskImmediately(taskId);
+    return completedTask;
+  } catch (err) {
+    const failedTask = updateKanbanTask(taskId, (currentTask) => {
+      currentTask.stage = 'in_progress';
+      currentTask.runStatus = 'error';
+      currentTask.lastError = err.message || String(err);
+      currentTask.currentRunId = null;
+      currentTask.updatedAt = new Date().toISOString();
+      const run = currentTask.runs.find((item) => item.id === runId);
+      if (run) {
+        run.completedAt = new Date().toISOString();
+        run.status = 'error';
+        run.finalResponse = '';
+        run.timelineEvents = run.timelineEvents || [];
+        if (entryTerminalType === 'codex') {
+          run.timelineEvents.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            kind: 'error',
+            phase: 'completed',
+            title: 'Error',
+            text: err.message || String(err),
+            exitCode: null,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        run.transcript = `${run.transcript || ''}\u001b[31m[Task failed] ${err.message || String(err)}\u001b[0m\r\n`;
+      }
+      return currentTask;
+    });
+    setActiveKanbanTask(failedTask);
+    persistKanbanTaskImmediately(taskId);
+    throw err;
+  } finally {
+    unregisterRuntimeTaskGraph(taskId);
+  }
+}
+
 function createWindow() {
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -975,6 +1689,8 @@ app.whenReady().then(async () => {
   if (workspace) {
     graphConfigManager.setWorkspace(workspace);
     swarmManager.setWorkspace(workspace);
+    sharedAgentManager.setWorkspace(workspace);
+    kanbanManager.setWorkspace(workspace);
     templateManager.setWorkspace(workspace);
   }
 
@@ -1038,6 +1754,8 @@ ipcMain.handle('set-workspace', (event, { workspacePath }) => {
   saveSettings(settings);
   graphConfigManager.setWorkspace(validatedWorkspacePath);
   swarmManager.setWorkspace(validatedWorkspacePath);
+  sharedAgentManager.setWorkspace(validatedWorkspacePath);
+  kanbanManager.setWorkspace(validatedWorkspacePath);
   templateManager.setWorkspace(validatedWorkspacePath);
   return { success: true };
 });
@@ -1079,6 +1797,46 @@ ipcMain.handle('get-selected-swarm', async () => {
 
 ipcMain.handle('set-selected-swarm', async (event, id) => {
   return swarmManager.setSelectedSwarmId(id);
+});
+
+ipcMain.handle('load-shared-agents', async () => {
+  return sharedAgentManager.loadAgents();
+});
+
+ipcMain.handle('save-shared-agent', async (event, agent) => {
+  return sharedAgentManager.saveAgent(agent);
+});
+
+ipcMain.handle('delete-shared-agent', async (event, id) => {
+  return sharedAgentManager.deleteAgent(id);
+});
+
+ipcMain.handle('load-kanban-state', async () => {
+  return loadKanbanState();
+});
+
+ipcMain.handle('save-kanban-state', async (event, state) => {
+  return saveKanbanState(state);
+});
+
+ipcMain.handle('kanban-start-task', async (event, { taskId, replyMessage }) => {
+  return runKanbanTask(taskId, replyMessage || '');
+});
+
+ipcMain.handle('kanban-delete-task', async (event, { taskId }) => {
+  const currentState = loadKanbanState();
+  const task = currentState.tasks.find((item) => item.id === taskId);
+  if (task?.runStatus === 'running') {
+    throw new Error('Cannot delete a running task.');
+  }
+  unregisterRuntimeTaskGraph(taskId);
+  activeKanbanTasks.delete(taskId);
+  const nextState = {
+    ...currentState,
+    tasks: currentState.tasks.filter((item) => item.id !== taskId),
+  };
+  saveKanbanState(nextState);
+  return { success: true };
 });
 
 // Mux template management
