@@ -71,3 +71,20 @@ export function generateId(existingIds = new Set()) {
   } while (existingIds.has(id));
   return id;
 }
+
+export function createAgentDefinitionFromTemplate(templateKey = 'custom', overrides = {}, existingIds = new Set()) {
+  const tmpl = AGENT_TEMPLATES[templateKey] || AGENT_TEMPLATES.custom;
+  const id = overrides.id || generateId(existingIds);
+  return {
+    id,
+    name: overrides.name || tmpl.role,
+    role: overrides.role || tmpl.role,
+    color: overrides.color || tmpl.color,
+    description: overrides.description || tmpl.description,
+    systemPrompt: overrides.systemPrompt || tmpl.systemPrompt,
+    model: overrides.model || tmpl.model,
+    terminalType: overrides.terminalType || tmpl.terminalType || 'claude-code',
+    createdAt: overrides.createdAt || new Date().toISOString(),
+    updatedAt: overrides.updatedAt || new Date().toISOString(),
+  };
+}

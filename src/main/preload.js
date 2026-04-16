@@ -51,6 +51,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteSwarm: (id) => ipcRenderer.invoke('delete-swarm', id),
   getSelectedSwarm: () => ipcRenderer.invoke('get-selected-swarm'),
   setSelectedSwarm: (id) => ipcRenderer.invoke('set-selected-swarm', id),
+  loadSharedAgents: () => ipcRenderer.invoke('load-shared-agents'),
+  saveSharedAgent: (agent) => ipcRenderer.invoke('save-shared-agent', agent),
+  deleteSharedAgent: (id) => ipcRenderer.invoke('delete-shared-agent', id),
+  loadKanbanState: () => ipcRenderer.invoke('load-kanban-state'),
+  saveKanbanState: (state) => ipcRenderer.invoke('save-kanban-state', state),
+  startKanbanTask: (data) => ipcRenderer.invoke('kanban-start-task', data),
+  deleteKanbanTask: (data) => ipcRenderer.invoke('kanban-delete-task', data),
+  onKanbanTaskUpdate: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('kanban-task-update', listener);
+    return () => ipcRenderer.removeListener('kanban-task-update', listener);
+  },
 
   // PTY (claude CLI sessions)
   spawnAgent: (data) => ipcRenderer.invoke('pty-spawn', data),
