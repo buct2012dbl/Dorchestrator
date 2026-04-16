@@ -409,37 +409,6 @@
   box-shadow: var(--box-shadow-neon);
 }
 
-.kanban-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 30;
-  min-height: 44px;
-  background: transparent;
-  border: 2px solid var(--accent);
-  color: var(--accent);
-  padding: 11px 16px;
-  font-size: 11px;
-  cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  text-transform: uppercase;
-  letter-spacing: 1.6px;
-  box-shadow: var(--box-shadow-neon-sm);
-  clip-path: polygon(
-    0 7px, 7px 0,
-    calc(100% - 7px) 0, 100% 7px,
-    100% calc(100% - 7px), calc(100% - 7px) 100%,
-    7px 100%, 0 calc(100% - 7px)
-  );
-  transition: all 120ms steps(4);
-}
-
-.kanban-fab:hover {
-  background: var(--accent);
-  color: var(--background);
-  box-shadow: var(--box-shadow-neon);
-}
-
 .kanban-agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -730,10 +699,6 @@
     min-width: 1160px;
   }
 
-  .kanban-fab {
-    right: 16px;
-    bottom: 16px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -778,7 +743,6 @@
 
   .kanban-sidebar-item,
   .kanban-primary-btn,
-  .kanban-fab,
   .kanban-agent-card,
   .kanban-card,
   .kanban-template-btn {

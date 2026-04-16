@@ -190,9 +190,6 @@ function KanbanWorkspace({
           </div>
         ))}
       </div>
-      <button className="kanban-fab" onClick={() => setShowTaskComposer(true)} aria-label="Create task">
-        New Task
-      </button>
     </div>
   );
 
