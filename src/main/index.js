@@ -926,10 +926,18 @@ function getAgentResponse(agentId, message, options = {}) {
       console.log(`[Bridge] Full response from ${agentId}: ${clean.length} chars`);
 
       // Extract final response (look for ⏺ marker or text after "thought for Xs")
-      const finalResponse = extractFinalResponse(clean);
-      console.log(`[Bridge] Extracted final response length for ${agentId}: ${finalResponse.length}`);
+      const extractedResponse = extractFinalResponse(clean);
+      const detectedError = extractClaudeCliError(clean);
+      const usableResponse = isUsableClaudeFinalResponse(extractedResponse, clean, message)
+        ? extractedResponse
+        : '';
+      console.log(`[Bridge] Extracted final response length for ${agentId}: ${usableResponse.length}`);
 
-      resolve({ response: finalResponse || '(no response)', transcript: captured });
+      resolve({
+        response: usableResponse || '(no response)',
+        transcript: captured,
+        error: detectedError || (!usableResponse ? 'Task failed before producing a usable final response.' : null),
+      });
     };
 
     const resetIdle = () => {
@@ -1033,6 +1041,55 @@ function extractFinalResponse(rawOutput) {
 
   // Fallback: return the original
   return rawOutput;
+}
+
+function extractClaudeCliError(rawOutput) {
+  const patterns = [
+    /Found \d+ invalid settings file.*?\/doctor for details/i,
+    /Auto-update failed.*?@anthropic-ai\/claude-code/i,
+    /ctrl-g to edit prompt in vi/i,
+    /\[error\]\s*(.+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = rawOutput.match(pattern);
+    if (match) {
+      return stripAnsiAndControl(match[0] || match[1] || '').trim();
+    }
+  }
+
+  return null;
+}
+
+function isUsableClaudeFinalResponse(response, rawOutput, prompt) {
+  const cleanResponse = stripAnsiAndControl(response || '').trim();
+  if (!cleanResponse) {
+    return false;
+  }
+
+  const transcriptMarkers = [
+    'You are executing a Kanban task inside a GUI work board.',
+    'Task:',
+    'ctrl-g to edit prompt in vi',
+    '/doctor for details',
+    'Auto-update failed',
+  ];
+
+  if (transcriptMarkers.some((marker) => cleanResponse.includes(marker))) {
+    return false;
+  }
+
+  const cleanPrompt = stripAnsiAndControl(prompt || '').trim();
+  if (cleanPrompt && cleanResponse === cleanPrompt) {
+    return false;
+  }
+
+  const cleanRawOutput = stripAnsiAndControl(rawOutput || '').trim();
+  if (cleanResponse === cleanRawOutput) {
+    return false;
+  }
+
+  return true;
 }
 
 function stripAnsiAndControl(text) {
