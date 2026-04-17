@@ -1593,6 +1593,18 @@ function appendKanbanTimelineEvent(taskId, runId, event) {
   queuePersistKanbanTask(task.id);
 }
 
+function createKanbanTimelineEvent(event = {}) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: event.kind || 'assistant',
+    phase: event.phase || 'completed',
+    title: stripAnsiAndControl(event.title || '').trim() || 'Update',
+    text: stripAnsiAndControl(event.text || '').trim(),
+    exitCode: Number.isInteger(event.exitCode) ? event.exitCode : null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function appendKanbanTaskAgentTimelineEvent(agentId, event) {
   const taskInfo = taskAgentIndex.get(agentId);
   if (!taskInfo) return;
@@ -1620,7 +1632,7 @@ async function runKanbanTask(taskId, replyMessage = '') {
   const runtimeGraph = createRuntimeGraphForTask(task);
   const entryAgent = runtimeGraph.agents?.find((agent) => agent.id === runtimeGraph.entryAgentId) || null;
   const entryTerminalType = entryAgent?.data?.terminalType || entryAgent?.data?.cliType || 'claude-code';
-  const useTimelineRender = entryTerminalType === 'codex' || entryTerminalType === 'coding-agent';
+  const useTimelineRender = entryTerminalType !== 'shell' && entryTerminalType !== 'empty';
   unregisterRuntimeTaskGraph(taskId);
   registerRuntimeTaskGraph(taskId, runtimeGraph);
 
@@ -1651,7 +1663,12 @@ async function runKanbanTask(taskId, replyMessage = '') {
       reply: replyMessage,
       finalResponse: '',
       transcript: useTimelineRender ? '' : buildTaskTranscriptIntro(currentTask, replyMessage),
-      timelineEvents: [],
+      timelineEvents: useTimelineRender ? [createKanbanTimelineEvent({
+        kind: 'command',
+        phase: 'running',
+        title: 'Task Started',
+        text: replyMessage || currentTask.prompt,
+      })] : [],
       segments: [],
     });
     return currentTask;
@@ -1702,6 +1719,14 @@ async function runKanbanTask(taskId, replyMessage = '') {
           run.transcript = `${run.transcript || ''}${capturedTranscript}`;
         }
         run.timelineEvents = run.timelineEvents || [];
+        if (useTimelineRender && response) {
+          run.timelineEvents.push(createKanbanTimelineEvent({
+            kind: 'assistant',
+            phase: 'completed',
+            title: 'Reply',
+            text: response,
+          }));
+        }
         const transcript = run.transcript || '';
         const transcriptBody = transcript.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '').trim();
         if ((!transcriptBody || transcriptBody === `> Task prompt\n${run.prompt}`) && response) {
@@ -1727,15 +1752,13 @@ async function runKanbanTask(taskId, replyMessage = '') {
         run.finalResponse = '';
         run.timelineEvents = run.timelineEvents || [];
         if (useTimelineRender) {
-          run.timelineEvents.push({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          run.timelineEvents.push(createKanbanTimelineEvent({
             kind: 'error',
             phase: 'completed',
             title: 'Error',
             text: err.message || String(err),
             exitCode: null,
-            createdAt: new Date().toISOString(),
-          });
+          }));
         }
         run.transcript = `${run.transcript || ''}\u001b[31m[Task failed] ${err.message || String(err)}\u001b[0m\r\n`;
       }

@@ -378,10 +378,12 @@ function KanbanWorkspace({
                         />
                       </div>
                     )}
-                    <div className="kanban-run-section">
-                      <div className="kanban-run-section-label">Prompt</div>
-                      <pre>{run.displayPrompt || run.reply || activeTask.prompt}</pre>
-                    </div>
+                    {!run.reply && (
+                      <div className="kanban-run-section">
+                        <div className="kanban-run-section-label">Prompt</div>
+                        <pre>{run.displayPrompt || activeTask.prompt}</pre>
+                      </div>
+                    )}
                     {run.reply && (
                       <div className="kanban-run-section">
                         <div className="kanban-run-section-label">Reviewer Feedback</div>
