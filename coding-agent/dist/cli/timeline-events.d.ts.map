@@ -1,0 +1,1 @@
+{"version":3,"file":"timeline-events.d.ts","sourceRoot":"","sources":["../../src/cli/timeline-events.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,gBAAgB;IAC/B,IAAI,EAAE,WAAW,GAAG,SAAS,GAAG,OAAO,CAAC;IACxC,KAAK,CAAC,EAAE,SAAS,GAAG,WAAW,CAAC;IAChC,KAAK,EAAE,MAAM,CAAC;IACd,IAAI,CAAC,EAAE,MAAM,CAAC;CACf;AAoBD,wBAAgB,oBAAoB,CAAC,KAAK,EAAE,gBAAgB,GAAG,IAAI,CAWlE"}

@@ -3,6 +3,7 @@ import { agentRegistry } from './agent-registry.js';
 import { messageBus } from './message-bus.js';
 import type { BaseAgent } from '../agent/base-agent.js';
 import type { AgentConfig } from './agent-registry.js';
+import { emitCliTimelineEvent } from '../cli/timeline-events.js';
 
 export interface OrchestratorConfig {
   workingDirectory: string;
@@ -72,6 +73,12 @@ export class Orchestrator {
       return result;
     } catch (error) {
       await messageBus.publish('agent:error', { agentId, error });
+      emitCliTimelineEvent({
+        kind: 'error',
+        phase: 'completed',
+        title: `Agent Error: ${agentId}`,
+        text: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }

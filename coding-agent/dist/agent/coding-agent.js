@@ -3,6 +3,7 @@ import { BaseAgent } from './base-agent.js';
 import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
 import { selectProvider, executeWithFallback, formatToolsForProvider } from './provider-utils.js';
+import { emitCliTimelineEvent } from '../cli/timeline-events.js';
 import chalk from 'chalk';
 import ora from 'ora';
 export class CodingAgent extends BaseAgent {
@@ -21,6 +22,12 @@ export class CodingAgent extends BaseAgent {
         await messageBus.publish('agent:message', { message }, {
             sessionId: session.id,
             agentId: this.config.id
+        });
+        emitCliTimelineEvent({
+            kind: 'command',
+            phase: 'running',
+            title: 'Task Received',
+            text: message,
         });
         // Select provider with fallback support
         const { provider, resolvedModel } = selectProvider(this.config.model, this.config.provider);
@@ -51,6 +58,12 @@ export class CodingAgent extends BaseAgent {
                         // On first text, clear spinner and keep "Agent:" label
                         if (!firstTextReceived) {
                             firstTextReceived = true;
+                            emitCliTimelineEvent({
+                                kind: 'assistant',
+                                phase: 'running',
+                                title: 'Generating Reply',
+                                text: '',
+                            });
                             // Invoke callback to stop spinner FIRST
                             onFirstText?.();
                             // Small delay to ensure spinner is fully stopped
@@ -101,6 +114,12 @@ export class CodingAgent extends BaseAgent {
             if (toolCalls.length > 0) {
                 const loopInfo = chalk.dim(`[Loop ${loopCount}/${maxLoops}]`);
                 console.log(`\n${loopInfo} ${chalk.cyan(`${toolCalls.length} tool call(s) to execute`)}`);
+                emitCliTimelineEvent({
+                    kind: 'command',
+                    phase: 'running',
+                    title: 'Planning Tool Work',
+                    text: `${toolCalls.length} tool call(s) queued`,
+                });
                 continueLoop = true;
                 // Add assistant message with tool calls
                 sessionManager.addMessage(session.id, {
@@ -183,6 +202,12 @@ export class CodingAgent extends BaseAgent {
         await messageBus.publish('agent:response', { response: fullResponse }, {
             sessionId: session.id,
             agentId: this.config.id
+        });
+        emitCliTimelineEvent({
+            kind: 'assistant',
+            phase: 'completed',
+            title: 'Reply',
+            text: fullResponse,
         });
         return fullResponse;
     }

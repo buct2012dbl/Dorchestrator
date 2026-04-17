@@ -3,6 +3,7 @@ import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
 import { toolRegistry } from '../tools/tool-registry.js';
 import { sharedContext } from '../context/shared-store.js';
+import { emitCliTimelineEvent } from '../cli/timeline-events.js';
 
 export abstract class BaseAgent {
   constructor(public config: AgentConfig) {}
@@ -11,6 +12,13 @@ export abstract class BaseAgent {
 
   protected async executeToolCall(toolId: string, args: any): Promise<any> {
     const session = sessionManager.current();
+
+    emitCliTimelineEvent({
+      kind: 'command',
+      phase: 'running',
+      title: `Tool: ${toolId}`,
+      text: JSON.stringify(args, null, 2),
+    });
 
     await messageBus.publish('tool:execute', { toolId, args }, {
       sessionId: session.id,
@@ -26,6 +34,13 @@ export abstract class BaseAgent {
     await messageBus.publish('tool:result', { toolId, result }, {
       sessionId: session.id,
       agentId: this.config.id
+    });
+
+    emitCliTimelineEvent({
+      kind: result?.success ? 'command' : 'error',
+      phase: 'completed',
+      title: result?.success ? `Tool Complete: ${toolId}` : `Tool Failed: ${toolId}`,
+      text: JSON.stringify(result, null, 2),
     });
 
     return result;

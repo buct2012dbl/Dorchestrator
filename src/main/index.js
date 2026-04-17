@@ -13,6 +13,7 @@ const graphConfigManager = require('./graphConfigManager');
 const swarmManager = require('./swarmManager');
 const sharedAgentManager = require('./sharedAgentManager');
 const kanbanManager = require('./kanbanManager');
+const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const templateManager = require('./templateManager');
 const {
   syncAgentsAndRespawn,
@@ -495,10 +496,19 @@ function spawnTrackedPty({
 }
 
 function forwardAgentPtyData(agentId, data) {
-  appendKanbanSegment(agentId, data);
-  const oscMatch = data.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
+  const { cleanText, events } = extractCliTimelineEvents(data);
+
+  events.forEach((event) => {
+    appendKanbanTaskAgentTimelineEvent(agentId, event);
+  });
+
+  appendKanbanSegment(agentId, cleanText);
+  const oscMatch = cleanText.match(/\x1b\](?:9|99|777);([^\x07\x1b]{3,})(?:\x07|\x1b\\)/);
   if (oscMatch && /[a-zA-Z]/.test(oscMatch[1])) {
     const notification = oscMatch[1];
+    if (notification.startsWith('AO_KANBAN_EVENT:')) {
+      return;
+    }
     console.log(`[Notification] agent=${agentId} terminal notification received (${notification.length} chars)`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('agent-notification', { agentId, message: notification });
@@ -1494,6 +1504,20 @@ function appendKanbanTimelineEvent(taskId, runId, event) {
   queuePersistKanbanTask(task.id);
 }
 
+function appendKanbanTaskAgentTimelineEvent(agentId, event) {
+  const taskInfo = taskAgentIndex.get(agentId);
+  if (!taskInfo) return;
+
+  const active = activeKanbanTasks.get(taskInfo.taskId);
+  const runId = active?.task?.currentRunId;
+  if (!runId) return;
+
+  appendKanbanTimelineEvent(taskInfo.taskId, runId, {
+    ...event,
+    title: `${taskInfo.agentName}: ${event.title || 'Update'}`,
+  });
+}
+
 async function runKanbanTask(taskId, replyMessage = '') {
   const state = loadKanbanState();
   const task = state.tasks.find((item) => item.id === taskId);
@@ -1507,6 +1531,7 @@ async function runKanbanTask(taskId, replyMessage = '') {
   const runtimeGraph = createRuntimeGraphForTask(task);
   const entryAgent = runtimeGraph.agents?.find((agent) => agent.id === runtimeGraph.entryAgentId) || null;
   const entryTerminalType = entryAgent?.data?.terminalType || entryAgent?.data?.cliType || 'claude-code';
+  const useTimelineRender = entryTerminalType === 'codex' || entryTerminalType === 'coding-agent';
   unregisterRuntimeTaskGraph(taskId);
   registerRuntimeTaskGraph(taskId, runtimeGraph);
 
@@ -1533,10 +1558,10 @@ async function runKanbanTask(taskId, replyMessage = '') {
       status: 'running',
       prompt: nextPrompt,
       displayPrompt: replyMessage || currentTask.prompt,
-      renderMode: entryTerminalType === 'codex' ? 'timeline' : 'terminal',
+      renderMode: useTimelineRender ? 'timeline' : 'terminal',
       reply: replyMessage,
       finalResponse: '',
-      transcript: entryTerminalType === 'codex' ? '' : buildTaskTranscriptIntro(currentTask, replyMessage),
+      transcript: useTimelineRender ? '' : buildTaskTranscriptIntro(currentTask, replyMessage),
       timelineEvents: [],
       segments: [],
     });
@@ -1610,7 +1635,7 @@ async function runKanbanTask(taskId, replyMessage = '') {
         run.status = 'error';
         run.finalResponse = '';
         run.timelineEvents = run.timelineEvents || [];
-        if (entryTerminalType === 'codex') {
+        if (useTimelineRender) {
           run.timelineEvents.push({
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             kind: 'error',

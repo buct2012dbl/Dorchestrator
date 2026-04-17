@@ -1,6 +1,7 @@
 import { sessionManager } from './session.js';
 import { agentRegistry } from './agent-registry.js';
 import { messageBus } from './message-bus.js';
+import { emitCliTimelineEvent } from '../cli/timeline-events.js';
 export class Orchestrator {
     initialized = false;
     activeSessions = new Map(); // agentId -> sessionId
@@ -52,6 +53,12 @@ export class Orchestrator {
         }
         catch (error) {
             await messageBus.publish('agent:error', { agentId, error });
+            emitCliTimelineEvent({
+                kind: 'error',
+                phase: 'completed',
+                title: `Agent Error: ${agentId}`,
+                text: error instanceof Error ? error.message : String(error),
+            });
             throw error;
         }
     }
