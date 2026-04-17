@@ -676,12 +676,6 @@ function startBridgeServer() {
 // ---- Get agent response by writing to its active PTY stdin and capturing output ----
 function getAgentResponse(agentId, message, options = {}) {
   return new Promise((resolve) => {
-    const ptyProcess = ptys.get(agentId);
-    if (!ptyProcess) {
-      resolve({ response: '(agent not running)', transcript: '' });
-      return;
-    }
-
     // Find the target agent to check its terminal type
     const targetAgent = findAgentById(agentId);
     const terminalType = targetAgent?.data?.terminalType || 'claude-code';
@@ -772,6 +766,12 @@ function getAgentResponse(agentId, message, options = {}) {
         finishCodingAgentExec('(timeout)');
       }, 180000);
 
+      return;
+    }
+
+    const ptyProcess = ptys.get(agentId);
+    if (!ptyProcess) {
+      resolve({ response: '(agent not running)', transcript: '' });
       return;
     }
 
