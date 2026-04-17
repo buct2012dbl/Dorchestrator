@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   closeTerminal,
   computePanelRects,
+  getRuntimeLayoutSignature,
   rebalanceTerminals,
   serializeRuntimeLayout,
+  shouldReuseLocalRuntimeTerminals,
 } from '../../src/renderer/components/mux/muxLayout.mjs';
 
 test('rebalanceTerminals preserves row-scoped fills instead of collapsing all rows together', () => {
@@ -65,6 +67,33 @@ test('serializeRuntimeLayout produces stable saved terminal records', () => {
       },
     ],
   });
+});
+
+test('shouldReuseLocalRuntimeTerminals keeps local mux sessions alive when persisted runtime layout echoes back', () => {
+  const splitTerminals = [
+    {
+      id: 'left',
+      bounds: { x: 0, y: 0, width: 0.5, height: 1 },
+      config: { name: 'Editor', cliType: 'shell' },
+    },
+    {
+      id: 'right',
+      bounds: { x: 0.5, y: 0, width: 0.5, height: 1 },
+      config: { name: 'Editor 2', cliType: 'shell' },
+    },
+  ];
+
+  const runtimeLayout = serializeRuntimeLayout(splitTerminals);
+  const localRuntimeLayoutSignature = getRuntimeLayoutSignature(runtimeLayout);
+
+  assert.equal(
+    shouldReuseLocalRuntimeTerminals(
+      splitTerminals,
+      { id: 'tpl-1', runtimeLayout },
+      localRuntimeLayoutSignature,
+    ),
+    true,
+  );
 });
 
 test('computePanelRects keeps panel gaps consistent inside the container', () => {

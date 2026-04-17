@@ -7,9 +7,11 @@ import {
   computePanelRects,
   createRuntimeTerminals,
   getNextSplitName,
+  getRuntimeLayoutSignature,
   getTemplateSpawnSignature,
-  serializeRuntimeLayout,
   clearMergeMetadata,
+  serializeRuntimeLayout,
+  shouldReuseLocalRuntimeTerminals,
 } from './muxLayout.mjs';
 
 function MuxTerminalView({
@@ -27,21 +29,34 @@ function MuxTerminalView({
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const pendingRuntimeLayoutRef = useRef(null);
+  const localRuntimeLayoutSignatureRef = useRef(null);
+  const terminalsRef = useRef([]);
   const spawnSignature = getTemplateSpawnSignature(template);
+
+  useEffect(() => {
+    terminalsRef.current = terminals;
+  }, [terminals]);
 
   useEffect(() => {
     if (!template) {
       setTerminals([]);
       setFocusedTerminalId(null);
       pendingRuntimeLayoutRef.current = null;
+      localRuntimeLayoutSignatureRef.current = null;
+      return;
+    }
+
+    if (shouldReuseLocalRuntimeTerminals(terminalsRef.current, template, localRuntimeLayoutSignatureRef.current)) {
+      pendingRuntimeLayoutRef.current = null;
       return;
     }
 
     const newTerminals = createRuntimeTerminals(template);
     pendingRuntimeLayoutRef.current = null;
+    localRuntimeLayoutSignatureRef.current = getRuntimeLayoutSignature(serializeRuntimeLayout(newTerminals));
     setTerminals(newTerminals);
     setFocusedTerminalId(newTerminals[0]?.id || null);
-  }, [spawnSignature, template, resetVersion]);
+  }, [resetVersion, spawnSignature, template]);
 
   useEffect(() => {
     if (!template?.id || !pendingRuntimeLayoutRef.current) return;
@@ -116,6 +131,7 @@ function MuxTerminalView({
         currentFocusedId === terminalId ? nextState.focusedTerminalId : currentFocusedId
       ));
       pendingRuntimeLayoutRef.current = serializeRuntimeLayout(nextState.terminals);
+      localRuntimeLayoutSignatureRef.current = getRuntimeLayoutSignature(pendingRuntimeLayoutRef.current);
       return nextState.terminals;
     });
   };
@@ -176,12 +192,14 @@ function MuxTerminalView({
         return [term];
       });
       pendingRuntimeLayoutRef.current = serializeRuntimeLayout(nextTerminals);
+      localRuntimeLayoutSignatureRef.current = getRuntimeLayoutSignature(pendingRuntimeLayoutRef.current);
       return nextTerminals;
     });
   };
 
   const handleConfirmReset = () => {
     setShowResetConfirm(false);
+    localRuntimeLayoutSignatureRef.current = null;
     onResetRuntimeLayout?.(template.id);
     setResetVersion((prev) => prev + 1);
   };

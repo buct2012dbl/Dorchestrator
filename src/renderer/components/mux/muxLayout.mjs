@@ -75,14 +75,22 @@ export function getTemplateSpawnSignature(template) {
       name: term.config?.name || '',
       systemPrompt: term.config?.systemPrompt || '',
     })),
-    runtimeLayout: (template.runtimeLayout?.terminals || []).map((term) => ({
-      bounds: term.bounds,
-      cliType: term.config?.cliType || 'empty',
-      model: term.config?.model || '',
-      name: term.config?.name || '',
-      systemPrompt: term.config?.systemPrompt || '',
-    })),
+    runtimeLayout: getRuntimeLayoutEntries(template.runtimeLayout),
   });
+}
+
+function getRuntimeLayoutEntries(runtimeLayout) {
+  return (runtimeLayout?.terminals || []).map((term) => ({
+    bounds: term.bounds,
+    cliType: term.config?.cliType || 'empty',
+    model: term.config?.model || '',
+    name: term.config?.name || '',
+    systemPrompt: term.config?.systemPrompt || '',
+  }));
+}
+
+export function getRuntimeLayoutSignature(runtimeLayout) {
+  return JSON.stringify(getRuntimeLayoutEntries(runtimeLayout));
 }
 
 export function serializeRuntimeLayout(terminals) {
@@ -98,6 +106,14 @@ export function serializeRuntimeLayout(terminals) {
       config: { ...term.config },
     })),
   };
+}
+
+export function shouldReuseLocalRuntimeTerminals(terminals, template, localRuntimeLayoutSignature) {
+  if (!template || terminals.length === 0 || !localRuntimeLayoutSignature) {
+    return false;
+  }
+
+  return getRuntimeLayoutSignature(template.runtimeLayout) === localRuntimeLayoutSignature;
 }
 
 export function clearMergeMetadata(term) {
