@@ -18,6 +18,7 @@ import { registerMcpToolsFromEnvironment } from '../tools/mcp-tools.js';
 import { startRepl } from './repl.js';
 import chalk from 'chalk';
 import boxen from 'boxen';
+import { writeFile } from 'node:fs/promises';
 
 const program = new Command();
 
@@ -68,6 +69,86 @@ export function registerAgentFactories(): void {
   agentRegistry.registerFactory('explorer', (config) => new CodingAgent(config));
   agentRegistry.registerFactory('planner', (config) => new CodingAgent(config));
   agentRegistry.registerFactory('reviewer', (config) => new CodingAgent(config));
+}
+
+async function createConfiguredOrchestrator(options: {
+  config?: string;
+  agent: string;
+  model?: string;
+  systemPrompt?: string;
+}) {
+  await configLoader.load(options.config);
+  const config = configLoader.get();
+
+  providerRegistry.loadFromConfig(config);
+
+  toolRegistry.clear();
+  toolRegistry.register(readTool);
+  toolRegistry.register(writeTool);
+  toolRegistry.register(editTool);
+  toolRegistry.register(globTool);
+  toolRegistry.register(grepTool);
+  toolRegistry.register(bashTool);
+  toolRegistry.register(searchCodeTool);
+  toolRegistry.register(getDependenciesTool);
+  toolRegistry.register(findSymbolTool);
+  toolRegistry.register(indexCodebaseTool);
+  toolRegistry.register(sendMessageTool);
+  toolRegistry.register(spawnAgentTool);
+  toolRegistry.register(broadcastTool);
+  toolRegistry.register(setSharedContextTool);
+  toolRegistry.register(getSharedContextTool);
+  toolRegistry.register(listSharedContextTool);
+  toolRegistry.register(deleteSharedContextTool);
+
+  let mcpToolIds: string[] = [];
+  try {
+    mcpToolIds = await registerMcpToolsFromEnvironment((tool) => {
+      toolRegistry.register(tool);
+    });
+  } catch (error) {
+    console.warn(chalk.yellow(`Failed to initialize MCP tools: ${error instanceof Error ? error.message : String(error)}`));
+  }
+  addToolsToAgents(config.agents, mcpToolIds);
+
+  registerAgentFactories();
+
+  const orchestrator = new Orchestrator({
+    workingDirectory: process.cwd(),
+    maxConcurrentAgents: 5,
+    defaultModel: config.defaults.model,
+    defaultTemperature: 0.7
+  });
+
+  await orchestrator.initialize();
+
+  for (const agentConfig of config.agents) {
+    orchestrator.createAgent(agentConfig);
+  }
+
+  const existingAgent = orchestrator.getAgent(options.agent);
+
+  if (existingAgent) {
+    if (options.model) existingAgent.config.model = options.model;
+    if (options.systemPrompt) {
+      existingAgent.config.systemPrompt = existingAgent.config.systemPrompt
+        ? `${existingAgent.config.systemPrompt}\n\n${options.systemPrompt}`
+        : options.systemPrompt;
+    }
+  } else {
+    const dynamicAgent = buildDynamicAgentConfig(
+      options.agent,
+      options.model || config.defaults.model,
+      options.systemPrompt || ''
+    );
+    addToolsToAgents([dynamicAgent], mcpToolIds);
+    orchestrator.createAgent(dynamicAgent);
+  }
+
+  return {
+    config,
+    orchestrator,
+  };
 }
 
 function buildDynamicAgentConfig(
@@ -124,77 +205,12 @@ program
   .option('-s, --system-prompt <text>', 'System prompt to append')
   .action(async (options) => {
     try {
-      // Load config
-      await configLoader.load(options.config);
-      const config = configLoader.get();
-
-      // Register LLM providers from config
-      providerRegistry.loadFromConfig(config);
-
-      // Register tools
-      toolRegistry.register(readTool);
-      toolRegistry.register(writeTool);
-      toolRegistry.register(editTool);
-      toolRegistry.register(globTool);
-      toolRegistry.register(grepTool);
-      toolRegistry.register(bashTool);
-      toolRegistry.register(searchCodeTool);
-      toolRegistry.register(getDependenciesTool);
-      toolRegistry.register(findSymbolTool);
-      toolRegistry.register(indexCodebaseTool);
-      toolRegistry.register(sendMessageTool);
-      toolRegistry.register(spawnAgentTool);
-      toolRegistry.register(broadcastTool);
-      toolRegistry.register(setSharedContextTool);
-      toolRegistry.register(getSharedContextTool);
-      toolRegistry.register(listSharedContextTool);
-      toolRegistry.register(deleteSharedContextTool);
-      let mcpToolIds: string[] = [];
-      try {
-        mcpToolIds = await registerMcpToolsFromEnvironment((tool) => {
-          toolRegistry.register(tool);
-        });
-      } catch (error) {
-        console.warn(chalk.yellow(`Failed to initialize MCP tools: ${error instanceof Error ? error.message : String(error)}`));
-      }
-      addToolsToAgents(config.agents, mcpToolIds);
-
-      // Register agent factories
-      registerAgentFactories();
-
-      // Initialize orchestrator
-      const orchestrator = new Orchestrator({
-        workingDirectory: process.cwd(),
-        maxConcurrentAgents: 5,
-        defaultModel: config.defaults.model,
-        defaultTemperature: 0.7
+      const { config, orchestrator } = await createConfiguredOrchestrator({
+        config: options.config,
+        agent: options.agent,
+        model: options.model,
+        systemPrompt: options.systemPrompt,
       });
-
-      await orchestrator.initialize();
-
-      // Create agents from config
-      for (const agentConfig of config.agents) {
-        orchestrator.createAgent(agentConfig);
-      }
-
-      const existingAgent = orchestrator.getAgent(options.agent);
-
-      if (existingAgent) {
-        if (options.model) existingAgent.config.model = options.model;
-        if (options.systemPrompt) {
-          existingAgent.config.systemPrompt = existingAgent.config.systemPrompt
-            ? `${existingAgent.config.systemPrompt}\n\n${options.systemPrompt}`
-            : options.systemPrompt;
-        }
-      } else {
-        const dynamicAgent = buildDynamicAgentConfig(
-          options.agent,
-          options.model || config.defaults.model,
-          options.systemPrompt || ''
-        );
-        addToolsToAgents([dynamicAgent], mcpToolIds);
-        orchestrator.createAgent(dynamicAgent);
-      }
 
       const activeAgent = orchestrator.getAgent(options.agent);
       renderLaunchScreen(
@@ -209,6 +225,49 @@ program
     } catch (error) {
       console.error(chalk.red('Error:'), error);
       process.exit(1);
+    }
+  });
+
+program
+  .command('exec')
+  .description('Execute a single non-interactive task and exit')
+  .argument('<prompt...>', 'Task prompt to execute')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('-a, --agent <id>', 'Agent ID to use', 'main-coder')
+  .option('-m, --model <name>', 'Model to use (overrides config)')
+  .option('-s, --system-prompt <text>', 'System prompt to append')
+  .option('-o, --output-last-message <path>', 'Write the final response to a file')
+  .action(async (promptParts, options) => {
+    const prompt = Array.isArray(promptParts) ? promptParts.join(' ') : String(promptParts || '');
+    if (!prompt.trim()) {
+      console.error(chalk.red('Error: prompt is required'));
+      process.exit(1);
+    }
+
+    let orchestrator: Orchestrator | null = null;
+    try {
+      const configured = await createConfiguredOrchestrator({
+        config: options.config,
+        agent: options.agent,
+        model: options.model,
+        systemPrompt: options.systemPrompt,
+      });
+      orchestrator = configured.orchestrator;
+
+      const response = await orchestrator.executeTask(options.agent, prompt);
+
+      if (options.outputLastMessage) {
+        await writeFile(options.outputLastMessage, response, 'utf8');
+      }
+
+      if (response) {
+        process.stdout.write(`\n${response}\n`);
+      }
+    } catch (error) {
+      console.error(chalk.red('Error:'), error);
+      process.exitCode = 1;
+    } finally {
+      orchestrator?.shutdown();
     }
   });
 

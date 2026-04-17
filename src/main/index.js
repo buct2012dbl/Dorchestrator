@@ -686,6 +686,95 @@ function getAgentResponse(agentId, message, options = {}) {
     const targetAgent = findAgentById(agentId);
     const terminalType = targetAgent?.data?.terminalType || 'claude-code';
 
+    if (terminalType === 'coding-agent') {
+      console.log(`[Bridge] Built-in coding-agent detected for ${agentId}; spawning exec command (${message.length} chars)`);
+
+      const codingAgentPath = getCodingAgentCliPath();
+      const outputPath = path.join(os.tmpdir(), `ao-coding-agent-last-message-${agentId}-${Date.now()}.txt`);
+      const args = [codingAgentPath, 'exec', '--agent', agentId, '--output-last-message', outputPath];
+      const configPath = path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json');
+      if (fs.existsSync(configPath)) {
+        args.push('--config', configPath);
+      }
+      if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
+      if (targetAgent?.data?.systemPrompt) args.push('--system-prompt', targetAgent.data.systemPrompt);
+      args.push(message);
+
+      const execEnv = buildPtyEnvironment();
+      prepareAgentMcpSession(agentId, terminalType, NODE_PATH, args, execEnv, '[Bridge]');
+
+      const execProcess = spawn(NODE_PATH, args, {
+        cwd: workspace || process.env.HOME || '/',
+        env: execEnv,
+      });
+
+      let output = '';
+      let renderedTranscript = '';
+      let done = false;
+      let safetyTimer = null;
+      let processError = null;
+      let exitCode = null;
+
+      const finishCodingAgentExec = (fallbackResponse = '(no response)') => {
+        if (done) return;
+        done = true;
+        if (safetyTimer) clearTimeout(safetyTimer);
+
+        let finalResponse = fallbackResponse;
+        try {
+          if (fs.existsSync(outputPath)) {
+            const fileResponse = fs.readFileSync(outputPath, 'utf8').trim();
+            if (fileResponse) {
+              finalResponse = fileResponse;
+            }
+            fs.unlinkSync(outputPath);
+          }
+        } catch {}
+
+        resolve({
+          response: finalResponse,
+          transcript: renderedTranscript.trimEnd(),
+          error: processError || (finalResponse === '(no response)' ? `Task failed before producing a final response${exitCode !== null ? ` (exit ${exitCode})` : ''}.` : null),
+        });
+      };
+
+      execProcess.stdout.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+
+        const { cleanText, events } = extractCliTimelineEvents(text);
+        events.forEach((event) => appendKanbanTaskAgentTimelineEvent(agentId, event));
+
+        const normalized = cleanText
+          .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+          .replace(/\x1b[()][0-9A-Za-z]/g, '');
+
+        if (normalized.trim()) {
+          renderedTranscript += normalized;
+        }
+      });
+
+      execProcess.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        if (text.trim()) {
+          processError = processError ? `${processError}\n${text.trim()}` : text.trim();
+          renderedTranscript += text;
+        }
+      });
+
+      execProcess.on('close', (code) => {
+        exitCode = code;
+        finishCodingAgentExec();
+      });
+
+      safetyTimer = setTimeout(() => {
+        finishCodingAgentExec('(timeout)');
+      }, 180000);
+
+      return;
+    }
+
     // For Codex agents, use exec command to process the message
     if (terminalType === 'codex') {
       console.log(`[Bridge] Codex agent detected for ${agentId}; spawning exec command (${message.length} chars)`);
@@ -1570,8 +1659,10 @@ async function runKanbanTask(taskId, replyMessage = '') {
   setActiveKanbanTask(activeTask);
 
   try {
-    await ensureAgentPtyRunning(runtimeGraph.entryAgentId);
-    await waitForAgentPtyReady(runtimeGraph.entryAgentId);
+    if (entryTerminalType !== 'coding-agent') {
+      await ensureAgentPtyRunning(runtimeGraph.entryAgentId);
+      await waitForAgentPtyReady(runtimeGraph.entryAgentId);
+    }
     const execution = await getAgentResponse(runtimeGraph.entryAgentId, nextPrompt, {
       onCodexEvent: entryTerminalType === 'codex'
         ? (event) => appendKanbanTimelineEvent(taskId, runId, event)
