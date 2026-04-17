@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import glob from 'fast-glob';
 import { execFile } from 'node:child_process';
@@ -113,6 +113,47 @@ export const editTool = {
             return {
                 success: true,
                 data: { path: args.file_path, replaced: true }
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+};
+export const deleteTool = {
+    id: 'delete',
+    description: 'Delete a file or directory within the workspace',
+    parameters: {
+        type: 'object',
+        properties: {
+            file_path: {
+                type: 'string',
+                description: 'Path to the file or directory to delete'
+            },
+            recursive: {
+                type: 'boolean',
+                description: 'Whether to allow deleting non-empty directories'
+            }
+        },
+        required: ['file_path']
+    },
+    async execute(args, context) {
+        try {
+            const filePath = resolveWorkspacePath(context.workingDirectory, args.file_path);
+            await rm(filePath, {
+                force: false,
+                recursive: Boolean(args.recursive),
+            });
+            return {
+                success: true,
+                data: {
+                    path: args.file_path,
+                    deleted: true,
+                    recursive: Boolean(args.recursive),
+                }
             };
         }
         catch (error) {

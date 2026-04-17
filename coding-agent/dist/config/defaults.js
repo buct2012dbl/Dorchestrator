@@ -10,7 +10,7 @@ export const defaultConfig = {
             temperature: 0.7,
             maxTokens: 8000,
             contextWindow: 180000,
-            tools: ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'send_message', 'spawn_agent'],
+            tools: ['read', 'write', 'edit', 'delete', 'bash', 'grep', 'glob', 'send_message', 'spawn_agent'],
             permissions: {
                 fileWrite: true,
                 shellExec: true,

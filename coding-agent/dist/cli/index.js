@@ -8,7 +8,7 @@ import { agentRegistry } from '../core/agent-registry.js';
 import { CodingAgent } from '../agent/coding-agent.js';
 import { providerRegistry } from '../llm/provider.js';
 import { toolRegistry } from '../tools/tool-registry.js';
-import { readTool, writeTool, editTool, globTool, grepTool } from '../tools/file-tools.js';
+import { readTool, writeTool, editTool, deleteTool, globTool, grepTool } from '../tools/file-tools.js';
 import { bashTool } from '../tools/bash-tool.js';
 import { searchCodeTool, getDependenciesTool, findSymbolTool, indexCodebaseTool } from '../tools/context-tools.js';
 import { sendMessageTool, spawnAgentTool, broadcastTool } from '../tools/agent-tools.js';
@@ -66,6 +66,7 @@ async function createConfiguredOrchestrator(options) {
     toolRegistry.register(readTool);
     toolRegistry.register(writeTool);
     toolRegistry.register(editTool);
+    toolRegistry.register(deleteTool);
     toolRegistry.register(globTool);
     toolRegistry.register(grepTool);
     toolRegistry.register(bashTool);
@@ -132,7 +133,7 @@ function buildDynamicAgentConfig(agentId, model, systemPrompt) {
         temperature: 0.7,
         maxTokens: 4096,
         contextWindow: 200000,
-        tools: ['read', 'write', 'edit', 'glob', 'grep', 'searchCode', 'getDependencies', 'findSymbol'],
+        tools: ['read', 'write', 'edit', 'delete', 'glob', 'grep', 'searchCode', 'getDependencies', 'findSymbol'],
         permissions: {
             fileWrite: true,
             shellExec: false,
