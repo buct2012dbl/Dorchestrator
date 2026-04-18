@@ -61,7 +61,17 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  justify-content: space-between;
   -webkit-app-region: no-drag;
+}
+
+.header-primary-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .mode-toggle {
@@ -71,6 +81,8 @@
   border: 1px solid var(--border);
   border-radius: 0;
   padding: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .mode-btn {

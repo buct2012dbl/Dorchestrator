@@ -808,6 +808,37 @@ function App() {
       <div className="header">
         <h1>Dorchestrator</h1>
         <div className="header-controls">
+          <div className="header-primary-controls">
+            <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
+              <span className="workspace-icon">▸</span>
+              <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
+            </button>
+            {mode === 'swarm' && activeSwarm && (
+              <span className="header-info-text">Active {activeSwarm.name}</span>
+            )}
+            {mode === 'swarm' && <span className="header-info-text">{agents.length} agents</span>}
+            {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
+            {mode === 'kanban' && <span className="header-info-text">{kanbanState.tasks.length} tasks</span>}
+            {mode === 'kanban' && <span className="header-info-text">{sharedAgents.length} shared agents</span>}
+            {mode === 'swarm' && (
+              <button
+                className="view-toggle-btn"
+                onClick={() => setShowGraph(!showGraph)}
+                title={showGraph ? 'Hide Graph' : 'Show Graph'}
+              >
+                <ViewToggleLabel icon={<GraphIcon />} label="GRAPH" expanded={showGraph} />
+              </button>
+            )}
+            {mode === 'swarm' && (
+              <button
+                className="view-toggle-btn"
+                onClick={() => setShowTerminal(!showTerminal)}
+                title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
+              >
+                <ViewToggleLabel icon={<TerminalIcon />} label="TERM" expanded={showTerminal} />
+              </button>
+            )}
+          </div>
           <div className="mode-toggle">
             {MODE_OPTIONS.map((option) => (
               <button
@@ -819,35 +850,6 @@ function App() {
               </button>
             ))}
           </div>
-          <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
-            <span className="workspace-icon">▸</span>
-            <span className="workspace-path">{formatWorkspacePath(workspace)}</span>
-          </button>
-          {mode === 'swarm' && activeSwarm && (
-            <span className="header-info-text">Active {activeSwarm.name}</span>
-          )}
-          {mode === 'swarm' && <span className="header-info-text">{agents.length} agents</span>}
-          {mode === 'swarm' && <span className="header-info-text">{edges.length} connections</span>}
-          {mode === 'kanban' && <span className="header-info-text">{kanbanState.tasks.length} tasks</span>}
-          {mode === 'kanban' && <span className="header-info-text">{sharedAgents.length} shared agents</span>}
-          {mode === 'swarm' && (
-            <button
-              className="view-toggle-btn"
-              onClick={() => setShowGraph(!showGraph)}
-              title={showGraph ? 'Hide Graph' : 'Show Graph'}
-            >
-              <ViewToggleLabel icon={<GraphIcon />} label="GRAPH" expanded={showGraph} />
-            </button>
-          )}
-          {mode === 'swarm' && (
-            <button
-              className="view-toggle-btn"
-              onClick={() => setShowTerminal(!showTerminal)}
-              title={showTerminal ? 'Hide Terminal' : 'Show Terminal'}
-            >
-              <ViewToggleLabel icon={<TerminalIcon />} label="TERM" expanded={showTerminal} />
-            </button>
-          )}
         </div>
       </div>
 
