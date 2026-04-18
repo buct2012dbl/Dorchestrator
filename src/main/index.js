@@ -14,6 +14,7 @@ const swarmManager = require('./swarmManager');
 const sharedAgentManager = require('./sharedAgentManager');
 const kanbanManager = require('./kanbanManager');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
+const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
 const templateManager = require('./templateManager');
 const {
   syncAgentsAndRespawn,
@@ -626,8 +627,18 @@ function startBridgeServer() {
       // Check target agent's terminal type
       const targetAgent = findAgentById(normalizedTargetAgentId);
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
+      const targetName = targetAgent?.data?.name || normalizedTargetAgentId;
 
       try {
+        const bridgeEvents = buildBridgeTimelineEvents({
+          kind,
+          fromName,
+          targetName,
+          message,
+        });
+        appendKanbanTaskAgentTimelineEvent(fromAgentId, bridgeEvents.senderEvent);
+        appendKanbanTaskAgentTimelineEvent(normalizedTargetAgentId, bridgeEvents.targetEvent);
+
         // Auto-start the target PTY on demand so bridge tools work even if the panel
         // has not been opened yet in the renderer.
         const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
