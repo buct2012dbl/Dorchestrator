@@ -5,7 +5,7 @@
 ![React](https://img.shields.io/badge/react-18.2.0-61dafb)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A visual desktop application for orchestrating multiple AI agents — powered by **Claude Code** or **OpenAI Codex** — with real-time collaboration and inter-agent communication.
+A visual desktop application for orchestrating multiple AI agents — powered by **Claude Code**, **OpenAI Codex**, or the built-in coding agent — with real-time collaboration, Kanban task execution, and inter-agent communication.
 
 ![Agent Orchestrator](https://img.shields.io/badge/status-active-success)
 
@@ -13,10 +13,20 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 
 ## Features
 
-### Dual Mode Operation
+### Three Workspace Modes
+- **Kanban Mode** - Task board for assigning work to shared agents or full swarms with background execution and review loops
 - **Swarm Mode** - Visual graph-based multi-agent orchestration with inter-agent communication
 - **Mux Mode** - Template-based terminal multiplexer for managing multiple agent sessions
 - Toggle between modes with a single click in the header
+
+### Kanban Mode
+- Five task stages: **Backlog**, **Todo**, **In Progress**, **In Review**, and **Done**
+- Create tasks that target either a shared agent or an existing swarm
+- When targeting a swarm, choose the entry agent that receives the first prompt
+- Dragging a card into **In Progress** starts the run in the background
+- Task detail modal shows run history in accordions with execution timelines or live transcripts
+- Review loop supports replying to a run from **In Review** or marking it done
+- Shared agent library with template-based creation and the same configuration panel used in Swarm mode
 
 ### Visual Agent Graph (Swarm Mode)
 - Drag-and-drop interface powered by React Flow
@@ -67,6 +77,7 @@ A visual desktop application for orchestrating multiple AI agents — powered by
   - Built-in: Uses integrated coding agent
 - System prompts for role-specific instructions
 - Persistent settings across sessions
+- Shared Kanban agents also appear as options when creating graph agents in Swarm mode
 
 ### Workspace Management
 - Folder-based workspaces for agent file access
@@ -154,7 +165,13 @@ The packaged app will be in the `dist/` directory.
 - TCP bridge server for inter-agent messaging (Claude Code only)
 - MCP config generation per agent
 - Workspace and auth settings persistence
+- Kanban task runtime orchestration, background execution, persistence, and timeline event capture
 - IPC handlers for renderer communication
+
+#### Kanban State (`src/main/kanbanManager.js`)
+- Persists Kanban board state per workspace under `.dorchestrator`
+- Stores selected sidebar view, sidebar collapse state, and task cards
+- Keeps task updates in sync between background execution and the renderer
 
 #### MCP Bridge (`src/main/mcp-bridge.js`)
 - Stdio MCP server (newline-delimited JSON)
@@ -168,6 +185,8 @@ The packaged app will be in the `dist/` directory.
 - **TerminalGrid** - Multi-terminal layout manager
 - **TerminalPanel** - Individual xterm.js terminal + PTY integration
 - **AgentConfigPanel** - Agent settings sidebar (terminal type, model, etc.)
+- **KanbanWorkspace** - Board lanes, shared agents, task composer, task review modal
+- **KanbanExecutionTimeline** - Structured task execution timeline view for Kanban runs
 
 ### Inter-Agent Communication Flow
 
@@ -187,10 +206,34 @@ CEO Terminal (receives reply)
 
 ## Usage
 
+### Using Kanban Mode
+1. Switch to `Kanban` from the header
+2. In `Agents`, create shared agents from templates or edit them with the standard agent config panel
+3. In `Board`, create a task with a title, first prompt, and target
+4. Choose either:
+   - a shared `Agent`
+   - a `Swarm`, plus the swarm entry agent that should receive the first prompt
+5. Drag the card into `In Progress` to start execution
+6. Open the card to inspect the run accordion, execution timeline, transcript, and final reply
+7. In `In Review`, either send reviewer feedback to continue the task or mark it `Done`
+
+### Kanban Board Stages
+- **Backlog** stores ideas that are not ready to execute yet
+- **Todo** is the default landing stage for newly created tasks
+- **In Progress** starts a background run when a card enters the lane
+- **In Review** is where completed runs wait for approval or reviewer feedback
+- **Done** contains accepted completed tasks
+
+### Shared Agents
+- Kanban shared agents are workspace-level reusable agent definitions
+- They can be created from the same role templates as Swarm agents
+- They are edited with the same configuration sidebar used elsewhere in the app
+- They also appear in Swarm graph creation controls so the two workflows share agent definitions
+
 ### Creating Agents
 1. Click "Add Agent" in the graph view
 2. Select a template (CEO, Programmer, etc.) or create custom
-3. Configure name, role, **terminal type** (Claude Code or Codex), model, and system prompt
+3. Configure name, role, **terminal type** (Claude Code, Codex, or Built-in Agent), model, and system prompt
 4. Click "Save"
 
 ### Choosing Terminal Type
@@ -201,6 +244,7 @@ In the **Configure Agent** panel, select the **Terminal** field:
 |----------|-----|--------|-------------|
 | **Claude Code** | `claude` | Opus 4.6, Sonnet 4.6, Haiku 4.5 | Yes |
 | **Codex (OpenAI)** | `codex` | gpt-5.1, gpt-5.2, gpt-5.3, gpt-5.4 | Yes |
+| **Built-in Agent** | integrated `/coding-agent` | provider-backed internal models | No external CLI required |
 
 You can mix agent types in the same workspace — for example, use a Claude Code CEO to orchestrate other Claude agents while running a Codex agent for parallel tasks.
 
@@ -327,5 +371,4 @@ MIT
 - [OpenAI](https://openai.com) for Codex CLI
 - [React Flow](https://reactflow.dev) for graph visualization
 - [xterm.js](https://xtermjs.org) for terminal emulation
-
 
