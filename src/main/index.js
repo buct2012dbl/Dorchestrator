@@ -15,6 +15,7 @@ const sharedAgentManager = require('./sharedAgentManager');
 const kanbanManager = require('./kanbanManager');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
+const { shouldFailKanbanTaskExecution } = require('./kanbanTaskResponse');
 const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
 const {
   createKanbanTaskBarrier,
@@ -1846,7 +1847,7 @@ async function runKanbanTask(taskId, replyMessage = '') {
     });
     const response = execution?.response || '';
     const capturedTranscript = execution?.transcript || '';
-    if (execution?.error && !response) {
+    if (shouldFailKanbanTaskExecution({ response, error: execution?.error })) {
       throw new Error(execution.error);
     }
     if ((!response || response === '(no response)') && capturedTranscript && /\[error\]/i.test(capturedTranscript)) {
