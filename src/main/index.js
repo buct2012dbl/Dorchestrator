@@ -821,7 +821,9 @@ function getAgentResponse(agentId, message, options = {}) {
       let safetyTimer = null;
       let finalMessageFromEvents = '';
       let errorMessageFromEvents = '';
-      const onCodexEvent = typeof options.onCodexEvent === 'function' ? options.onCodexEvent : null;
+      const onCodexEvent = typeof options.onCodexEvent === 'function'
+        ? options.onCodexEvent
+        : (event) => appendKanbanTaskAgentTimelineEvent(agentId, event);
 
       const finishCodexExec = (fallbackResponse = '(no response)') => {
         if (done) return;
