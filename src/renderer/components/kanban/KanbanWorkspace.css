@@ -604,6 +604,12 @@
   box-shadow: var(--box-shadow-neon-sm);
 }
 
+.kanban-task-modal-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px 24px;
+}
+
 .kanban-modal {
   width: min(760px, calc(100vw - 40px));
   max-height: calc(100vh - 60px);
@@ -625,6 +631,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  max-height: calc(100vh - 48px - env(safe-area-inset-top));
+  margin: 0 auto;
 }
 
 .kanban-form {
@@ -875,6 +883,10 @@
   .kanban-task-modal {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
+  }
+
+  .kanban-task-modal-overlay {
+    padding: max(12px, env(safe-area-inset-top)) 12px 12px;
   }
 
   .kanban-task-modal-header {

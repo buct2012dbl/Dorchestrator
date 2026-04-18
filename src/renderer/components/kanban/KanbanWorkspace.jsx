@@ -342,7 +342,7 @@ function KanbanWorkspace({
       )}
 
       {activeTask && (
-        <div className="config-confirm-overlay" onClick={() => setActiveTaskId(null)}>
+        <div className="config-confirm-overlay kanban-task-modal-overlay" onClick={() => setActiveTaskId(null)}>
           <div className="kanban-modal kanban-task-modal" onClick={(e) => e.stopPropagation()}>
             <div className="kanban-task-modal-header">
               <div>
