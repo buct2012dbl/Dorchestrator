@@ -15,6 +15,7 @@ const sharedAgentManager = require('./sharedAgentManager');
 const kanbanManager = require('./kanbanManager');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
+const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
 const templateManager = require('./templateManager');
 const {
   syncAgentsAndRespawn,
@@ -1434,10 +1435,17 @@ function setActiveKanbanTask(task) {
   const existing = activeKanbanTasks.get(task.id);
   activeKanbanTasks.set(task.id, {
     ...existing,
+    lastActivityAt: existing?.lastActivityAt || Date.now(),
     task,
   });
   emitKanbanTaskUpdate(task);
   queuePersistKanbanTask(task.id);
+}
+
+function markKanbanTaskActivity(taskId) {
+  const active = activeKanbanTasks.get(taskId);
+  if (!active) return;
+  active.lastActivityAt = Date.now();
 }
 
 function updateKanbanTask(taskId, updater, options = {}) {
@@ -1633,6 +1641,7 @@ function appendKanbanSegment(agentId, text) {
   }
 
   active.task = task;
+  markKanbanTaskActivity(task.id);
   emitKanbanTaskUpdate(task);
   queuePersistKanbanTask(task.id);
 }
@@ -1659,6 +1668,7 @@ function appendKanbanTimelineEvent(taskId, runId, event) {
   });
 
   active.task = task;
+  markKanbanTaskActivity(task.id);
   emitKanbanTaskUpdate(task);
   queuePersistKanbanTask(task.id);
 }
@@ -1687,6 +1697,29 @@ function appendKanbanTaskAgentTimelineEvent(agentId, event) {
     ...event,
     title: `${taskInfo.agentName}: ${event.title || 'Update'}`,
   });
+}
+
+async function waitForKanbanTaskSettlement(taskId, runId, options = {}) {
+  const quietMs = options.quietMs || 1200;
+  const timeoutMs = options.timeoutMs || 15000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const active = activeKanbanTasks.get(taskId);
+    if (!active?.task || active.task.currentRunId !== runId) {
+      return;
+    }
+
+    if (hasKanbanTaskSettled({ lastActivityAt: active.lastActivityAt, quietMs })) {
+      return;
+    }
+
+    const delay = getKanbanTaskSettlementDelay({
+      lastActivityAt: active.lastActivityAt,
+      quietMs,
+    });
+    await new Promise((resolve) => setTimeout(resolve, Math.min(Math.max(delay, 60), 250)));
+  }
 }
 
 async function runKanbanTask(taskId, replyMessage = '') {
@@ -1768,6 +1801,9 @@ async function runKanbanTask(taskId, replyMessage = '') {
         ?.replace(/^\[error\]\s*/i, '')
         .trim();
       throw new Error(transcriptError || 'Task failed before producing a final response.');
+    }
+    if (task.targetType === 'swarm') {
+      await waitForKanbanTaskSettlement(taskId, runId);
     }
     const completedTask = updateKanbanTask(taskId, (currentTask) => {
       currentTask.stage = 'in_review';
