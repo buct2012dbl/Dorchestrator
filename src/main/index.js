@@ -16,6 +16,11 @@ const kanbanManager = require('./kanbanManager');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
 const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
+const {
+  createKanbanTaskBarrier,
+  markKanbanTaskBarrierAgentCompleted,
+  isKanbanTaskBarrierSatisfied,
+} = require('./kanbanTaskBarrier');
 const templateManager = require('./templateManager');
 const {
   syncAgentsAndRespawn,
@@ -639,6 +644,9 @@ function startBridgeServer() {
         });
         appendKanbanTaskAgentTimelineEvent(fromAgentId, bridgeEvents.senderEvent);
         appendKanbanTaskAgentTimelineEvent(normalizedTargetAgentId, bridgeEvents.targetEvent);
+        if (kind === 'response') {
+          markKanbanTaskAgentCompletedById(fromAgentId);
+        }
 
         // Auto-start the target PTY on demand so bridge tools work even if the panel
         // has not been opened yet in the renderer.
@@ -1448,6 +1456,21 @@ function markKanbanTaskActivity(taskId) {
   active.lastActivityAt = Date.now();
 }
 
+function markKanbanTaskAgentCompleted(taskId, runId, agentId) {
+  const active = activeKanbanTasks.get(taskId);
+  if (!active?.barrier || active.barrier.runId !== runId) return;
+  active.barrier = markKanbanTaskBarrierAgentCompleted(active.barrier, agentId);
+}
+
+function markKanbanTaskAgentCompletedById(agentId) {
+  const taskInfo = taskAgentIndex.get(agentId);
+  if (!taskInfo) return;
+  const active = activeKanbanTasks.get(taskInfo.taskId);
+  const runId = active?.task?.currentRunId;
+  if (!runId) return;
+  markKanbanTaskAgentCompleted(taskInfo.taskId, runId, agentId);
+}
+
 function updateKanbanTask(taskId, updater, options = {}) {
   const state = loadKanbanState();
   const tasks = state.tasks.map((task) => {
@@ -1722,6 +1745,24 @@ async function waitForKanbanTaskSettlement(taskId, runId, options = {}) {
   }
 }
 
+async function waitForKanbanTaskBarrier(taskId, runId, options = {}) {
+  const timeoutMs = options.timeoutMs || 180000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const active = activeKanbanTasks.get(taskId);
+    if (!active?.task || active.task.currentRunId !== runId) {
+      return;
+    }
+
+    if (isKanbanTaskBarrierSatisfied(active.barrier)) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 async function runKanbanTask(taskId, replyMessage = '') {
   const state = loadKanbanState();
   const task = state.tasks.find((item) => item.id === taskId);
@@ -1777,6 +1818,21 @@ async function runKanbanTask(taskId, replyMessage = '') {
     return currentTask;
   });
   setActiveKanbanTask(activeTask);
+  if (task.targetType === 'swarm') {
+    const barrierAgentIds = (runtimeGraph.agents || [])
+      .filter((agent) => {
+        const terminalType = agent?.data?.terminalType || agent?.data?.cliType || 'claude-code';
+        return terminalType !== 'shell' && terminalType !== 'empty';
+      })
+      .map((agent) => agent.id);
+    const active = activeKanbanTasks.get(taskId);
+    if (active) {
+      active.barrier = createKanbanTaskBarrier({
+        runId,
+        agentIds: barrierAgentIds,
+      });
+    }
+  }
 
   try {
     if (entryTerminalType !== 'coding-agent') {
@@ -1803,6 +1859,8 @@ async function runKanbanTask(taskId, replyMessage = '') {
       throw new Error(transcriptError || 'Task failed before producing a final response.');
     }
     if (task.targetType === 'swarm') {
+      markKanbanTaskAgentCompleted(taskId, runId, runtimeGraph.entryAgentId);
+      await waitForKanbanTaskBarrier(taskId, runId);
       await waitForKanbanTaskSettlement(taskId, runId);
     }
     const completedTask = updateKanbanTask(taskId, (currentTask) => {
@@ -1842,6 +1900,10 @@ async function runKanbanTask(taskId, replyMessage = '') {
       return currentTask;
     });
     setActiveKanbanTask(completedTask);
+    const active = activeKanbanTasks.get(taskId);
+    if (active) {
+      delete active.barrier;
+    }
     persistKanbanTaskImmediately(taskId);
     return completedTask;
   } catch (err) {
@@ -1871,6 +1933,10 @@ async function runKanbanTask(taskId, replyMessage = '') {
       return currentTask;
     });
     setActiveKanbanTask(failedTask);
+    const active = activeKanbanTasks.get(taskId);
+    if (active) {
+      delete active.barrier;
+    }
     persistKanbanTaskImmediately(taskId);
     throw err;
   } finally {
