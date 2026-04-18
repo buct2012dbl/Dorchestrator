@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AgentConfigPanel from '../swarm/AgentConfigPanel';
 import KanbanExecutionTimeline from './KanbanExecutionTimeline';
 import KanbanTranscriptTerminal from './KanbanTranscriptTerminal';
@@ -57,6 +57,8 @@ function KanbanWorkspace({
   const [draftTargetId, setDraftTargetId] = useState(sharedAgents[0]?.id || '');
   const [draftEntryAgentId, setDraftEntryAgentId] = useState('');
   const [reviewReply, setReviewReply] = useState('');
+  const [taskModalOffset, setTaskModalOffset] = useState({ x: 0, y: 0 });
+  const taskModalDragRef = useRef(null);
 
   const selectedAgent = sharedAgents.find((agent) => agent.id === selectedAgentId) || null;
   const activeTask = kanbanState.tasks.find((task) => task.id === activeTaskId) || null;
@@ -130,6 +132,48 @@ function KanbanWorkspace({
     await onUpdateTask(activeTask.id, { stage: 'done', runStatus: 'idle', updatedAt: new Date().toISOString() });
     setActiveTaskId(null);
   };
+
+  const handleTaskModalDragStart = useCallback((e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return;
+
+    taskModalDragRef.current = {
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      originX: taskModalOffset.x,
+      originY: taskModalOffset.y,
+    };
+    window.getSelection?.().removeAllRanges();
+  }, [taskModalOffset.x, taskModalOffset.y]);
+
+  useEffect(() => {
+    if (!activeTaskId) {
+      setTaskModalOffset({ x: 0, y: 0 });
+    }
+  }, [activeTaskId]);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const dragState = taskModalDragRef.current;
+      if (!dragState) return;
+
+      setTaskModalOffset({
+        x: dragState.originX + (e.clientX - dragState.pointerStartX),
+        y: dragState.originY + (e.clientY - dragState.pointerStartY),
+      });
+    };
+
+    const handleMouseUp = () => {
+      taskModalDragRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const renderBoard = () => (
     <div className="kanban-board">
@@ -343,8 +387,12 @@ function KanbanWorkspace({
 
       {activeTask && (
         <div className="config-confirm-overlay kanban-task-modal-overlay" onClick={() => setActiveTaskId(null)}>
-          <div className="kanban-modal kanban-task-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="kanban-task-modal-header">
+          <div
+            className="kanban-modal kanban-task-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ transform: `translate(${taskModalOffset.x}px, ${taskModalOffset.y}px)` }}
+          >
+            <div className="kanban-task-modal-header" onMouseDown={handleTaskModalDragStart}>
               <div>
                 <h3>{activeTask.title}</h3>
                 <p>{activeTask.runStatus === 'running' ? 'Task is processing in the background.' : 'Review the full run history or send follow-up feedback.'}</p>

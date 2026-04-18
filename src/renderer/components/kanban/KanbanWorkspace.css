@@ -605,9 +605,7 @@
 }
 
 .kanban-task-modal-overlay {
-  align-items: flex-start;
   overflow-y: auto;
-  padding: max(24px, env(safe-area-inset-top)) 20px 24px;
 }
 
 .kanban-modal {
@@ -628,11 +626,10 @@
 
 .kanban-task-modal {
   width: min(960px, calc(100vw - 40px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-height: calc(100vh - 48px - env(safe-area-inset-top));
-  margin: 0 auto;
+  max-height: calc(100vh - 132px);
+  margin-top: 72px;
+  margin-bottom: 24px;
+  cursor: default;
 }
 
 .kanban-form {
@@ -676,13 +673,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin: -18px -18px 0;
-  padding: 18px 18px 14px;
-  background: linear-gradient(180deg, rgba(21, 26, 24, 0.98), rgba(13, 16, 15, 0.92));
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  margin-bottom: 12px;
+  cursor: move;
+  user-select: none;
 }
 
 .kanban-task-modal-header h3 {
@@ -703,11 +696,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 0 -6px;
-  padding: 12px 6px 0;
 }
 
 .kanban-run {
@@ -787,8 +775,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--accent-secondary) 22%, var(--border));
-  padding-top: 14px;
 }
 
 .kanban-error-banner {
@@ -886,7 +872,12 @@
   }
 
   .kanban-task-modal-overlay {
-    padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+    padding: 0 12px;
+  }
+
+  .kanban-task-modal {
+    margin-top: 16px;
+    margin-bottom: 12px;
   }
 
   .kanban-task-modal-header {
