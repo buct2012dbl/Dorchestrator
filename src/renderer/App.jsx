@@ -6,6 +6,7 @@ import VoiceAssistant from './components/VoiceAssistant';
 import MuxWorkspace from './components/mux/MuxWorkspace';
 import KanbanWorkspace from './components/kanban/KanbanWorkspace';
 import SwarmSidebar from './components/swarm/SwarmSidebar';
+import { DEFAULT_MODE, MODE_OPTIONS } from './modeConfig.mjs';
 import { createDefaultSwarmGraph, useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
 import './App.css';
@@ -183,7 +184,7 @@ function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [swarmLoading, setSwarmLoading] = useState(false);
   const [terminalKey, setTerminalKey] = useState(0);
-  const [mode, setMode] = useState('swarm');
+  const [mode, setMode] = useState(DEFAULT_MODE);
   const [swarms, setSwarms] = useState([]);
   const [sharedAgents, setSharedAgents] = useState([]);
   const [kanbanState, setKanbanState] = useState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
@@ -808,24 +809,15 @@ function App() {
         <h1>Dorchestrator</h1>
         <div className="header-controls">
           <div className="mode-toggle">
-            <button
-              className={`mode-btn ${mode === 'swarm' ? 'active' : ''}`}
-              onClick={() => { setMode('swarm'); setShowConfig(false); }}
-            >
-              Swarm
-            </button>
-            <button
-              className={`mode-btn ${mode === 'mux' ? 'active' : ''}`}
-              onClick={() => { setMode('mux'); setShowConfig(false); }}
-            >
-              Mux
-            </button>
-            <button
-              className={`mode-btn ${mode === 'kanban' ? 'active' : ''}`}
-              onClick={() => { setMode('kanban'); setShowConfig(false); }}
-            >
-              Kanban
-            </button>
+            {MODE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                className={`mode-btn ${mode === option.id ? 'active' : ''}`}
+                onClick={() => { setMode(option.id); setShowConfig(false); }}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
           <button className="workspace-btn" onClick={handleSelectFolder} title={workspace}>
             <span className="workspace-icon">▸</span>
