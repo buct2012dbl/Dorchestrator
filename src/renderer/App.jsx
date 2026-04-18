@@ -5,6 +5,7 @@ import AgentConfigPanel from './components/swarm/AgentConfigPanel';
 import VoiceAssistant from './components/VoiceAssistant';
 import MuxWorkspace from './components/mux/MuxWorkspace';
 import KanbanWorkspace from './components/kanban/KanbanWorkspace';
+import { getRunStatusForStageMove } from './components/kanban/kanbanTaskState.mjs';
 import SwarmSidebar from './components/swarm/SwarmSidebar';
 import { DEFAULT_MODE, MODE_OPTIONS } from './modeConfig.mjs';
 import { createDefaultSwarmGraph, useAgents } from './hooks/useAgents';
@@ -722,6 +723,7 @@ function App() {
     const nextTask = {
       ...task,
       stage,
+      runStatus: getRunStatusForStageMove(task, stage),
       updatedAt: new Date().toISOString(),
     };
     await persistKanbanState({
