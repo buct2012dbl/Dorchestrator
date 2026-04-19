@@ -121,6 +121,13 @@ function KanbanWorkspace({
     setReviewReply('');
   };
 
+  const handleCardKeyDown = (e, task) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleOpenTask(task);
+    }
+  };
+
   const handleReply = async () => {
     if (!activeTask || !reviewReply.trim()) return;
     await onStartTask(activeTask.id, reviewReply.trim());
@@ -207,13 +214,28 @@ function KanbanWorkspace({
             </div>
             <div className="kanban-card-list">
               {tasksByStage[stage.id].map((task) => (
-                <button
+                <div
                   key={task.id}
                   className={`kanban-card ${task.runStatus === 'running' ? 'running' : ''} status-${task.runStatus}`}
+                  role="button"
+                  tabIndex={0}
                   draggable={task.runStatus !== 'running'}
                   onDragStart={(e) => e.dataTransfer.setData('text/task-id', task.id)}
                   onClick={() => handleOpenTask(task)}
+                  onKeyDown={(e) => handleCardKeyDown(e, task)}
                 >
+                  <button
+                    type="button"
+                    className="kanban-card-delete"
+                    aria-label={`Delete ${task.title}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteTask(task.id);
+                    }}
+                    onDragStart={(e) => e.preventDefault()}
+                  >
+                    ×
+                  </button>
                   <div className="kanban-card-header">
                     <span className="kanban-card-title">{task.title}</span>
                     <span className={`kanban-badge ${task.runStatus}`}>{task.runStatus.replace('_', ' ')}</span>
@@ -223,7 +245,7 @@ function KanbanWorkspace({
                     <span className="kanban-card-target">{task.targetType === 'swarm' ? 'Swarm' : 'Agent'}</span>
                     <span>{formatTime(task.updatedAt)}</span>
                   </div>
-                </button>
+                </div>
               ))}
               {tasksByStage[stage.id].length === 0 && (
                 <div className="kanban-column-empty">
