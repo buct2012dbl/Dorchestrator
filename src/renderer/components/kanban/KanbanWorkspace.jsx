@@ -711,7 +711,12 @@ function KanbanWorkspace({
                 {scheduleType === 'once' ? (
                   <div className="kanban-schedule-field">
                     <label>Run At</label>
-                    <input type="datetime-local" value={scheduleRunAt} onChange={(e) => setScheduleRunAt(e.target.value)} />
+                    <input
+                      type="datetime-local"
+                      lang="en-US"
+                      value={scheduleRunAt}
+                      onChange={(e) => setScheduleRunAt(e.target.value)}
+                    />
                   </div>
                 ) : (
                   <div className="kanban-schedule-interval-row">
