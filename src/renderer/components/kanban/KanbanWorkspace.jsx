@@ -59,6 +59,30 @@ function hasScheduledCommandOutput(run) {
   return Boolean((run?.output || run?.stdout || run?.stderr || '').trim());
 }
 
+function getScheduledRunLog(task, run, scheduledTasks = []) {
+  if (task?.targetType !== 'scheduled' || !task?.targetId) return null;
+  const scheduledTask = scheduledTasks.find((item) => item.id === task.targetId);
+  if (!scheduledTask) return null;
+  const logs = scheduledTask.logs || [];
+
+  if (task.scheduleLogId) {
+    const exactLog = logs.find((log) => log.id === task.scheduleLogId);
+    if (exactLog) return exactLog;
+  }
+
+  if (task.id) {
+    const boardTaskLog = logs.find((log) => log.boardTaskId === task.id);
+    if (boardTaskLog) return boardTaskLog;
+  }
+
+  if (run?.startedAt) {
+    const startedLog = logs.find((log) => log.startedAt === run.startedAt);
+    if (startedLog) return startedLog;
+  }
+
+  return null;
+}
+
 function KanbanWorkspace({
   sharedAgents,
   swarms,
@@ -741,14 +765,20 @@ function KanbanWorkspace({
             <div className="kanban-task-modal-body">
               <div className="kanban-task-runs">
                 {(activeTask.runs || []).slice().reverse().map((run, index) => (
-                  <details key={run.id} className="kanban-run" open={index === 0}>
-                    <summary>
-                      <span>Run {activeTask.runs.length - index}</span>
-                      <span>{run.status}</span>
-                      <span>{formatTime(run.startedAt)}</span>
-                    </summary>
-                    <div className="kanban-run-body">
-                      {run.renderMode === 'timeline' && (
+                  (() => {
+                    const scheduledRunLog = getScheduledRunLog(activeTask, run, kanbanState.scheduledTasks || []);
+                    const scheduledOutput = scheduledRunLog?.output || scheduledRunLog?.stdout || scheduledRunLog?.stderr || '';
+                    const hasScheduledOutput = Boolean((run.output || run.stdout || run.stderr || scheduledOutput || '').trim());
+
+                    return (
+                    <details key={run.id} className="kanban-run" open={index === 0}>
+                      <summary>
+                        <span>Run {activeTask.runs.length - index}</span>
+                        <span>{run.status}</span>
+                        <span>{formatTime(run.startedAt)}</span>
+                      </summary>
+                      <div className="kanban-run-body">
+                        {run.renderMode === 'timeline' && (
                         <div className="kanban-run-section">
                           <div className="kanban-run-section-label">Execution Timeline</div>
                           <KanbanExecutionTimeline
@@ -756,12 +786,12 @@ function KanbanWorkspace({
                             isRunning={run.status === 'running'}
                           />
                         </div>
-                      )}
-                      {run.renderMode !== 'timeline' && hasVisibleTranscript(run) && (
+                        )}
+                        {run.renderMode !== 'timeline' && (hasVisibleTranscript(run) || (activeTask.targetType === 'scheduled' && hasScheduledOutput)) && (
                         <div className="kanban-run-section">
                           <div className="kanban-run-section-label">{activeTask.targetType === 'scheduled' ? 'Command Output' : 'Live Transcript'}</div>
                           {activeTask.targetType === 'scheduled' ? (
-                            <pre>{run.output || run.stdout || run.stderr || run.transcript || '$ No command output captured.'}</pre>
+                            <pre>{run.output || run.stdout || run.stderr || scheduledOutput || '$ No command output captured.'}</pre>
                           ) : (
                             <KanbanTranscriptTerminal
                               sessionKey={run.id}
@@ -769,26 +799,26 @@ function KanbanWorkspace({
                             />
                           )}
                         </div>
-                      )}
-                      {!run.reply && activeTask.targetType !== 'scheduled' && (
+                        )}
+                        {!run.reply && activeTask.targetType !== 'scheduled' && (
                         <div className="kanban-run-section">
                           <div className="kanban-run-section-label">Prompt</div>
                           <pre>{run.displayPrompt || activeTask.prompt}</pre>
                         </div>
-                      )}
-                      {run.reply && activeTask.targetType !== 'scheduled' && (
+                        )}
+                        {run.reply && activeTask.targetType !== 'scheduled' && (
                         <div className="kanban-run-section">
                           <div className="kanban-run-section-label">Reviewer Feedback</div>
                           <pre>{run.reply}</pre>
                         </div>
-                      )}
-                      {run.finalResponse && activeTask.targetType !== 'scheduled' && (
+                        )}
+                        {run.finalResponse && activeTask.targetType !== 'scheduled' && (
                         <div className="kanban-run-section">
                           <div className="kanban-run-section-label">Reply</div>
                           <pre>{run.finalResponse}</pre>
                         </div>
-                      )}
-                      {activeTask.targetType === 'scheduled' && (
+                        )}
+                        {activeTask.targetType === 'scheduled' && (
                         <>
                           <div className="kanban-run-section">
                             <div className="kanban-run-section-label">Command</div>
@@ -799,24 +829,26 @@ function KanbanWorkspace({
                             <pre>{run.finalResponse || 'Command is still running.'}</pre>
                           </div>
                         </>
-                      )}
-                      {run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && (run.segments || []).map((segment) => (
+                        )}
+                        {run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && activeTask.targetType !== 'scheduled' && (run.segments || []).map((segment) => (
                         <div key={segment.id} className="kanban-run-segment">
                           <div className="kanban-run-segment-header">{segment.agentName}</div>
                           <pre>{segment.text}</pre>
                         </div>
-                      ))}
-                      {!run.finalResponse && run.renderMode === 'timeline' && !hasVisibleTimeline(run) && (
+                        ))}
+                        {!run.finalResponse && run.renderMode === 'timeline' && !hasVisibleTimeline(run) && (
                         <div className="kanban-run-empty">No response yet. Waiting for the agent to emit structured progress.</div>
-                      )}
-                      {!run.finalResponse && run.renderMode !== 'timeline' && activeTask.targetType !== 'scheduled' && !hasVisibleTranscript(run) && (!run.segments || run.segments.length === 0) && (
+                        )}
+                        {!run.finalResponse && run.renderMode !== 'timeline' && activeTask.targetType !== 'scheduled' && !hasVisibleTranscript(run) && (!run.segments || run.segments.length === 0) && (
                         <div className="kanban-run-empty">No streamed terminal output was captured for this run.</div>
-                      )}
-                      {activeTask.targetType === 'scheduled' && !hasScheduledCommandOutput(run) && (
+                        )}
+                        {activeTask.targetType === 'scheduled' && !hasScheduledOutput && (
                         <div className="kanban-run-empty">No command output was captured for this run.</div>
-                      )}
-                    </div>
-                  </details>
+                        )}
+                      </div>
+                    </details>
+                    );
+                  })()
                 ))}
               </div>
               {activeTask.lastError && <div className="kanban-error-banner">{activeTask.lastError}</div>}
