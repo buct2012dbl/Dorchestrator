@@ -481,13 +481,6 @@ function KanbanWorkspace({
           </div>
         </div>
 
-        <div className="kanban-schedule-panel">
-          <div className="kanban-schedule-empty-panel">
-            <div className="kanban-run-section-label">Schedule Editor</div>
-            <p>Create a new schedule or select one from the list and click `Edit`.</p>
-          </div>
-        </div>
-
         {showScheduleEditor && (
           <div className="config-confirm-overlay kanban-schedule-editor-overlay" onClick={handleCloseScheduleEditor}>
             <div className="kanban-modal kanban-schedule-editor-modal" onClick={(e) => e.stopPropagation()}>

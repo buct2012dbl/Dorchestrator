@@ -664,8 +664,7 @@
   gap: 18px;
 }
 
-.kanban-schedule-list,
-.kanban-schedule-panel {
+.kanban-schedule-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -860,20 +859,6 @@
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   line-height: 1.45;
-}
-
-.kanban-schedule-empty-panel {
-  border: 1px dashed color-mix(in srgb, var(--border) 65%, var(--accent));
-  background: rgba(9, 12, 18, 0.48);
-  padding: 18px;
-  min-height: 220px;
-  color: var(--muted-foreground);
-  font-family: 'Share Tech Mono', monospace;
-  line-height: 1.6;
-}
-
-.kanban-schedule-empty-panel p {
-  margin: 0;
 }
 
 .kanban-schedule-editor-overlay {
