@@ -653,6 +653,239 @@
   box-shadow: var(--box-shadow-neon-sm);
 }
 
+.kanban-schedules-view {
+  min-height: 100%;
+}
+
+.kanban-schedule-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.kanban-schedule-list,
+.kanban-schedule-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.kanban-schedule-list {
+  width: 100%;
+  padding-right: 0;
+}
+
+.kanban-schedule-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--accent);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.kanban-schedule-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.kanban-schedule-empty-list {
+  max-width: 360px;
+}
+
+.kanban-schedule-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(18, 18, 26, 0.96), rgba(10, 10, 16, 0.94));
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+
+.kanban-schedule-item:hover,
+.kanban-schedule-item.active {
+  border-color: var(--accent);
+  box-shadow: var(--box-shadow-neon-sm);
+  transform: translateY(-1px);
+}
+
+.kanban-schedule-item-header,
+.kanban-schedule-item-times,
+.kanban-schedule-item-actions,
+.kanban-schedule-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kanban-schedule-item-header,
+.kanban-schedule-item-times {
+  justify-content: space-between;
+}
+
+.kanban-schedule-item-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  min-width: 0;
+}
+
+.kanban-schedule-item-times {
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.kanban-schedule-item-command {
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.86;
+}
+
+.kanban-schedule-item-actions {
+  flex-wrap: wrap;
+}
+
+.schedule-delete-btn {
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
+  color: var(--destructive);
+}
+
+.schedule-delete-btn:hover {
+  border-color: var(--destructive);
+  color: #ffb7c8;
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.28);
+}
+
+.kanban-schedule-form {
+  border: 1px solid var(--border);
+  background: rgba(9, 12, 18, 0.72);
+  padding: 18px;
+  gap: 14px;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+}
+
+.kanban-schedule-form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kanban-schedule-form-header p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.kanban-schedule-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(180px, 0.8fr);
+  gap: 12px;
+}
+
+.kanban-schedule-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kanban-schedule-interval-row {
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.kanban-schedule-interval-row > div {
+  flex: 1;
+}
+
+.kanban-schedule-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.kanban-schedule-checkbox input {
+  width: auto;
+}
+
+.kanban-schedule-checkbox span {
+  color: var(--foreground);
+  font-size: 11px;
+  font-family: 'Share Tech Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.kanban-schedule-summary {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px 14px;
+}
+
+.kanban-schedule-summary-grid {
+  display: grid;
+  gap: 6px;
+  color: var(--foreground);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.kanban-schedule-empty-panel {
+  border: 1px dashed color-mix(in srgb, var(--border) 65%, var(--accent));
+  background: rgba(9, 12, 18, 0.48);
+  padding: 18px;
+  min-height: 220px;
+  color: var(--muted-foreground);
+  font-family: 'Share Tech Mono', monospace;
+  line-height: 1.6;
+}
+
+.kanban-schedule-empty-panel p {
+  margin: 0;
+}
+
+.kanban-schedule-editor-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.kanban-schedule-editor-modal {
+  width: min(980px, calc(100vw - 56px));
+}
+
 .kanban-task-modal-overlay {
   overflow-y: auto;
 }
@@ -978,6 +1211,27 @@
   .kanban-columns {
     min-width: 980px;
     gap: 10px;
+  }
+
+  .kanban-schedule-page {
+    gap: 14px;
+  }
+
+  .kanban-schedule-form-header,
+  .kanban-schedule-form-grid,
+  .kanban-schedule-interval-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kanban-schedule-list {
+    width: 100%;
+    padding-right: 0;
+  }
+
+  .kanban-schedule-card-grid {
+    grid-template-columns: 1fr;
   }
 
   .kanban-column {

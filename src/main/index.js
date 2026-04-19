@@ -13,6 +13,11 @@ const graphConfigManager = require('./graphConfigManager');
 const swarmManager = require('./swarmManager');
 const sharedAgentManager = require('./sharedAgentManager');
 const kanbanManager = require('./kanbanManager');
+const {
+  computeNextScheduledRunAt,
+  getScheduleSummary,
+  normalizeScheduledTask,
+} = require('./kanbanSchedule');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
 const { shouldFailKanbanTaskExecution } = require('./kanbanTaskResponse');
@@ -198,6 +203,8 @@ let agentGraph = { agents: [], edges: [] };
 const runtimeTaskGraphs = new Map();
 const taskAgentIndex = new Map();
 const activeKanbanTasks = new Map();
+const scheduledKanbanTimers = new Map();
+const runningScheduledTasks = new Set();
 
 function getCombinedGraph() {
   const agents = [...(agentGraph.agents || [])];
@@ -1400,12 +1407,142 @@ function emitKanbanTaskUpdate(task) {
   }
 }
 
+function emitKanbanStateUpdate(state) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('kanban-state-update', { state });
+  }
+}
+
 function loadKanbanState() {
   return kanbanManager.loadState();
 }
 
 function saveKanbanState(state) {
-  return kanbanManager.saveState(state);
+  const success = kanbanManager.saveState(state);
+  if (success) {
+    syncScheduledKanbanTasks(loadKanbanState());
+  }
+  return success;
+}
+
+function createShellExecutionRun(command, runId, startedAt) {
+  return {
+    id: runId,
+    startedAt,
+    completedAt: null,
+    status: 'running',
+    prompt: command,
+    displayPrompt: command,
+    renderMode: 'terminal',
+    reply: '',
+    finalResponse: '',
+    transcript: `$ ${command}\n`,
+    timelineEvents: [],
+    segments: [],
+  };
+}
+
+function buildScheduledBoardTask(schedule, logId) {
+  const now = new Date().toISOString();
+  const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id: taskId,
+    title: schedule.name,
+    prompt: schedule.command,
+    stage: 'in_progress',
+    targetType: 'scheduled',
+    targetId: schedule.id,
+    entryAgentId: null,
+    scheduleLogId: logId,
+    createdAt: now,
+    updatedAt: now,
+    runStatus: 'running',
+    lastError: null,
+    currentRunId: runId,
+    history: [{
+      id: `${runId}-scheduled-trigger`,
+      type: 'scheduled-trigger',
+      text: getScheduleSummary(schedule),
+      createdAt: now,
+    }],
+    runs: [createShellExecutionRun(schedule.command, runId, now)],
+  };
+}
+
+function updateScheduledTask(scheduleId, updater) {
+  const state = loadKanbanState();
+  let nextScheduledTask = null;
+  const scheduledTasks = state.scheduledTasks.map((task) => {
+    if (task.id !== scheduleId) return task;
+    nextScheduledTask = normalizeScheduledTask(updater(clone(task)));
+    return nextScheduledTask;
+  });
+  const nextState = { ...state, scheduledTasks };
+  saveKanbanState(nextState);
+  emitKanbanStateUpdate(nextState);
+  return nextScheduledTask;
+}
+
+function clearScheduledKanbanTimer(scheduleId) {
+  const timer = scheduledKanbanTimers.get(scheduleId);
+  if (timer) {
+    clearTimeout(timer);
+    scheduledKanbanTimers.delete(scheduleId);
+  }
+}
+
+function scheduleKanbanTaskExecution(schedule) {
+  clearScheduledKanbanTimer(schedule.id);
+  if (!schedule?.enabled) {
+    return;
+  }
+
+  const nextRunAt = schedule.nextRunAt || computeNextScheduledRunAt(schedule);
+  if (!nextRunAt) {
+    return;
+  }
+
+  const delay = Math.max(0, new Date(nextRunAt).getTime() - Date.now());
+  scheduledKanbanTimers.set(schedule.id, setTimeout(() => {
+    scheduledKanbanTimers.delete(schedule.id);
+    void runScheduledKanbanTask(schedule.id).catch((err) => {
+      console.error(`[KanbanScheduler] Failed to execute ${schedule.id}:`, err.message);
+    });
+  }, delay));
+}
+
+function syncScheduledKanbanTasks(state = loadKanbanState()) {
+  const taskIds = new Set((state.scheduledTasks || []).map((task) => task.id));
+  for (const scheduleId of scheduledKanbanTimers.keys()) {
+    if (!taskIds.has(scheduleId)) {
+      clearScheduledKanbanTimer(scheduleId);
+    }
+  }
+
+  for (const scheduledTask of state.scheduledTasks || []) {
+    if (!scheduledTask.enabled) {
+      clearScheduledKanbanTimer(scheduledTask.id);
+      continue;
+    }
+
+    const nextRunAt = scheduledTask.nextRunAt || computeNextScheduledRunAt(scheduledTask);
+    if (!nextRunAt) {
+      clearScheduledKanbanTimer(scheduledTask.id);
+      continue;
+    }
+
+    if (nextRunAt !== scheduledTask.nextRunAt) {
+      updateScheduledTask(scheduledTask.id, (currentTask) => ({
+        ...currentTask,
+        nextRunAt,
+        updatedAt: new Date().toISOString(),
+      }));
+      continue;
+    }
+
+    scheduleKanbanTaskExecution({ ...scheduledTask, nextRunAt });
+  }
 }
 
 function queuePersistKanbanTask(taskId) {
@@ -1764,6 +1901,161 @@ async function waitForKanbanTaskBarrier(taskId, runId, options = {}) {
   }
 }
 
+async function runScheduledKanbanTask(scheduleId, options = {}) {
+  const state = loadKanbanState();
+  const schedule = state.scheduledTasks.find((item) => item.id === scheduleId);
+  if (!schedule) {
+    throw new Error('Scheduled task not found.');
+  }
+  if (!schedule.enabled && !options.force) {
+    return schedule;
+  }
+  if (runningScheduledTasks.has(scheduleId)) {
+    return schedule;
+  }
+
+  runningScheduledTasks.add(scheduleId);
+  clearScheduledKanbanTimer(scheduleId);
+
+  const logId = `schedule-log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const boardTask = buildScheduledBoardTask(schedule, logId);
+  const startedAt = boardTask.runs[0].startedAt;
+  const scheduleLog = {
+    id: logId,
+    startedAt,
+    completedAt: null,
+    status: 'running',
+    exitCode: null,
+    boardTaskId: boardTask.id,
+    stdout: '',
+    stderr: '',
+    output: '',
+    error: null,
+  };
+
+  const activeState = loadKanbanState();
+  const nextState = {
+    ...activeState,
+    tasks: [...activeState.tasks, boardTask],
+    scheduledTasks: activeState.scheduledTasks.map((item) => {
+      if (item.id !== scheduleId) return item;
+      const nextRunAt = item.scheduleType === 'interval'
+        ? computeNextScheduledRunAt({ ...item, lastRunAt: startedAt }, { nowIso: startedAt })
+        : null;
+      return normalizeScheduledTask({
+        ...item,
+        lastRunAt: startedAt,
+        nextRunAt,
+        enabled: item.scheduleType === 'once' ? false : item.enabled,
+        updatedAt: startedAt,
+        logs: [...(item.logs || []), scheduleLog],
+      });
+    }),
+  };
+  saveKanbanState(nextState);
+  setActiveKanbanTask(boardTask);
+  emitKanbanStateUpdate(nextState);
+
+  const commandOutput = { stdout: '', stderr: '' };
+  const shell = process.env.SHELL || '/bin/zsh';
+  const child = spawn(shell, ['-lc', schedule.command], {
+    cwd: workspace || process.env.HOME || '/',
+    env: buildPtyEnvironment(),
+  });
+
+  const appendScheduledOutput = (streamName, text) => {
+    if (!text) return;
+    commandOutput[streamName] += text;
+    const active = activeKanbanTasks.get(boardTask.id);
+    if (!active?.task) return;
+    const task = clone(active.task);
+    const run = task.runs.find((item) => item.id === task.currentRunId);
+    if (!run) return;
+    run.transcript = `${run.transcript || ''}${text}`;
+    active.task = task;
+    markKanbanTaskActivity(task.id);
+    emitKanbanTaskUpdate(task);
+    queuePersistKanbanTask(task.id);
+  };
+
+  child.stdout.on('data', (data) => appendScheduledOutput('stdout', data.toString()));
+  child.stderr.on('data', (data) => appendScheduledOutput('stderr', data.toString()));
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = (exitCode, errorMessage = null) => {
+      if (settled) return;
+      settled = true;
+      runningScheduledTasks.delete(scheduleId);
+
+      const completedAt = new Date().toISOString();
+      const output = `${commandOutput.stdout}${commandOutput.stderr}`;
+      const isSuccess = exitCode === 0 && !errorMessage;
+      const finalResponse = isSuccess
+        ? `Command completed successfully.\n\n$ ${schedule.command}`
+        : `Command failed${exitCode === null ? '' : ` with exit code ${exitCode}`}.\n\n$ ${schedule.command}`;
+
+      updateKanbanTask(boardTask.id, (task) => {
+        task.stage = 'in_review';
+        task.runStatus = isSuccess ? 'awaiting_review' : 'error';
+        task.lastError = errorMessage || (isSuccess ? null : `Exit code ${exitCode}`);
+        task.updatedAt = completedAt;
+        task.currentRunId = null;
+        task.history = task.history || [];
+        task.history.push({
+          id: `${boardTask.runs[0].id}-scheduled-complete`,
+          type: isSuccess ? 'scheduled-complete' : 'scheduled-failed',
+          text: finalResponse,
+          createdAt: completedAt,
+        });
+        const run = task.runs.find((item) => item.id === boardTask.runs[0].id);
+        if (run) {
+          run.completedAt = completedAt;
+          run.status = isSuccess ? 'completed' : 'error';
+          run.finalResponse = finalResponse;
+          run.transcript = `${run.transcript || ''}${errorMessage && !commandOutput.stderr.includes(errorMessage) ? `${errorMessage}\n` : ''}`;
+        }
+        return task;
+      });
+      persistKanbanTaskImmediately(boardTask.id);
+      activeKanbanTasks.delete(boardTask.id);
+
+      const currentState = loadKanbanState();
+      const completedState = {
+        ...currentState,
+        scheduledTasks: currentState.scheduledTasks.map((item) => {
+          if (item.id !== scheduleId) return item;
+          return normalizeScheduledTask({
+            ...item,
+            updatedAt: completedAt,
+            logs: (item.logs || []).map((log) => (
+              log.id === logId
+                ? {
+                    ...log,
+                    completedAt,
+                    status: isSuccess ? 'success' : 'error',
+                    exitCode: Number.isInteger(exitCode) ? exitCode : null,
+                    stdout: commandOutput.stdout,
+                    stderr: commandOutput.stderr,
+                    output,
+                    error: errorMessage || (!isSuccess ? `Exit code ${exitCode}` : null),
+                  }
+                : log
+            )),
+          });
+        }),
+      };
+      saveKanbanState(completedState);
+      emitKanbanStateUpdate(completedState);
+      resolve(completedState.scheduledTasks.find((item) => item.id === scheduleId) || null);
+    };
+
+    child.on('error', (err) => finish(null, err.message));
+    child.on('close', (code) => finish(code, code === 0 ? null : null));
+  });
+}
+
 async function runKanbanTask(taskId, replyMessage = '') {
   const state = loadKanbanState();
   const task = state.tasks.find((item) => item.id === taskId);
@@ -2004,6 +2296,7 @@ app.whenReady().then(async () => {
     sharedAgentManager.setWorkspace(workspace);
     kanbanManager.setWorkspace(workspace);
     templateManager.setWorkspace(workspace);
+    syncScheduledKanbanTasks(loadKanbanState());
   }
 
   await startBridgeServer(); // wait for port to be assigned before any PTY spawning
@@ -2069,6 +2362,7 @@ ipcMain.handle('set-workspace', (event, { workspacePath }) => {
   sharedAgentManager.setWorkspace(validatedWorkspacePath);
   kanbanManager.setWorkspace(validatedWorkspacePath);
   templateManager.setWorkspace(validatedWorkspacePath);
+  syncScheduledKanbanTasks(loadKanbanState());
   return { success: true };
 });
 
@@ -2128,7 +2422,11 @@ ipcMain.handle('load-kanban-state', async () => {
 });
 
 ipcMain.handle('save-kanban-state', async (event, state) => {
-  return saveKanbanState(state);
+  const success = saveKanbanState(state);
+  if (success) {
+    emitKanbanStateUpdate(loadKanbanState());
+  }
+  return success;
 });
 
 ipcMain.handle('kanban-start-task', async (event, { taskId, replyMessage }) => {
@@ -2149,6 +2447,10 @@ ipcMain.handle('kanban-delete-task', async (event, { taskId }) => {
   };
   saveKanbanState(nextState);
   return { success: true };
+});
+
+ipcMain.handle('kanban-run-scheduled-task-now', async (event, { scheduleId }) => {
+  return runScheduledKanbanTask(scheduleId, { force: true });
 });
 
 // Mux template management

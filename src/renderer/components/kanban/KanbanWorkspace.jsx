@@ -26,6 +26,27 @@ function formatTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function formatDateTimeInput(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatScheduleSummary(task) {
+  if (task.scheduleType === 'interval') {
+    return `Every ${task.intervalValue} ${task.intervalUnit}`;
+  }
+  return task.runAt ? `One time at ${formatTime(task.runAt)}` : 'One time';
+}
+
+function getTaskTargetLabel(task) {
+  if (task.targetType === 'swarm') return 'Swarm';
+  if (task.targetType === 'scheduled') return 'Scheduled';
+  return 'Agent';
+}
+
 function hasVisibleTranscript(run) {
   return Boolean((run?.transcript || '').trim());
 }
@@ -47,21 +68,36 @@ function KanbanWorkspace({
   onDeleteTask,
   onStartTask,
   onUpdateTask,
+  onSaveScheduledTask,
+  onDeleteScheduledTask,
+  onRunScheduledTaskNow,
 }) {
   const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [showTaskComposer, setShowTaskComposer] = useState(false);
+  const [showScheduleEditor, setShowScheduleEditor] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftPrompt, setDraftPrompt] = useState('');
   const [draftTargetType, setDraftTargetType] = useState('agent');
   const [draftTargetId, setDraftTargetId] = useState(sharedAgents[0]?.id || '');
   const [draftEntryAgentId, setDraftEntryAgentId] = useState('');
+  const [editingScheduledTaskId, setEditingScheduledTaskId] = useState(null);
+  const [scheduleName, setScheduleName] = useState('');
+  const [scheduleCommand, setScheduleCommand] = useState('');
+  const [scheduleType, setScheduleType] = useState('once');
+  const [scheduleRunAt, setScheduleRunAt] = useState('');
+  const [scheduleIntervalValue, setScheduleIntervalValue] = useState('1');
+  const [scheduleIntervalUnit, setScheduleIntervalUnit] = useState('hours');
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [reviewReply, setReviewReply] = useState('');
   const [taskModalOffset, setTaskModalOffset] = useState({ x: 0, y: 0 });
   const taskModalDragRef = useRef(null);
 
   const selectedAgent = sharedAgents.find((agent) => agent.id === selectedAgentId) || null;
   const activeTask = kanbanState.tasks.find((task) => task.id === activeTaskId) || null;
+  const scheduledTasks = kanbanState.scheduledTasks || [];
+  const selectedScheduledTask = scheduledTasks.find((task) => task.id === selectedScheduleId) || null;
   const selectedAgentNode = selectedAgent
     ? { id: selectedAgent.id, data: { ...selectedAgent } }
     : null;
@@ -80,6 +116,14 @@ function KanbanWorkspace({
     return swarm?.agents || [];
   }, [draftTargetId, swarms]);
 
+  const sortedScheduledTasks = useMemo(() => (
+    [...scheduledTasks].sort((left, right) => {
+      const leftTime = left.nextRunAt || left.updatedAt || left.createdAt || '';
+      const rightTime = right.nextRunAt || right.updatedAt || right.createdAt || '';
+      return leftTime.localeCompare(rightTime);
+    })
+  ), [scheduledTasks]);
+
   useEffect(() => {
     if (draftTargetType === 'agent' && !draftTargetId && sharedAgents[0]?.id) {
       setDraftTargetId(sharedAgents[0].id);
@@ -88,6 +132,39 @@ function KanbanWorkspace({
       setDraftTargetId(swarms[0].id);
     }
   }, [draftTargetId, draftTargetType, sharedAgents, swarms]);
+
+  useEffect(() => {
+    if (!scheduledTasks.length) {
+      setSelectedScheduleId(null);
+      return;
+    }
+    if (!selectedScheduleId || !scheduledTasks.some((task) => task.id === selectedScheduleId)) {
+      setSelectedScheduleId(scheduledTasks[0].id);
+    }
+  }, [scheduledTasks, selectedScheduleId]);
+
+  const resetScheduledTaskForm = useCallback(() => {
+    setEditingScheduledTaskId(null);
+    setScheduleName('');
+    setScheduleCommand('');
+    setScheduleType('once');
+    setScheduleRunAt('');
+    setScheduleIntervalValue('1');
+    setScheduleIntervalUnit('hours');
+    setScheduleEnabled(true);
+  }, []);
+
+  const populateScheduledTaskForm = useCallback((task) => {
+    setEditingScheduledTaskId(task?.id || null);
+    setScheduleName(task?.name || '');
+    setScheduleCommand(task?.command || '');
+    setScheduleType(task?.scheduleType || 'once');
+    setScheduleRunAt(formatDateTimeInput(task?.runAt));
+    setScheduleIntervalValue(String(task?.intervalValue || 1));
+    setScheduleIntervalUnit(task?.intervalUnit || 'hours');
+    setScheduleEnabled(task?.enabled !== false);
+    setSelectedScheduleId(task?.id || null);
+  }, []);
 
   const handleQuickAddAgent = async (templateKey) => {
     const nextAgent = createAgentDefinitionFromTemplate(templateKey, {}, new Set(sharedAgents.map((agent) => agent.id)));
@@ -119,6 +196,49 @@ function KanbanWorkspace({
   const handleOpenTask = (task) => {
     setActiveTaskId(task.id);
     setReviewReply('');
+  };
+
+  const handleOpenNewScheduleEditor = () => {
+    resetScheduledTaskForm();
+    setShowScheduleEditor(true);
+  };
+
+  const handleEditScheduledTask = (task) => {
+    populateScheduledTaskForm(task);
+    setShowScheduleEditor(true);
+  };
+
+  const handleCloseScheduleEditor = useCallback(() => {
+    setShowScheduleEditor(false);
+  }, []);
+
+  const handleSubmitScheduledTask = async (e) => {
+    e.preventDefault();
+    if (!scheduleName.trim() || !scheduleCommand.trim()) {
+      return;
+    }
+    if (scheduleType === 'once' && !scheduleRunAt) {
+      return;
+    }
+
+    await onSaveScheduledTask({
+      id: editingScheduledTaskId,
+      name: scheduleName.trim(),
+      command: scheduleCommand.trim(),
+      scheduleType,
+      runAt: scheduleType === 'once' ? new Date(scheduleRunAt).toISOString() : null,
+      intervalValue: scheduleType === 'interval' ? Number.parseInt(scheduleIntervalValue, 10) || 1 : 1,
+      intervalUnit: scheduleType === 'interval' ? scheduleIntervalUnit : 'hours',
+      enabled: scheduleEnabled,
+    });
+    handleCloseScheduleEditor();
+  };
+
+  const handleDeleteScheduledTaskClick = async (taskId) => {
+    await onDeleteScheduledTask(taskId);
+    if (editingScheduledTaskId === taskId) {
+      resetScheduledTaskForm();
+    }
   };
 
   const handleCardKeyDown = (e, task) => {
@@ -162,12 +282,12 @@ function KanbanWorkspace({
   useEffect(() => {
     const handleMouseMove = (e) => {
       const dragState = taskModalDragRef.current;
-      if (!dragState) return;
-
-      setTaskModalOffset({
-        x: dragState.originX + (e.clientX - dragState.pointerStartX),
-        y: dragState.originY + (e.clientY - dragState.pointerStartY),
-      });
+      if (dragState) {
+        setTaskModalOffset({
+          x: dragState.originX + (e.clientX - dragState.pointerStartX),
+          y: dragState.originY + (e.clientY - dragState.pointerStartY),
+        });
+      }
     };
 
     const handleMouseUp = () => {
@@ -189,7 +309,7 @@ function KanbanWorkspace({
           <div className="kanban-board-title cyber-glitch" data-text="Execution Board">Execution Board</div>
           <div className="kanban-board-subtitle">
             <span className="kanban-terminal-prefix">&gt;</span>
-            Drag cards between stages. Moving a card into In Progress starts the background run.
+            Drag cards between stages. Moving an agent or swarm card into In Progress starts the background run.
             <span className="cyber-cursor">_</span>
           </div>
         </div>
@@ -244,7 +364,7 @@ function KanbanWorkspace({
                   </div>
                   <div className="kanban-card-body">{task.prompt}</div>
                   <div className="kanban-card-footer">
-                    <span className="kanban-card-target">{task.targetType === 'swarm' ? 'Swarm' : 'Agent'}</span>
+                    <span className="kanban-card-target">{getTaskTargetLabel(task)}</span>
                     <span>{formatTime(task.updatedAt)}</span>
                   </div>
                 </div>
@@ -301,6 +421,151 @@ function KanbanWorkspace({
     </div>
   );
 
+  const renderSchedules = () => (
+    <div className="kanban-schedules-view">
+      <div className="kanban-board-toolbar">
+        <div className="kanban-board-heading">
+          <div className="kanban-board-title">Scheduled Tasks</div>
+          <div className="kanban-board-subtitle">
+            <span className="kanban-terminal-prefix">$</span>
+            Configure one-time or recurring workspace commands. Review execution output from the spawned task card in In Review.
+          </div>
+        </div>
+        <button type="button" className="kanban-primary-btn" onClick={handleOpenNewScheduleEditor}>New</button>
+      </div>
+      <div className="kanban-schedule-page">
+        <div className="kanban-schedule-list">
+          <div className="kanban-schedule-list-header">
+            <span>Task List</span>
+          </div>
+          {sortedScheduledTasks.length === 0 && (
+            <div className="kanban-column-empty kanban-schedule-empty-list">
+              <span className="kanban-terminal-prefix">&gt;</span>
+              No scheduled tasks yet
+            </div>
+          )}
+          <div className="kanban-schedule-card-grid">
+            {sortedScheduledTasks.map((task) => (
+              <div
+                key={task.id}
+                className={`kanban-schedule-item ${selectedScheduleId === task.id ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedScheduleId(task.id);
+                }}
+              >
+                <div className="kanban-schedule-item-header">
+                  <span className="kanban-schedule-item-title">{task.name}</span>
+                  <span className={`kanban-badge ${task.enabled ? 'awaiting_review' : 'idle'}`}>{task.enabled ? 'enabled' : 'paused'}</span>
+                </div>
+                <div className="kanban-schedule-item-command">{task.command}</div>
+                <div className="kanban-schedule-item-times">
+                  <span>{formatScheduleSummary(task)}</span>
+                  <span>Next {formatTime(task.nextRunAt) || 'manual'}</span>
+                </div>
+                <div className="kanban-schedule-item-actions">
+                  <button type="button" className="kanban-template-btn" onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditScheduledTask(task);
+                  }}>Edit</button>
+                  <button type="button" className="kanban-template-btn" onClick={async (e) => {
+                    e.stopPropagation();
+                    await onRunScheduledTaskNow(task.id);
+                  }}>Run Now</button>
+                  <button type="button" className="kanban-template-btn schedule-delete-btn" onClick={async (e) => {
+                    e.stopPropagation();
+                    await handleDeleteScheduledTaskClick(task.id);
+                  }}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="kanban-schedule-panel">
+          <div className="kanban-schedule-empty-panel">
+            <div className="kanban-run-section-label">Schedule Editor</div>
+            <p>Create a new schedule or select one from the list and click `Edit`.</p>
+          </div>
+        </div>
+
+        {showScheduleEditor && (
+          <div className="config-confirm-overlay kanban-schedule-editor-overlay" onClick={handleCloseScheduleEditor}>
+            <div className="kanban-modal kanban-schedule-editor-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="kanban-modal-header">
+                <div>
+                  <h3>{editingScheduledTaskId ? 'Edit Schedule' : 'New Schedule'}</h3>
+                  <p>{editingScheduledTaskId ? 'Update the selected scheduled task.' : 'Create a new scheduled task for this workspace.'}</p>
+                </div>
+                <button type="button" className="config-close" onClick={handleCloseScheduleEditor}>×</button>
+              </div>
+              <form className="kanban-form kanban-schedule-form" onSubmit={handleSubmitScheduledTask}>
+                <div className="kanban-modal-body">
+                  <div className="kanban-schedule-form-header">
+                    <label className="kanban-schedule-checkbox">
+                      <input type="checkbox" checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />
+                      <span>Enabled</span>
+                    </label>
+                  </div>
+                  <div className="kanban-schedule-form-grid">
+                    <div className="kanban-schedule-field">
+                      <label>Name</label>
+                      <input value={scheduleName} onChange={(e) => setScheduleName(e.target.value)} />
+                    </div>
+                    <div className="kanban-schedule-field">
+                      <label>Run Type</label>
+                      <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value)}>
+                        <option value="once">One Time</option>
+                        <option value="interval">Recurring</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="kanban-schedule-field">
+                    <label>CLI Command</label>
+                    <textarea rows={7} value={scheduleCommand} onChange={(e) => setScheduleCommand(e.target.value)} />
+                  </div>
+                  {scheduleType === 'once' ? (
+                    <div className="kanban-schedule-field">
+                      <label>Run At</label>
+                      <input type="datetime-local" value={scheduleRunAt} onChange={(e) => setScheduleRunAt(e.target.value)} />
+                    </div>
+                  ) : (
+                    <div className="kanban-schedule-interval-row">
+                      <div className="kanban-schedule-field">
+                        <label>Every</label>
+                        <input type="number" min="1" value={scheduleIntervalValue} onChange={(e) => setScheduleIntervalValue(e.target.value)} />
+                      </div>
+                      <div className="kanban-schedule-field">
+                        <label>Unit</label>
+                        <select value={scheduleIntervalUnit} onChange={(e) => setScheduleIntervalUnit(e.target.value)}>
+                          <option value="minutes">Minutes</option>
+                          <option value="hours">Hours</option>
+                          <option value="days">Days</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  <div className="kanban-schedule-summary">
+                    <div className="kanban-run-section-label">Current Selection</div>
+                    <div className="kanban-schedule-summary-grid">
+                      <span>{scheduleName.trim() || 'Untitled schedule'}</span>
+                      <span>{scheduleType === 'once' ? 'One Time' : `Every ${scheduleIntervalValue || 1} ${scheduleIntervalUnit}`}</span>
+                      <span>{scheduleType === 'once' ? (scheduleRunAt ? formatTime(new Date(scheduleRunAt).toISOString()) : 'No time selected') : (scheduleEnabled ? 'Auto-run enabled' : 'Paused')}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="kanban-modal-footer config-confirm-actions">
+                  <button type="button" className="btn-cancel" onClick={handleCloseScheduleEditor}>Cancel</button>
+                  <button type="button" className="btn-cancel" onClick={resetScheduledTaskForm}>Reset</button>
+                  <button type="submit" className="btn-confirm">{editingScheduledTaskId ? 'Save' : 'Create'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="kanban-workspace">
       <div className={`kanban-sidebar-shell ${kanbanState.sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -329,6 +594,12 @@ function KanbanWorkspace({
           >
             Agents
           </button>
+          <button
+            className={`kanban-sidebar-item ${kanbanState.selectedView === 'schedules' ? 'active' : ''}`}
+            onClick={() => onChangeSelectedView('schedules')}
+          >
+            Schedules
+          </button>
         </aside>
       </div>
       {kanbanState.sidebarCollapsed && (
@@ -345,7 +616,11 @@ function KanbanWorkspace({
       )}
 
       <div className="kanban-content">
-        {kanbanState.selectedView === 'agents' ? renderAgents() : renderBoard()}
+        {kanbanState.selectedView === 'agents'
+          ? renderAgents()
+          : kanbanState.selectedView === 'schedules'
+            ? renderSchedules()
+            : renderBoard()}
       </div>
 
       {selectedAgentNode && kanbanState.selectedView === 'agents' && (
@@ -494,7 +769,7 @@ function KanbanWorkspace({
                 ))}
               </div>
               {activeTask.lastError && <div className="kanban-error-banner">{activeTask.lastError}</div>}
-              {activeTask.stage === 'in_review' && (
+              {activeTask.stage === 'in_review' && activeTask.targetType !== 'scheduled' && (
                 <div className="kanban-review-box">
                   <label>Reply</label>
                   <textarea rows={5} value={reviewReply} onChange={(e) => setReviewReply(e.target.value)} />
@@ -503,6 +778,12 @@ function KanbanWorkspace({
                     <button className="btn-cancel" onClick={handleMarkDone}>Mark Done</button>
                     <button className="btn-confirm" onClick={handleReply}>Send Reply</button>
                   </div>
+                </div>
+              )}
+              {activeTask.stage === 'in_review' && activeTask.targetType === 'scheduled' && (
+                <div className="kanban-modal-footer config-confirm-actions">
+                  <button className="btn-delete" onClick={() => onDeleteTask(activeTask.id)}>Delete</button>
+                  <button className="btn-confirm" onClick={handleMarkDone}>Mark Done</button>
                 </div>
               )}
               {activeTask.stage !== 'in_review' && activeTask.runStatus !== 'running' && (

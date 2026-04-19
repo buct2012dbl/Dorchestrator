@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const { normalizeScheduledTask } = require('./kanbanSchedule');
 
 const DEFAULT_STATE = {
   selectedView: 'board',
   sidebarCollapsed: false,
   tasks: [],
+  scheduledTasks: [],
 };
 
 function clone(value) {
@@ -112,6 +114,9 @@ class KanbanManager {
       selectedView: state.selectedView || 'board',
       sidebarCollapsed: Boolean(state.sidebarCollapsed),
       tasks: Array.isArray(state.tasks) ? state.tasks.map((task) => normalizeTask(clone(task))) : [],
+      scheduledTasks: Array.isArray(state.scheduledTasks)
+        ? state.scheduledTasks.map((task) => normalizeScheduledTask(clone(task)))
+        : [],
     };
   }
 
@@ -120,6 +125,9 @@ class KanbanManager {
       selectedView: state?.selectedView || 'board',
       sidebarCollapsed: Boolean(state?.sidebarCollapsed),
       tasks: Array.isArray(state?.tasks) ? state.tasks.map((task) => normalizeTask(task)) : [],
+      scheduledTasks: Array.isArray(state?.scheduledTasks)
+        ? state.scheduledTasks.map((task) => normalizeScheduledTask(task))
+        : [],
     });
   }
 }

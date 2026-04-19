@@ -12,6 +12,8 @@ import { createDefaultSwarmGraph, useAgents } from './hooks/useAgents';
 import { NODE_STATUS } from './store/agentStore';
 import './App.css';
 
+const DEFAULT_KANBAN_STATE = { selectedView: 'board', sidebarCollapsed: false, tasks: [], scheduledTasks: [] };
+
 function GraphIcon() {
   return (
     <svg className="view-toggle-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -188,7 +190,7 @@ function App() {
   const [mode, setMode] = useState(DEFAULT_MODE);
   const [swarms, setSwarms] = useState([]);
   const [sharedAgents, setSharedAgents] = useState([]);
-  const [kanbanState, setKanbanState] = useState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
+  const [kanbanState, setKanbanState] = useState(DEFAULT_KANBAN_STATE);
   const [selectedSwarmId, setSelectedSwarmId] = useState(null);
   const [isSwarmSidebarCollapsed, setIsSwarmSidebarCollapsed] = useState(false);
   const [showDeleteSwarmConfirm, setShowDeleteSwarmConfirm] = useState(false);
@@ -246,7 +248,7 @@ function App() {
   const loadKanbanWorkspaceState = useCallback(async () => {
     if (!window.electronAPI || !workspace) {
       setSharedAgents([]);
-      setKanbanState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
+      setKanbanState(DEFAULT_KANBAN_STATE);
       return;
     }
 
@@ -256,11 +258,11 @@ function App() {
         window.electronAPI.loadKanbanState(),
       ]);
       setSharedAgents(loadedAgents || []);
-      setKanbanState(loadedKanbanState || { selectedView: 'board', sidebarCollapsed: false, tasks: [] });
+      setKanbanState(loadedKanbanState || DEFAULT_KANBAN_STATE);
     } catch (err) {
       console.error('[App] Failed to load Kanban state:', err);
       setSharedAgents([]);
-      setKanbanState({ selectedView: 'board', sidebarCollapsed: false, tasks: [] });
+      setKanbanState(DEFAULT_KANBAN_STATE);
     }
   }, [workspace]);
 
@@ -490,6 +492,11 @@ function App() {
       }));
     }));
 
+    unsubs.push(window.electronAPI.onKanbanStateUpdate(({ state }) => {
+      if (!state) return;
+      setKanbanState(state);
+    }));
+
     return () => {
       Object.values(statusUpdateTimers).forEach(clearTimeout);
       unsubs.forEach((unsub) => unsub());
@@ -697,6 +704,7 @@ function App() {
       currentRunId: null,
       history: [],
       runs: [],
+      scheduleLogId: null,
     };
     await persistKanbanState({
       ...kanbanState,
@@ -731,7 +739,7 @@ function App() {
       tasks: kanbanState.tasks.map((item) => (item.id === taskId ? nextTask : item)),
     });
 
-    if (stage === 'in_progress') {
+    if (stage === 'in_progress' && task.targetType !== 'scheduled') {
       await window.electronAPI?.startKanbanTask({ taskId });
     }
   }, [kanbanState, persistKanbanState]);
@@ -746,6 +754,46 @@ function App() {
 
   const handleStartKanbanTask = useCallback(async (taskId, replyMessage) => {
     await window.electronAPI?.startKanbanTask({ taskId, replyMessage });
+  }, []);
+
+  const handleSaveScheduledKanbanTask = useCallback(async (scheduledTaskInput) => {
+    const now = new Date().toISOString();
+    const existingTask = kanbanState.scheduledTasks.find((task) => task.id === scheduledTaskInput.id);
+    const nextTask = {
+      id: existingTask?.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: scheduledTaskInput.name,
+      command: scheduledTaskInput.command,
+      scheduleType: scheduledTaskInput.scheduleType,
+      runAt: scheduledTaskInput.scheduleType === 'once' ? scheduledTaskInput.runAt : null,
+      intervalValue: scheduledTaskInput.scheduleType === 'interval' ? scheduledTaskInput.intervalValue : 1,
+      intervalUnit: scheduledTaskInput.scheduleType === 'interval' ? scheduledTaskInput.intervalUnit : 'hours',
+      enabled: scheduledTaskInput.enabled !== false,
+      createdAt: existingTask?.createdAt || now,
+      updatedAt: now,
+      lastRunAt: existingTask?.lastRunAt || null,
+      nextRunAt: null,
+      logs: existingTask?.logs || [],
+    };
+    const nextState = {
+      ...kanbanState,
+      scheduledTasks: existingTask
+        ? kanbanState.scheduledTasks.map((task) => (task.id === existingTask.id ? nextTask : task))
+        : [...kanbanState.scheduledTasks, nextTask],
+    };
+    await persistKanbanState(nextState);
+  }, [kanbanState, persistKanbanState]);
+
+  const handleDeleteScheduledKanbanTask = useCallback(async (scheduleId) => {
+    const nextState = {
+      ...kanbanState,
+      scheduledTasks: kanbanState.scheduledTasks.filter((task) => task.id !== scheduleId),
+      tasks: kanbanState.tasks.filter((task) => task.targetType !== 'scheduled' || task.targetId !== scheduleId),
+    };
+    await persistKanbanState(nextState);
+  }, [kanbanState, persistKanbanState]);
+
+  const handleRunScheduledKanbanTaskNow = useCallback(async (scheduleId) => {
+    await window.electronAPI?.runKanbanScheduledTaskNow({ scheduleId });
   }, []);
 
   const confirmDeleteSwarm = useCallback(async () => {
@@ -979,6 +1027,9 @@ function App() {
             onDeleteTask={handleDeleteKanbanTask}
             onStartTask={handleStartKanbanTask}
             onUpdateTask={handleUpdateKanbanTask}
+            onSaveScheduledTask={handleSaveScheduledKanbanTask}
+            onDeleteScheduledTask={handleDeleteScheduledKanbanTask}
+            onRunScheduledTaskNow={handleRunScheduledKanbanTaskNow}
           />
         )}
         {mode === 'swarm' && showConfig && selectedAgentData && (
