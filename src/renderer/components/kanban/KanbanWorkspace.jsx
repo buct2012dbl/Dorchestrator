@@ -511,84 +511,6 @@ function KanbanWorkspace({
           </div>
         </div>
 
-        {showScheduleEditor && (
-          <div className="config-confirm-overlay kanban-schedule-editor-overlay" onClick={handleCloseScheduleEditor}>
-            <div
-              className="kanban-modal kanban-schedule-editor-modal"
-              onClick={(e) => e.stopPropagation()}
-              style={{ transform: `translate(${scheduleModalOffset.x}px, ${scheduleModalOffset.y}px)` }}
-            >
-              <div className="kanban-modal-header kanban-schedule-editor-header" onMouseDown={handleScheduleModalDragStart}>
-                <div>
-                  <h3>{editingScheduledTaskId ? 'Edit Schedule' : 'New Schedule'}</h3>
-                  <p>{editingScheduledTaskId ? 'Update the selected scheduled task.' : 'Create a new scheduled task for this workspace.'}</p>
-                </div>
-                <button type="button" className="config-close" onClick={handleCloseScheduleEditor}>×</button>
-              </div>
-              <form className="kanban-form kanban-schedule-form" onSubmit={handleSubmitScheduledTask}>
-                <div className="kanban-modal-body">
-                  <div className="kanban-schedule-form-header">
-                    <label className="kanban-schedule-checkbox">
-                      <input type="checkbox" checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />
-                      <span>Enabled</span>
-                    </label>
-                  </div>
-                  <div className="kanban-schedule-form-grid">
-                    <div className="kanban-schedule-field">
-                      <label>Name</label>
-                      <input value={scheduleName} onChange={(e) => setScheduleName(e.target.value)} />
-                    </div>
-                    <div className="kanban-schedule-field">
-                      <label>Run Type</label>
-                      <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value)}>
-                        <option value="once">One Time</option>
-                        <option value="interval">Recurring</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="kanban-schedule-field">
-                    <label>CLI Command</label>
-                    <textarea rows={7} value={scheduleCommand} onChange={(e) => setScheduleCommand(e.target.value)} />
-                  </div>
-                  {scheduleType === 'once' ? (
-                    <div className="kanban-schedule-field">
-                      <label>Run At</label>
-                      <input type="datetime-local" value={scheduleRunAt} onChange={(e) => setScheduleRunAt(e.target.value)} />
-                    </div>
-                  ) : (
-                    <div className="kanban-schedule-interval-row">
-                      <div className="kanban-schedule-field">
-                        <label>Every</label>
-                        <input type="number" min="1" value={scheduleIntervalValue} onChange={(e) => setScheduleIntervalValue(e.target.value)} />
-                      </div>
-                      <div className="kanban-schedule-field">
-                        <label>Unit</label>
-                        <select value={scheduleIntervalUnit} onChange={(e) => setScheduleIntervalUnit(e.target.value)}>
-                          <option value="minutes">Minutes</option>
-                          <option value="hours">Hours</option>
-                          <option value="days">Days</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                  <div className="kanban-schedule-summary">
-                    <div className="kanban-run-section-label">Current Selection</div>
-                    <div className="kanban-schedule-summary-grid">
-                      <span>{scheduleName.trim() || 'Untitled schedule'}</span>
-                      <span>{scheduleType === 'once' ? 'One Time' : `Every ${scheduleIntervalValue || 1} ${scheduleIntervalUnit}`}</span>
-                      <span>{scheduleType === 'once' ? (scheduleRunAt ? formatTime(new Date(scheduleRunAt).toISOString()) : 'No time selected') : (scheduleEnabled ? 'Auto-run enabled' : 'Paused')}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="kanban-modal-footer config-confirm-actions">
-                  <button type="button" className="btn-cancel" onClick={handleCloseScheduleEditor}>Cancel</button>
-                  <button type="button" className="btn-cancel" onClick={resetScheduledTaskForm}>Reset</button>
-                  <button type="submit" className="btn-confirm">{editingScheduledTaskId ? 'Save' : 'Create'}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -713,6 +635,85 @@ function KanbanWorkspace({
               <div className="kanban-modal-footer config-confirm-actions">
                 <button type="button" className="btn-cancel" onClick={() => setShowTaskComposer(false)}>Cancel</button>
                 <button type="submit" className="btn-confirm">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showScheduleEditor && (
+        <div className="config-confirm-overlay kanban-schedule-editor-overlay" onClick={handleCloseScheduleEditor}>
+          <div
+            className="kanban-modal kanban-schedule-editor-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ transform: `translate(${scheduleModalOffset.x}px, ${scheduleModalOffset.y}px)` }}
+          >
+            <div className="kanban-modal-header kanban-schedule-editor-header" onMouseDown={handleScheduleModalDragStart}>
+              <div>
+                <h3>{editingScheduledTaskId ? 'Edit Schedule' : 'New Schedule'}</h3>
+                <p>{editingScheduledTaskId ? 'Update the selected scheduled task.' : 'Create a new scheduled task for this workspace.'}</p>
+              </div>
+              <button type="button" className="config-close" onClick={handleCloseScheduleEditor}>×</button>
+            </div>
+            <form className="kanban-form kanban-schedule-form" onSubmit={handleSubmitScheduledTask}>
+              <div className="kanban-modal-body">
+                <div className="kanban-schedule-form-header">
+                  <label className="kanban-schedule-checkbox">
+                    <input type="checkbox" checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />
+                    <span>Enabled</span>
+                  </label>
+                </div>
+                <div className="kanban-schedule-form-grid">
+                  <div className="kanban-schedule-field">
+                    <label>Name</label>
+                    <input value={scheduleName} onChange={(e) => setScheduleName(e.target.value)} />
+                  </div>
+                  <div className="kanban-schedule-field">
+                    <label>Run Type</label>
+                    <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value)}>
+                      <option value="once">One Time</option>
+                      <option value="interval">Recurring</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="kanban-schedule-field">
+                  <label>CLI Command</label>
+                  <textarea rows={7} value={scheduleCommand} onChange={(e) => setScheduleCommand(e.target.value)} />
+                </div>
+                {scheduleType === 'once' ? (
+                  <div className="kanban-schedule-field">
+                    <label>Run At</label>
+                    <input type="datetime-local" value={scheduleRunAt} onChange={(e) => setScheduleRunAt(e.target.value)} />
+                  </div>
+                ) : (
+                  <div className="kanban-schedule-interval-row">
+                    <div className="kanban-schedule-field">
+                      <label>Every</label>
+                      <input type="number" min="1" value={scheduleIntervalValue} onChange={(e) => setScheduleIntervalValue(e.target.value)} />
+                    </div>
+                    <div className="kanban-schedule-field">
+                      <label>Unit</label>
+                      <select value={scheduleIntervalUnit} onChange={(e) => setScheduleIntervalUnit(e.target.value)}>
+                        <option value="minutes">Minutes</option>
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                <div className="kanban-schedule-summary">
+                  <div className="kanban-run-section-label">Current Selection</div>
+                  <div className="kanban-schedule-summary-grid">
+                    <span>{scheduleName.trim() || 'Untitled schedule'}</span>
+                    <span>{scheduleType === 'once' ? 'One Time' : `Every ${scheduleIntervalValue || 1} ${scheduleIntervalUnit}`}</span>
+                    <span>{scheduleType === 'once' ? (scheduleRunAt ? formatTime(new Date(scheduleRunAt).toISOString()) : 'No time selected') : (scheduleEnabled ? 'Auto-run enabled' : 'Paused')}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="kanban-modal-footer config-confirm-actions">
+                <button type="button" className="btn-cancel" onClick={handleCloseScheduleEditor}>Cancel</button>
+                <button type="button" className="btn-cancel" onClick={resetScheduledTaskForm}>Reset</button>
+                <button type="submit" className="btn-confirm">{editingScheduledTaskId ? 'Save' : 'Create'}</button>
               </div>
             </form>
           </div>
