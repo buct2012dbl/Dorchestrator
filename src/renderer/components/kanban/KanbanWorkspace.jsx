@@ -341,42 +341,50 @@ function KanbanWorkspace({
       {showTaskComposer && (
         <div className="config-confirm-overlay" onClick={() => setShowTaskComposer(false)}>
           <div className="kanban-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Create Task</h3>
+            <div className="kanban-modal-header">
+              <div>
+                <h3>Create Task</h3>
+                <p>Queue a new Kanban task with the same modal framing used across Swarm and Mux.</p>
+              </div>
+              <button className="config-close" onClick={() => setShowTaskComposer(false)}>×</button>
+            </div>
             <form className="kanban-form" onSubmit={handleCreateTask}>
-              <label>Task Name</label>
-              <input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} />
-              <label>First Prompt</label>
-              <textarea rows={8} value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} />
-              <label>Run With</label>
-              <select
-                value={draftTargetType}
-                onChange={(e) => {
-                  const nextType = e.target.value;
-                  setDraftTargetType(nextType);
-                  setDraftTargetId(nextType === 'agent' ? (sharedAgents[0]?.id || '') : (swarms[0]?.id || ''));
-                  setDraftEntryAgentId('');
-                }}
-              >
-                <option value="agent">Agent</option>
-                <option value="swarm">Swarm</option>
-              </select>
-              <label>{draftTargetType === 'agent' ? 'Agent' : 'Swarm'}</label>
-              <select value={draftTargetId} onChange={(e) => setDraftTargetId(e.target.value)}>
-                {(draftTargetType === 'agent' ? sharedAgents : swarms).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-              {draftTargetType === 'swarm' && (
-                <>
-                  <label>Entry Agent</label>
-                  <select value={draftEntryAgentId} onChange={(e) => setDraftEntryAgentId(e.target.value)}>
-                    {availableEntryAgents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agent.data?.name || agent.id}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-              <div className="config-confirm-actions">
+              <div className="kanban-modal-body">
+                <label>Task Name</label>
+                <input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} />
+                <label>First Prompt</label>
+                <textarea rows={8} value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} />
+                <label>Run With</label>
+                <select
+                  value={draftTargetType}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setDraftTargetType(nextType);
+                    setDraftTargetId(nextType === 'agent' ? (sharedAgents[0]?.id || '') : (swarms[0]?.id || ''));
+                    setDraftEntryAgentId('');
+                  }}
+                >
+                  <option value="agent">Agent</option>
+                  <option value="swarm">Swarm</option>
+                </select>
+                <label>{draftTargetType === 'agent' ? 'Agent' : 'Swarm'}</label>
+                <select value={draftTargetId} onChange={(e) => setDraftTargetId(e.target.value)}>
+                  {(draftTargetType === 'agent' ? sharedAgents : swarms).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+                {draftTargetType === 'swarm' && (
+                  <>
+                    <label>Entry Agent</label>
+                    <select value={draftEntryAgentId} onChange={(e) => setDraftEntryAgentId(e.target.value)}>
+                      {availableEntryAgents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>{agent.data?.name || agent.id}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+              <div className="kanban-modal-footer config-confirm-actions">
                 <button type="button" className="btn-cancel" onClick={() => setShowTaskComposer(false)}>Cancel</button>
                 <button type="submit" className="btn-confirm">Create</button>
               </div>
@@ -392,91 +400,93 @@ function KanbanWorkspace({
             onClick={(e) => e.stopPropagation()}
             style={{ transform: `translate(${taskModalOffset.x}px, ${taskModalOffset.y}px)` }}
           >
-            <div className="kanban-task-modal-header" onMouseDown={handleTaskModalDragStart}>
+            <div className="kanban-modal-header kanban-task-modal-header" onMouseDown={handleTaskModalDragStart}>
               <div>
                 <h3>{activeTask.title}</h3>
                 <p>{activeTask.runStatus === 'running' ? 'Task is processing in the background.' : 'Review the full run history or send follow-up feedback.'}</p>
               </div>
-              <button className="config-close" onClick={() => setActiveTaskId(null)}>x</button>
+              <button className="config-close" onClick={() => setActiveTaskId(null)}>×</button>
             </div>
-            <div className="kanban-task-runs">
-              {(activeTask.runs || []).slice().reverse().map((run, index) => (
-                <details key={run.id} className="kanban-run" open={index === 0}>
-                  <summary>
-                    <span>Run {activeTask.runs.length - index}</span>
-                    <span>{run.status}</span>
-                    <span>{formatTime(run.startedAt)}</span>
-                  </summary>
-                  <div className="kanban-run-body">
-                    {run.renderMode === 'timeline' && (
-                      <div className="kanban-run-section">
-                        <div className="kanban-run-section-label">Execution Timeline</div>
-                        <KanbanExecutionTimeline
-                          events={run.timelineEvents || []}
-                          isRunning={run.status === 'running'}
-                        />
-                      </div>
-                    )}
-                    {run.renderMode !== 'timeline' && hasVisibleTranscript(run) && (
-                      <div className="kanban-run-section">
-                        <div className="kanban-run-section-label">Live Transcript</div>
-                        <KanbanTranscriptTerminal
-                          sessionKey={run.id}
-                          transcript={run.transcript || ''}
-                        />
-                      </div>
-                    )}
-                    {!run.reply && (
-                      <div className="kanban-run-section">
-                        <div className="kanban-run-section-label">Prompt</div>
-                        <pre>{run.displayPrompt || activeTask.prompt}</pre>
-                      </div>
-                    )}
-                    {run.reply && (
-                      <div className="kanban-run-section">
-                        <div className="kanban-run-section-label">Reviewer Feedback</div>
-                        <pre>{run.reply}</pre>
-                      </div>
-                    )}
-                    {run.finalResponse && (
-                      <div className="kanban-run-section">
-                        <div className="kanban-run-section-label">Reply</div>
-                        <pre>{run.finalResponse}</pre>
-                      </div>
-                    )}
-                    {run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && (run.segments || []).map((segment) => (
-                      <div key={segment.id} className="kanban-run-segment">
-                        <div className="kanban-run-segment-header">{segment.agentName}</div>
-                        <pre>{segment.text}</pre>
-                      </div>
-                    ))}
-                    {!run.finalResponse && run.renderMode === 'timeline' && !hasVisibleTimeline(run) && (
-                      <div className="kanban-run-empty">No response yet. Waiting for the agent to emit structured progress.</div>
-                    )}
-                    {!run.finalResponse && run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && (!run.segments || run.segments.length === 0) && (
-                      <div className="kanban-run-empty">No streamed terminal output was captured for this run.</div>
-                    )}
+            <div className="kanban-task-modal-body">
+              <div className="kanban-task-runs">
+                {(activeTask.runs || []).slice().reverse().map((run, index) => (
+                  <details key={run.id} className="kanban-run" open={index === 0}>
+                    <summary>
+                      <span>Run {activeTask.runs.length - index}</span>
+                      <span>{run.status}</span>
+                      <span>{formatTime(run.startedAt)}</span>
+                    </summary>
+                    <div className="kanban-run-body">
+                      {run.renderMode === 'timeline' && (
+                        <div className="kanban-run-section">
+                          <div className="kanban-run-section-label">Execution Timeline</div>
+                          <KanbanExecutionTimeline
+                            events={run.timelineEvents || []}
+                            isRunning={run.status === 'running'}
+                          />
+                        </div>
+                      )}
+                      {run.renderMode !== 'timeline' && hasVisibleTranscript(run) && (
+                        <div className="kanban-run-section">
+                          <div className="kanban-run-section-label">Live Transcript</div>
+                          <KanbanTranscriptTerminal
+                            sessionKey={run.id}
+                            transcript={run.transcript || ''}
+                          />
+                        </div>
+                      )}
+                      {!run.reply && (
+                        <div className="kanban-run-section">
+                          <div className="kanban-run-section-label">Prompt</div>
+                          <pre>{run.displayPrompt || activeTask.prompt}</pre>
+                        </div>
+                      )}
+                      {run.reply && (
+                        <div className="kanban-run-section">
+                          <div className="kanban-run-section-label">Reviewer Feedback</div>
+                          <pre>{run.reply}</pre>
+                        </div>
+                      )}
+                      {run.finalResponse && (
+                        <div className="kanban-run-section">
+                          <div className="kanban-run-section-label">Reply</div>
+                          <pre>{run.finalResponse}</pre>
+                        </div>
+                      )}
+                      {run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && (run.segments || []).map((segment) => (
+                        <div key={segment.id} className="kanban-run-segment">
+                          <div className="kanban-run-segment-header">{segment.agentName}</div>
+                          <pre>{segment.text}</pre>
+                        </div>
+                      ))}
+                      {!run.finalResponse && run.renderMode === 'timeline' && !hasVisibleTimeline(run) && (
+                        <div className="kanban-run-empty">No response yet. Waiting for the agent to emit structured progress.</div>
+                      )}
+                      {!run.finalResponse && run.renderMode !== 'timeline' && !hasVisibleTranscript(run) && (!run.segments || run.segments.length === 0) && (
+                        <div className="kanban-run-empty">No streamed terminal output was captured for this run.</div>
+                      )}
+                    </div>
+                  </details>
+                ))}
+              </div>
+              {activeTask.lastError && <div className="kanban-error-banner">{activeTask.lastError}</div>}
+              {activeTask.stage === 'in_review' && (
+                <div className="kanban-review-box">
+                  <label>Reply</label>
+                  <textarea rows={5} value={reviewReply} onChange={(e) => setReviewReply(e.target.value)} />
+                  <div className="kanban-modal-footer config-confirm-actions">
+                    <button className="btn-delete" onClick={() => onDeleteTask(activeTask.id)}>Delete</button>
+                    <button className="btn-cancel" onClick={handleMarkDone}>Mark Done</button>
+                    <button className="btn-confirm" onClick={handleReply}>Send Reply</button>
                   </div>
-                </details>
-              ))}
-            </div>
-            {activeTask.lastError && <div className="kanban-error-banner">{activeTask.lastError}</div>}
-            {activeTask.stage === 'in_review' && (
-              <div className="kanban-review-box">
-                <label>Reply</label>
-                <textarea rows={5} value={reviewReply} onChange={(e) => setReviewReply(e.target.value)} />
-                <div className="config-confirm-actions">
-                  <button className="btn-delete" onClick={() => onDeleteTask(activeTask.id)}>Delete</button>
-                  <button className="btn-cancel" onClick={handleMarkDone}>Mark Done</button>
-                  <button className="btn-confirm" onClick={handleReply}>Send Reply</button>
                 </div>
-              </div>
-            )}
-            {activeTask.stage !== 'in_review' && activeTask.runStatus !== 'running' && (
-              <div className="config-confirm-actions">
-                <button className="btn-delete" onClick={() => onDeleteTask(activeTask.id)}>Delete</button>
-              </div>
-            )}
+              )}
+              {activeTask.stage !== 'in_review' && activeTask.runStatus !== 'running' && (
+                <div className="kanban-modal-footer config-confirm-actions">
+                  <button className="btn-delete" onClick={() => onDeleteTask(activeTask.id)}>Delete</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

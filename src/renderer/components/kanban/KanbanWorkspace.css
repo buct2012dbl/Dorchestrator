@@ -611,17 +611,30 @@
 .kanban-modal {
   width: min(760px, calc(100vw - 40px));
   max-height: calc(100vh - 60px);
-  overflow: auto;
-  background: color-mix(in srgb, var(--card) 92%, black);
-  border: 1px solid var(--border);
-  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(24, 24, 38, 0.98), rgba(12, 12, 20, 0.98));
+  border: 2px solid var(--accent);
+  box-shadow: var(--box-shadow-neon-lg);
+  position: relative;
   clip-path: polygon(
-    0 10px, 10px 0,
-    calc(100% - 10px) 0, 100% 10px,
-    100% calc(100% - 10px), calc(100% - 10px) 100%,
-    10px 100%, 0 calc(100% - 10px)
+    0 16px, 16px 0,
+    calc(100% - 16px) 0, 100% 16px,
+    100% calc(100% - 16px), calc(100% - 16px) 100%,
+    16px 100%, 0 calc(100% - 16px)
   );
-  box-shadow: 0 0 22px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 255, 136, 0.2);
+}
+
+.kanban-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--panel-grid);
+  background-size: 46px 46px;
+  opacity: 0.22;
 }
 
 .kanban-task-modal {
@@ -632,10 +645,58 @@
   cursor: default;
 }
 
+.kanban-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: linear-gradient(180deg, rgba(27, 30, 42, 0.96), rgba(18, 18, 26, 0.9));
+  position: relative;
+  z-index: 1;
+}
+
+.kanban-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'Orbitron', monospace;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+.kanban-modal-header p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.kanban-modal-body,
+.kanban-task-modal-body {
+  position: relative;
+  z-index: 1;
+}
+
+.kanban-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.kanban-modal-footer {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .kanban-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-height: 0;
 }
 
 .kanban-form label,
@@ -657,6 +718,12 @@
   padding: 10px 12px;
   font-family: 'Share Tech Mono', monospace;
   transition: all 140ms ease;
+  clip-path: polygon(
+    0 7px, 7px 0,
+    calc(100% - 7px) 0, 100% 7px,
+    100% calc(100% - 7px), calc(100% - 7px) 100%,
+    7px 100%, 0 calc(100% - 7px)
+  );
 }
 
 .kanban-form input:focus,
@@ -669,27 +736,14 @@
 }
 
 .kanban-task-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
   cursor: move;
   user-select: none;
 }
 
-.kanban-task-modal-header h3 {
-  font-family: 'Orbitron', monospace;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--foreground);
-}
-
-.kanban-task-modal-header p {
-  margin-top: 6px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-family: 'Share Tech Mono', monospace;
+.kanban-task-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
 }
 
 .kanban-task-runs {
@@ -700,7 +754,13 @@
 
 .kanban-run {
   border: 1px solid var(--border);
-  background: rgba(7, 12, 10, 0.88);
+  background: linear-gradient(180deg, rgba(13, 17, 24, 0.94), rgba(8, 10, 15, 0.96));
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
 }
 
 .kanban-run summary {
@@ -881,8 +941,12 @@
   }
 
   .kanban-task-modal-header {
-    margin: -18px -18px 0;
-    padding: 16px 16px 12px;
+    padding: 16px;
+  }
+
+  .kanban-modal-body,
+  .kanban-task-modal-body {
+    padding: 16px;
   }
 
   .kanban-run summary {
