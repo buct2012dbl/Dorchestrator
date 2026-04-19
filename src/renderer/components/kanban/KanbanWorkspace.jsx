@@ -92,7 +92,9 @@ function KanbanWorkspace({
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [reviewReply, setReviewReply] = useState('');
   const [taskModalOffset, setTaskModalOffset] = useState({ x: 0, y: 0 });
+  const [scheduleModalOffset, setScheduleModalOffset] = useState({ x: 0, y: 0 });
   const taskModalDragRef = useRef(null);
+  const scheduleModalDragRef = useRef(null);
 
   const selectedAgent = sharedAgents.find((agent) => agent.id === selectedAgentId) || null;
   const activeTask = kanbanState.tasks.find((task) => task.id === activeTaskId) || null;
@@ -273,11 +275,30 @@ function KanbanWorkspace({
     window.getSelection?.().removeAllRanges();
   }, [taskModalOffset.x, taskModalOffset.y]);
 
+  const handleScheduleModalDragStart = useCallback((e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return;
+
+    scheduleModalDragRef.current = {
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      originX: scheduleModalOffset.x,
+      originY: scheduleModalOffset.y,
+    };
+    window.getSelection?.().removeAllRanges();
+  }, [scheduleModalOffset.x, scheduleModalOffset.y]);
+
   useEffect(() => {
     if (!activeTaskId) {
       setTaskModalOffset({ x: 0, y: 0 });
     }
   }, [activeTaskId]);
+
+  useEffect(() => {
+    if (!showScheduleEditor) {
+      setScheduleModalOffset({ x: 0, y: 0 });
+    }
+  }, [showScheduleEditor]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -288,10 +309,19 @@ function KanbanWorkspace({
           y: dragState.originY + (e.clientY - dragState.pointerStartY),
         });
       }
+
+      const scheduleDragState = scheduleModalDragRef.current;
+      if (scheduleDragState) {
+        setScheduleModalOffset({
+          x: scheduleDragState.originX + (e.clientX - scheduleDragState.pointerStartX),
+          y: scheduleDragState.originY + (e.clientY - scheduleDragState.pointerStartY),
+        });
+      }
     };
 
     const handleMouseUp = () => {
       taskModalDragRef.current = null;
+      scheduleModalDragRef.current = null;
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -483,8 +513,12 @@ function KanbanWorkspace({
 
         {showScheduleEditor && (
           <div className="config-confirm-overlay kanban-schedule-editor-overlay" onClick={handleCloseScheduleEditor}>
-            <div className="kanban-modal kanban-schedule-editor-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="kanban-modal-header">
+            <div
+              className="kanban-modal kanban-schedule-editor-modal"
+              onClick={(e) => e.stopPropagation()}
+              style={{ transform: `translate(${scheduleModalOffset.x}px, ${scheduleModalOffset.y}px)` }}
+            >
+              <div className="kanban-modal-header kanban-schedule-editor-header" onMouseDown={handleScheduleModalDragStart}>
                 <div>
                   <h3>{editingScheduledTaskId ? 'Edit Schedule' : 'New Schedule'}</h3>
                   <p>{editingScheduledTaskId ? 'Update the selected scheduled task.' : 'Create a new scheduled task for this workspace.'}</p>

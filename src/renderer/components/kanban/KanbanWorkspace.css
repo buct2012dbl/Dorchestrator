@@ -869,6 +869,13 @@
 
 .kanban-schedule-editor-modal {
   width: min(980px, calc(100vw - 56px));
+  margin-top: 72px;
+  margin-bottom: 24px;
+}
+
+.kanban-schedule-editor-header {
+  cursor: move;
+  user-select: none;
 }
 
 .kanban-task-modal-overlay {
