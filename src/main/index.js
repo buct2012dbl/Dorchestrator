@@ -1437,6 +1437,9 @@ function createShellExecutionRun(command, runId, startedAt) {
     reply: '',
     finalResponse: '',
     transcript: `$ ${command}\n`,
+    stdout: '',
+    stderr: '',
+    output: '',
     timelineEvents: [],
     segments: [],
   };
@@ -1972,6 +1975,8 @@ async function runScheduledKanbanTask(scheduleId, options = {}) {
     const run = task.runs.find((item) => item.id === task.currentRunId);
     if (!run) return;
     run.transcript = `${run.transcript || ''}${text}`;
+    run[streamName] = `${run[streamName] || ''}${text}`;
+    run.output = `${run.output || ''}${text}`;
     active.task = task;
     markKanbanTaskActivity(task.id);
     emitKanbanTaskUpdate(task);
@@ -2014,6 +2019,9 @@ async function runScheduledKanbanTask(scheduleId, options = {}) {
           run.completedAt = completedAt;
           run.status = isSuccess ? 'completed' : 'error';
           run.finalResponse = finalResponse;
+          run.stdout = commandOutput.stdout;
+          run.stderr = commandOutput.stderr;
+          run.output = output;
           run.transcript = `${run.transcript || ''}${errorMessage && !commandOutput.stderr.includes(errorMessage) ? `${errorMessage}\n` : ''}`;
         }
         return task;
