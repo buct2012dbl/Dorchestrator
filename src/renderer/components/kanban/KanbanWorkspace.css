@@ -613,7 +613,8 @@
   max-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   background:
     linear-gradient(180deg, rgba(24, 24, 38, 0.98), rgba(12, 12, 20, 0.98));
   border: 2px solid var(--accent);
@@ -653,8 +654,9 @@
   padding: 16px 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   background: linear-gradient(180deg, rgba(27, 30, 42, 0.96), rgba(18, 18, 26, 0.9));
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .kanban-modal-header h3 {
@@ -687,7 +689,6 @@
   flex-direction: column;
   gap: 10px;
   flex: 1;
-  overflow-y: auto;
   padding: 18px;
 }
 
@@ -752,7 +753,7 @@
 
 .kanban-task-modal-body {
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   padding: 18px;
 }
 
