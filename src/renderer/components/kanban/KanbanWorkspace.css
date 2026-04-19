@@ -865,12 +865,15 @@
   position: absolute;
   inset: 0;
   z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 24px 24px;
 }
 
 .kanban-schedule-editor-modal {
   width: min(980px, calc(100vw - 56px));
-  margin-top: 72px;
-  margin-bottom: 24px;
+  margin: 0;
 }
 
 .kanban-schedule-editor-header {
