@@ -224,21 +224,23 @@ function KanbanWorkspace({
                   onClick={() => handleOpenTask(task)}
                   onKeyDown={(e) => handleCardKeyDown(e, task)}
                 >
-                  <button
-                    type="button"
-                    className="kanban-card-delete"
-                    aria-label={`Delete ${task.title}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTask(task.id);
-                    }}
-                    onDragStart={(e) => e.preventDefault()}
-                  >
-                    ×
-                  </button>
                   <div className="kanban-card-header">
                     <span className="kanban-card-title">{task.title}</span>
-                    <span className={`kanban-badge ${task.runStatus}`}>{task.runStatus.replace('_', ' ')}</span>
+                    <div className="kanban-card-actions">
+                      <span className={`kanban-badge ${task.runStatus}`}>{task.runStatus.replace('_', ' ')}</span>
+                      <button
+                        type="button"
+                        className="kanban-card-delete"
+                        aria-label={`Delete ${task.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteTask(task.id);
+                        }}
+                        onDragStart={(e) => e.preventDefault()}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                   <div className="kanban-card-body">{task.prompt}</div>
                   <div className="kanban-card-footer">
