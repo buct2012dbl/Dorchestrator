@@ -34,6 +34,23 @@ function formatDateTimeInput(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function splitScheduleRunAt(value) {
+  const formatted = formatDateTimeInput(value);
+  if (!formatted) {
+    return { date: '', time: '' };
+  }
+  const [date, time] = formatted.split('T');
+  return { date: date || '', time: time || '' };
+}
+
+function buildScheduleRunAtIso(dateValue, timeValue) {
+  const safeDate = (dateValue || '').trim();
+  const safeTime = (timeValue || '').trim();
+  if (!safeDate || !safeTime) return null;
+  const candidate = new Date(`${safeDate}T${safeTime}`);
+  return Number.isNaN(candidate.getTime()) ? null : candidate.toISOString();
+}
+
 function formatScheduleSummary(task) {
   if (task.scheduleType === 'interval') {
     return `Every ${task.intervalValue} ${task.intervalUnit}`;
@@ -113,7 +130,8 @@ function KanbanWorkspace({
   const [scheduleName, setScheduleName] = useState('');
   const [scheduleCommand, setScheduleCommand] = useState('');
   const [scheduleType, setScheduleType] = useState('once');
-  const [scheduleRunAt, setScheduleRunAt] = useState('');
+  const [scheduleRunDate, setScheduleRunDate] = useState('');
+  const [scheduleRunTime, setScheduleRunTime] = useState('');
   const [scheduleIntervalValue, setScheduleIntervalValue] = useState('1');
   const [scheduleIntervalUnit, setScheduleIntervalUnit] = useState('hours');
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
@@ -178,7 +196,8 @@ function KanbanWorkspace({
     setScheduleName('');
     setScheduleCommand('');
     setScheduleType('once');
-    setScheduleRunAt('');
+    setScheduleRunDate('');
+    setScheduleRunTime('');
     setScheduleIntervalValue('1');
     setScheduleIntervalUnit('hours');
     setScheduleEnabled(true);
@@ -189,7 +208,9 @@ function KanbanWorkspace({
     setScheduleName(task?.name || '');
     setScheduleCommand(task?.command || '');
     setScheduleType(task?.scheduleType || 'once');
-    setScheduleRunAt(formatDateTimeInput(task?.runAt));
+    const splitRunAt = splitScheduleRunAt(task?.runAt);
+    setScheduleRunDate(splitRunAt.date);
+    setScheduleRunTime(splitRunAt.time);
     setScheduleIntervalValue(String(task?.intervalValue || 1));
     setScheduleIntervalUnit(task?.intervalUnit || 'hours');
     setScheduleEnabled(task?.enabled !== false);
@@ -247,7 +268,8 @@ function KanbanWorkspace({
     if (!scheduleName.trim() || !scheduleCommand.trim()) {
       return;
     }
-    if (scheduleType === 'once' && !scheduleRunAt) {
+    const scheduleRunAtIso = buildScheduleRunAtIso(scheduleRunDate, scheduleRunTime);
+    if (scheduleType === 'once' && !scheduleRunAtIso) {
       return;
     }
 
@@ -256,7 +278,7 @@ function KanbanWorkspace({
       name: scheduleName.trim(),
       command: scheduleCommand.trim(),
       scheduleType,
-      runAt: scheduleType === 'once' ? new Date(scheduleRunAt).toISOString() : null,
+      runAt: scheduleType === 'once' ? scheduleRunAtIso : null,
       intervalValue: scheduleType === 'interval' ? Number.parseInt(scheduleIntervalValue, 10) || 1 : 1,
       intervalUnit: scheduleType === 'interval' ? scheduleIntervalUnit : 'hours',
       enabled: scheduleEnabled,
@@ -709,14 +731,27 @@ function KanbanWorkspace({
                   <textarea rows={7} value={scheduleCommand} onChange={(e) => setScheduleCommand(e.target.value)} />
                 </div>
                 {scheduleType === 'once' ? (
-                  <div className="kanban-schedule-field">
-                    <label>Run At</label>
-                    <input
-                      type="datetime-local"
-                      lang="en-US"
-                      value={scheduleRunAt}
-                      onChange={(e) => setScheduleRunAt(e.target.value)}
-                    />
+                  <div className="kanban-schedule-interval-row">
+                    <div className="kanban-schedule-field">
+                      <label>Run Date</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="YYYY-MM-DD"
+                        value={scheduleRunDate}
+                        onChange={(e) => setScheduleRunDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="kanban-schedule-field">
+                      <label>Run Time</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="HH:MM"
+                        value={scheduleRunTime}
+                        onChange={(e) => setScheduleRunTime(e.target.value)}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="kanban-schedule-interval-row">
@@ -739,7 +774,7 @@ function KanbanWorkspace({
                   <div className="kanban-schedule-summary-grid">
                     <span>{scheduleName.trim() || 'Untitled schedule'}</span>
                     <span>{scheduleType === 'once' ? 'One Time' : `Every ${scheduleIntervalValue || 1} ${scheduleIntervalUnit}`}</span>
-                    <span>{scheduleType === 'once' ? (scheduleRunAt ? formatTime(new Date(scheduleRunAt).toISOString()) : 'No time selected') : (scheduleEnabled ? 'Auto-run enabled' : 'Paused')}</span>
+                    <span>{scheduleType === 'once' ? (buildScheduleRunAtIso(scheduleRunDate, scheduleRunTime) ? formatTime(buildScheduleRunAtIso(scheduleRunDate, scheduleRunTime)) : 'No time selected') : (scheduleEnabled ? 'Auto-run enabled' : 'Paused')}</span>
                   </div>
                 </div>
               </div>
