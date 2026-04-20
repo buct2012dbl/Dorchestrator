@@ -27,6 +27,8 @@ A visual desktop application for orchestrating multiple AI agents — powered by
 - Task detail modal shows run history in accordions with execution timelines or live transcripts
 - Review loop supports replying to a run from **In Review** or marking it done
 - Shared agent library with template-based creation and the same configuration panel used in Swarm mode
+- Built-in **Schedules** view for one-time or recurring workspace commands with pause, edit, delete, and manual run controls
+- Scheduled commands create spawned task cards automatically and surface their command output in **In Review**
 
 ### Visual Agent Graph (Swarm Mode)
 - Drag-and-drop interface powered by React Flow
@@ -230,6 +232,13 @@ CEO Terminal (receives reply)
 - They are edited with the same configuration sidebar used elsewhere in the app
 - They also appear in Swarm graph creation controls so the two workflows share agent definitions
 
+### Scheduled Tasks
+- Open `Schedules` in the Kanban sidebar to create workspace automation alongside the board and shared agents
+- Each schedule stores a name, CLI command, enabled state, and either a one-time run timestamp or a recurring interval in minutes, hours, or days
+- `Run Now` triggers a schedule immediately without waiting for the next automatic window
+- Automatic executions create Kanban cards, stream command output into the task modal, and land in **In Review** with success or failure status
+- One-time schedules disable themselves after they fire; recurring schedules keep calculating the next run time and preserve execution logs
+
 ### Creating Agents
 1. Click "Add Agent" in the graph view
 2. Select a template (CEO, Programmer, etc.) or create custom
@@ -371,4 +380,3 @@ MIT
 - [OpenAI](https://openai.com) for Codex CLI
 - [React Flow](https://reactflow.dev) for graph visualization
 - [xterm.js](https://xtermjs.org) for terminal emulation
-
