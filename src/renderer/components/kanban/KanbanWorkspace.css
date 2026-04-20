@@ -827,23 +827,127 @@
   flex: 1;
 }
 
-.kanban-schedule-checkbox {
+.kanban-schedule-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  width: 100%;
   margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 52%),
+    rgba(5, 7, 12, 0.72);
+  color: var(--foreground);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, transform 160ms ease;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
 }
 
-.kanban-schedule-checkbox input {
-  width: auto;
+.kanban-schedule-toggle:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  box-shadow: var(--box-shadow-neon-sm);
 }
 
-.kanban-schedule-checkbox span {
+.kanban-schedule-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 255, 136, 0.3), var(--box-shadow-neon-sm);
+}
+
+.kanban-schedule-toggle.enabled {
+  background:
+    linear-gradient(135deg, rgba(0, 255, 136, 0.1), transparent 58%),
+    rgba(5, 7, 12, 0.82);
+}
+
+.kanban-schedule-toggle.paused {
+  background:
+    linear-gradient(135deg, rgba(255, 170, 0, 0.12), transparent 58%),
+    rgba(5, 7, 12, 0.82);
+}
+
+.kanban-schedule-toggle-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: rgba(255, 255, 255, 0.06);
+  clip-path: polygon(
+    0 7px, 7px 0,
+    calc(100% - 7px) 0, 100% 7px,
+    100% calc(100% - 7px), calc(100% - 7px) 100%,
+    7px 100%, 0 calc(100% - 7px)
+  );
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.kanban-schedule-toggle.enabled .kanban-schedule-toggle-track {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: rgba(0, 255, 136, 0.14);
+}
+
+.kanban-schedule-toggle.paused .kanban-schedule-toggle-track {
+  border-color: rgba(255, 170, 0, 0.38);
+  background: rgba(255, 170, 0, 0.1);
+}
+
+.kanban-schedule-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  background: var(--foreground);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.15);
+  clip-path: polygon(
+    0 5px, 5px 0,
+    calc(100% - 5px) 0, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 5px) 100%,
+    5px 100%, 0 calc(100% - 5px)
+  );
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.kanban-schedule-toggle.enabled .kanban-schedule-toggle-thumb {
+  transform: translateX(26px);
+  background: var(--accent);
+}
+
+.kanban-schedule-toggle.paused .kanban-schedule-toggle-thumb {
+  background: #ffb347;
+}
+
+.kanban-schedule-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kanban-schedule-toggle-copy strong,
+.kanban-schedule-toggle-copy span {
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.kanban-schedule-toggle-copy strong {
   color: var(--foreground);
   font-size: 11px;
-  font-family: 'Share Tech Mono', monospace;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
+}
+
+.kanban-schedule-toggle-copy span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .kanban-schedule-summary {

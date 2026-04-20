@@ -708,10 +708,22 @@ function KanbanWorkspace({
             <form className="kanban-form kanban-schedule-form" onSubmit={handleSubmitScheduledTask}>
               <div className="kanban-modal-body">
                 <div className="kanban-schedule-form-header">
-                  <label className="kanban-schedule-checkbox">
-                    <input type="checkbox" checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />
-                    <span>Enabled</span>
-                  </label>
+                  <button
+                    type="button"
+                    className={`kanban-schedule-toggle ${scheduleEnabled ? 'enabled' : 'paused'}`}
+                    role="switch"
+                    aria-checked={scheduleEnabled}
+                    aria-label={`Scheduled task is ${scheduleEnabled ? 'enabled' : 'paused'}. Click to toggle.`}
+                    onClick={() => setScheduleEnabled((current) => !current)}
+                  >
+                    <span className="kanban-schedule-toggle-track" aria-hidden="true">
+                      <span className="kanban-schedule-toggle-thumb" />
+                    </span>
+                    <span className="kanban-schedule-toggle-copy">
+                      <strong>{scheduleEnabled ? 'Enabled' : 'Paused'}</strong>
+                      <span>{scheduleEnabled ? 'Task runs automatically on schedule.' : 'Task stays saved but will not auto-run.'}</span>
+                    </span>
+                  </button>
                 </div>
                 <div className="kanban-schedule-form-grid">
                   <div className="kanban-schedule-field">
