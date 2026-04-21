@@ -14,7 +14,7 @@ const VoiceAssistant = ({ onTranscript }) => {
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const mediaStreamRef = useRef(null);
+  const recordingStreamRef = useRef(null);
   const onTranscriptRef = useRef(onTranscript);
 
   useEffect(() => {
@@ -92,10 +92,18 @@ const VoiceAssistant = ({ onTranscript }) => {
   };
 
   // Audio visualization
-  const startAudioVisualization = useCallback(async () => {
+  const stopRecordingStream = useCallback(() => {
+    if (recordingStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+  }, []);
+
+  const startAudioVisualization = useCallback(async (stream) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+      if (!stream) {
+        return;
+      }
 
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
@@ -135,10 +143,6 @@ const VoiceAssistant = ({ onTranscript }) => {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
     analyserRef.current = null;
     setAudioLevel(0);
   }, []);
@@ -160,7 +164,7 @@ const VoiceAssistant = ({ onTranscript }) => {
         }
       });
       console.log('[VoiceAssistant] Microphone access granted, stream:', stream);
-      mediaStreamRef.current = stream;
+      recordingStreamRef.current = stream;
 
       // Try different codecs - prefer PCM if available, fallback to opus
       let options;
@@ -192,6 +196,7 @@ const VoiceAssistant = ({ onTranscript }) => {
 
         if (audioChunksRef.current.length === 0) {
           console.error('[VoiceAssistant] No audio chunks recorded');
+          stopRecordingStream();
           setStatus('idle');
           setTranscript('No audio recorded');
           setTimeout(() => setTranscript(''), 2000);
@@ -203,12 +208,14 @@ const VoiceAssistant = ({ onTranscript }) => {
 
         if (audioBlob.size < 1000) {
           console.error('[VoiceAssistant] Audio blob too small');
+          stopRecordingStream();
           setStatus('idle');
           setTranscript('Recording too short');
           setTimeout(() => setTranscript(''), 2000);
           return;
         }
 
+        stopRecordingStream();
         await processAudio(audioBlob);
       };
 
@@ -216,15 +223,16 @@ const VoiceAssistant = ({ onTranscript }) => {
       setIsRecording(true);
       setStatus('recording');
       setTranscript('');
-      startAudioVisualization();
+      startAudioVisualization(stream);
     } catch (error) {
       console.error('[VoiceAssistant] Error starting recording:', error);
       console.error('[VoiceAssistant] Error name:', error.name);
       console.error('[VoiceAssistant] Error message:', error.message);
+      stopRecordingStream();
       setTranscript(`Failed to start recording: ${error.message}`);
       setTimeout(() => setTranscript(''), 3000);
     }
-  }, [modelStatus, startAudioVisualization]);
+  }, [modelStatus, startAudioVisualization, stopRecordingStream]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -239,6 +247,11 @@ const VoiceAssistant = ({ onTranscript }) => {
     setStatus('processing');
     stopAudioVisualization();
   }, [stopAudioVisualization]);
+
+  useEffect(() => () => {
+    stopAudioVisualization();
+    stopRecordingStream();
+  }, [stopAudioVisualization, stopRecordingStream]);
 
   const processAudio = async (audioBlob) => {
     if (!window.electronAPI) {
