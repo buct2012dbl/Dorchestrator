@@ -16,6 +16,7 @@ const kanbanManager = require('./kanbanManager');
 const {
   computeNextScheduledRunAt,
   getScheduleSummary,
+  isOneTimeScheduleExpired,
   normalizeScheduledTask,
 } = require('./kanbanSchedule');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
@@ -1512,7 +1513,7 @@ function scheduleKanbanTaskExecution(schedule) {
     return;
   }
 
-  const nextRunAt = schedule.nextRunAt || computeNextScheduledRunAt(schedule);
+  const nextRunAt = computeNextScheduledRunAt(schedule);
   if (!nextRunAt) {
     return;
   }
@@ -1540,8 +1541,17 @@ function syncScheduledKanbanTasks(state = loadKanbanState()) {
       continue;
     }
 
-    const nextRunAt = scheduledTask.nextRunAt || computeNextScheduledRunAt(scheduledTask);
+    const nextRunAt = computeNextScheduledRunAt(scheduledTask);
     if (!nextRunAt) {
+      if (isOneTimeScheduleExpired(scheduledTask)) {
+        updateScheduledTask(scheduledTask.id, (currentTask) => ({
+          ...currentTask,
+          enabled: false,
+          nextRunAt: null,
+          updatedAt: new Date().toISOString(),
+        }));
+        continue;
+      }
       clearScheduledKanbanTimer(scheduledTask.id);
       continue;
     }

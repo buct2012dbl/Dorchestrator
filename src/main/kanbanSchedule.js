@@ -76,7 +76,10 @@ function computeNextScheduledRunAt(task = {}, options = {}) {
   if (normalized.scheduleType === 'once') {
     if (!normalized.runAt) return null;
     const runAt = new Date(normalized.runAt);
-    return Number.isNaN(runAt.getTime()) ? null : runAt.toISOString();
+    if (Number.isNaN(runAt.getTime()) || runAt.getTime() <= now.getTime()) {
+      return null;
+    }
+    return runAt.toISOString();
   }
 
   const intervalMs = getIntervalMs(normalized);
@@ -101,6 +104,21 @@ function computeNextScheduledRunAt(task = {}, options = {}) {
   return new Date(nextTime).toISOString();
 }
 
+function isOneTimeScheduleExpired(task = {}, options = {}) {
+  const normalized = normalizeScheduledTask(task);
+  if (normalized.scheduleType !== 'once' || normalized.enabled === false || !normalized.runAt) {
+    return false;
+  }
+
+  const now = options.nowIso ? new Date(options.nowIso) : new Date();
+  if (Number.isNaN(now.getTime())) {
+    return false;
+  }
+
+  const runAt = new Date(normalized.runAt);
+  return !Number.isNaN(runAt.getTime()) && runAt.getTime() <= now.getTime();
+}
+
 function getScheduleSummary(task = {}) {
   const normalized = normalizeScheduledTask(task);
   if (normalized.scheduleType === 'once') {
@@ -113,6 +131,7 @@ module.exports = {
   computeNextScheduledRunAt,
   getIntervalMs,
   getScheduleSummary,
+  isOneTimeScheduleExpired,
   normalizeScheduleLog,
   normalizeScheduledTask,
 };
