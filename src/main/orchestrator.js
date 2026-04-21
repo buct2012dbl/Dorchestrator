@@ -106,6 +106,72 @@ class AgentOrchestrator {
     }
   }
 
+  async handleAssistantMessage(agentId, history, finalMessage) {
+    const toolUses = (finalMessage.content || []).filter((block) => block.type === 'tool_use');
+
+    history.push({ role: 'assistant', content: finalMessage.content });
+    this.histories.set(agentId, history);
+
+    if (toolUses.length === 0) {
+      console.log('[Orchestrator] No tool calls, emitting agent-done for', agentId);
+      this.emit('agent-status', { agentId, status: 'idle' });
+      this.emit('agent-done', { agentId });
+      return;
+    }
+
+    const messageTools = toolUses.filter((toolUse) => toolUse.name === 'send_message');
+    const otherTools = toolUses.filter((toolUse) => toolUse.name !== 'send_message');
+
+    if (messageTools.length > 0) {
+      const messagePromises = messageTools.map(async (toolUse) => {
+        const { target_agent_id, message } = toolUse.input;
+
+        this.emit('agent-message-sent', {
+          fromAgentId: agentId,
+          toAgentId: target_agent_id,
+          message,
+        });
+
+        const response = await this.sendToAgentAndCollect(target_agent_id, message, agentId);
+
+        return {
+          toolUse,
+          target_agent_id,
+          response,
+        };
+      });
+
+      const results = await Promise.all(messagePromises);
+
+      for (const { toolUse, target_agent_id, response } of results) {
+        history.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolUse.id,
+              content: `Response from ${target_agent_id}:\n${response}`,
+            },
+          ],
+        });
+      }
+      this.histories.set(agentId, history);
+
+      this.emit('agent-stream', { agentId, text: '\n' });
+      console.log('[Orchestrator] Calling continueAgent for', agentId);
+      await this.continueAgent(agentId);
+      console.log('[Orchestrator] continueAgent completed for', agentId);
+      return;
+    }
+
+    if (otherTools.length > 0) {
+      // Process non-message tools in the future.
+    }
+
+    this.emit('agent-status', { agentId, status: 'idle' });
+    this.emit('agent-done', { agentId });
+  }
+
   async sendToAgent(agentId, userMessage, fromAgentId = null) {
     if (!this.client) {
       this.emit('agent-error', { agentId, error: 'Not configured. Click "Settings" in the header to set Auth Token and Base URL.' });
@@ -152,7 +218,6 @@ class AgentOrchestrator {
       const stream = this.client.messages.stream(requestParams);
 
       let fullText = '';
-      let toolUses = [];
 
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
@@ -163,83 +228,7 @@ class AgentOrchestrator {
       }
 
       const finalMessage = await stream.finalMessage();
-
-      // Process tool uses
-      for (const block of finalMessage.content) {
-        if (block.type === 'tool_use') {
-          toolUses.push(block);
-        }
-      }
-
-      // Add assistant response to history
-      history.push({ role: 'assistant', content: finalMessage.content });
-      this.histories.set(agentId, history);
-
-      // Handle tool calls (send_message to other agents)
-      if (toolUses.length > 0) {
-        // Separate send_message tools from others
-        const messageTools = toolUses.filter(t => t.name === 'send_message');
-        const otherTools = toolUses.filter(t => t.name !== 'send_message');
-
-        if (messageTools.length > 0) {
-          // Execute all send_message calls in parallel
-          const messagePromises = messageTools.map(async (toolUse) => {
-            const { target_agent_id, message } = toolUse.input;
-
-            // Notify the UI about the message routing
-            this.emit('agent-message-sent', {
-              fromAgentId: agentId,
-              toAgentId: target_agent_id,
-              message,
-            });
-
-            // Actually send to the target agent
-            const response = await this.sendToAgentAndCollect(target_agent_id, message, agentId);
-
-            return {
-              toolUse,
-              target_agent_id,
-              response
-            };
-          });
-
-          // Wait for all messages to complete
-          const results = await Promise.all(messagePromises);
-
-          // Add all tool results to history at once
-          for (const { toolUse, target_agent_id, response } of results) {
-            history.push({
-              role: 'user',
-              content: [
-                {
-                  type: 'tool_result',
-                  tool_use_id: toolUse.id,
-                  content: `Response from ${target_agent_id}:\n${response}`,
-                },
-              ],
-            });
-          }
-          this.histories.set(agentId, history);
-
-          // Let the original agent continue with all responses
-          this.emit('agent-stream', { agentId, text: '\n' });
-          console.log('[Orchestrator] Calling continueAgent for', agentId);
-          await this.continueAgent(agentId);
-          console.log('[Orchestrator] continueAgent completed for', agentId);
-        }
-
-        // Handle other tools if any (future expansion)
-        if (otherTools.length > 0) {
-          // Process non-message tools
-        }
-
-        // Don't emit agent-done here - continueAgent will handle it
-      } else {
-        // No tool calls, we're done
-        console.log('[Orchestrator] No tool calls, emitting agent-done for', agentId);
-        this.emit('agent-status', { agentId, status: 'idle' });
-        this.emit('agent-done', { agentId });
-      }
+      await this.handleAssistantMessage(agentId, history, finalMessage);
 
     } catch (err) {
       this.emit('agent-error', { agentId, error: err.message || String(err) });
@@ -329,12 +318,7 @@ class AgentOrchestrator {
 
       const finalMessage = await stream.finalMessage();
 
-      history.push({ role: 'assistant', content: finalMessage.content });
-      this.histories.set(agentId, history);
-
-      console.log('[Orchestrator] continueAgent finished, emitting agent-done for', agentId);
-      this.emit('agent-status', { agentId, status: 'idle' });
-      this.emit('agent-done', { agentId });
+      await this.handleAssistantMessage(agentId, history, finalMessage);
     } catch (err) {
       this.emit('agent-error', { agentId, error: err.message || String(err) });
       this.emit('agent-status', { agentId, status: 'error' });
