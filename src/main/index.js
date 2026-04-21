@@ -684,7 +684,7 @@ function startBridgeServer() {
         } else if (terminalType === 'codex') {
           // Codex does not reliably process foreign input injected into the live PTY.
           // Reuse the dedicated exec path so the message is actually handled.
-          void getAgentResponse(normalizedTargetAgentId, fullMessage)
+          void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
             .then((result) => {
               console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
@@ -818,9 +818,11 @@ function getAgentResponse(agentId, message, options = {}) {
     // For Codex agents, use exec command to process the message
     if (terminalType === 'codex') {
       console.log(`[Bridge] Codex agent detected for ${agentId}; spawning exec command (${message.length} chars)`);
+      const suppressTerminalOutput = options.suppressTerminalOutput === true;
 
-      // Show incoming message in terminal
-      ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
+      if (!suppressTerminalOutput || options.showIncomingMessage !== false) {
+        ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
+      }
 
       const codexPath = process.env.CODEX_PATH || 'codex';
       const codexOutputPath = path.join(os.tmpdir(), `ao-codex-last-message-${agentId}-${Date.now()}.txt`);
@@ -858,7 +860,9 @@ function getAgentResponse(agentId, message, options = {}) {
         if (done) return;
         done = true;
         if (safetyTimer) clearTimeout(safetyTimer);
-        ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
+        if (!suppressTerminalOutput) {
+          ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
+        }
 
         let finalResponse = fallbackResponse;
         try {
@@ -901,7 +905,9 @@ function getAgentResponse(agentId, message, options = {}) {
 
           const formatted = formatCodexJsonEvent(line);
           if (formatted && formatted.trim()) {
-            ptyProcess.write(`${formatted}\r\n`);
+            if (!suppressTerminalOutput) {
+              ptyProcess.write(`${formatted}\r\n`);
+            }
             renderedTranscript += `${formatted}\n`;
           }
 
@@ -914,7 +920,9 @@ function getAgentResponse(agentId, message, options = {}) {
           if (errorCandidate) {
             errorMessageFromEvents = errorCandidate;
             renderedTranscript += `[error] ${errorCandidate}\n`;
-            ptyProcess.write(`[error] ${errorCandidate}\r\n`);
+            if (!suppressTerminalOutput) {
+              ptyProcess.write(`[error] ${errorCandidate}\r\n`);
+            }
           }
         }
       });
@@ -927,7 +935,9 @@ function getAgentResponse(agentId, message, options = {}) {
           && !normalized.toLowerCase().includes('warning:')
           && !normalized.includes('Reading additional input from stdin')
         ) {
-          ptyProcess.write(`${normalized}\r\n`);
+          if (!suppressTerminalOutput) {
+            ptyProcess.write(`${normalized}\r\n`);
+          }
           renderedTranscript += `${normalized}\n`;
         }
       });
