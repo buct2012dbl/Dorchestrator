@@ -8,6 +8,7 @@
 
 const net = require('net');
 const fs = require('fs');
+const { drainJsonLines } = require('./jsonLineBuffer');
 
 let agentId = 'unknown';
 let bridgePort = 0;
@@ -37,10 +38,9 @@ process.stdin.resume();
 let lineBuf = '';
 process.stdin.on('data', (chunk) => {
   lineBuf += chunk;
-  let newlineIdx;
-  while ((newlineIdx = lineBuf.indexOf('\n')) !== -1) {
-    const line = lineBuf.slice(0, newlineIdx).trim();
-    lineBuf = lineBuf.slice(newlineIdx + 1);
+  const drained = drainJsonLines(lineBuf);
+  lineBuf = drained.rest;
+  for (const line of drained.lines) {
     if (!line) continue;
     try {
       handleMessage(JSON.parse(line));
