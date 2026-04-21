@@ -653,6 +653,14 @@
   box-shadow: var(--box-shadow-neon-sm);
 }
 
+.kanban-template-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  box-shadow: none;
+}
+
 .kanban-schedules-view {
   min-height: 100%;
 }

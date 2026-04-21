@@ -784,13 +784,11 @@ function App() {
   }, [kanbanState, persistKanbanState]);
 
   const handleDeleteScheduledKanbanTask = useCallback(async (scheduleId) => {
-    const nextState = {
-      ...kanbanState,
-      scheduledTasks: kanbanState.scheduledTasks.filter((task) => task.id !== scheduleId),
-      tasks: kanbanState.tasks.filter((task) => task.targetType !== 'scheduled' || task.targetId !== scheduleId),
-    };
-    await persistKanbanState(nextState);
-  }, [kanbanState, persistKanbanState]);
+    const nextState = await window.electronAPI?.deleteScheduledKanbanTask({ scheduleId });
+    if (nextState) {
+      setKanbanState(nextState);
+    }
+  }, []);
 
   const handleRunScheduledKanbanTaskNow = useCallback(async (scheduleId) => {
     await window.electronAPI?.runKanbanScheduledTaskNow({ scheduleId });

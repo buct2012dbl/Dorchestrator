@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveKanbanState: (state) => ipcRenderer.invoke('save-kanban-state', state),
   startKanbanTask: (data) => ipcRenderer.invoke('kanban-start-task', data),
   deleteKanbanTask: (data) => ipcRenderer.invoke('kanban-delete-task', data),
+  deleteScheduledKanbanTask: (data) => ipcRenderer.invoke('kanban-delete-scheduled-task', data),
   runKanbanScheduledTaskNow: (data) => ipcRenderer.invoke('kanban-run-scheduled-task-now', data),
   onKanbanTaskUpdate: (callback) => {
     const listener = (event, data) => callback(data);

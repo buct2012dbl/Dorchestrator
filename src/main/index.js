@@ -206,6 +206,17 @@ const activeKanbanTasks = new Map();
 const scheduledKanbanTimers = new Map();
 const runningScheduledTasks = new Set();
 
+function hasRunningScheduledTask(state, scheduleId) {
+  if (runningScheduledTasks.has(scheduleId)) {
+    return true;
+  }
+  return (state?.tasks || []).some((task) => (
+    task.targetType === 'scheduled'
+    && task.targetId === scheduleId
+    && task.runStatus === 'running'
+  ));
+}
+
 function getCombinedGraph() {
   const agents = [...(agentGraph.agents || [])];
   const edges = [...(agentGraph.edges || [])];
@@ -1548,6 +1559,26 @@ function syncScheduledKanbanTasks(state = loadKanbanState()) {
   }
 }
 
+function deleteScheduledKanbanTask(scheduleId) {
+  const currentState = loadKanbanState();
+  if (hasRunningScheduledTask(currentState, scheduleId)) {
+    throw new Error('Cannot delete a scheduled task while one of its runs is in progress.');
+  }
+
+  clearScheduledKanbanTimer(scheduleId);
+
+  const nextState = {
+    ...currentState,
+    scheduledTasks: currentState.scheduledTasks.filter((task) => task.id !== scheduleId),
+    tasks: currentState.tasks.filter((task) => (
+      task.targetType !== 'scheduled' || task.targetId !== scheduleId
+    )),
+  };
+  saveKanbanState(nextState);
+  emitKanbanStateUpdate(nextState);
+  return nextState;
+}
+
 function queuePersistKanbanTask(taskId) {
   const active = activeKanbanTasks.get(taskId);
   if (!active) return;
@@ -2001,7 +2032,7 @@ async function runScheduledKanbanTask(scheduleId, options = {}) {
         ? `Command completed successfully.\n\n$ ${schedule.command}`
         : `Command failed${exitCode === null ? '' : ` with exit code ${exitCode}`}.\n\n$ ${schedule.command}`;
 
-      updateKanbanTask(boardTask.id, (task) => {
+      const finalizedTask = updateKanbanTask(boardTask.id, (task) => {
         task.stage = 'in_review';
         task.runStatus = isSuccess ? 'awaiting_review' : 'error';
         task.lastError = errorMessage || (isSuccess ? null : `Exit code ${exitCode}`);
@@ -2026,7 +2057,9 @@ async function runScheduledKanbanTask(scheduleId, options = {}) {
         }
         return task;
       });
-      persistKanbanTaskImmediately(boardTask.id);
+      if (finalizedTask) {
+        persistKanbanTaskImmediately(boardTask.id);
+      }
       activeKanbanTasks.delete(boardTask.id);
 
       const currentState = loadKanbanState();
@@ -2455,6 +2488,10 @@ ipcMain.handle('kanban-delete-task', async (event, { taskId }) => {
   };
   saveKanbanState(nextState);
   return { success: true };
+});
+
+ipcMain.handle('kanban-delete-scheduled-task', async (event, { scheduleId }) => {
+  return deleteScheduledKanbanTask(scheduleId);
 });
 
 ipcMain.handle('kanban-run-scheduled-task-now', async (event, { scheduleId }) => {

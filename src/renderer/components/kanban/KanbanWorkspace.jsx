@@ -159,6 +159,13 @@ function KanbanWorkspace({
     return grouped;
   }, [kanbanState.tasks]);
 
+  const runningScheduledTaskIds = useMemo(() => new Set(
+    (kanbanState.tasks || [])
+      .filter((task) => task.targetType === 'scheduled' && task.runStatus === 'running')
+      .map((task) => task.targetId)
+      .filter(Boolean)
+  ), [kanbanState.tasks]);
+
   const availableEntryAgents = useMemo(() => {
     const swarm = swarms.find((item) => item.id === draftTargetId);
     return swarm?.agents || [];
@@ -525,39 +532,51 @@ function KanbanWorkspace({
             </div>
           )}
           <div className="kanban-schedule-card-grid">
-            {sortedScheduledTasks.map((task) => (
-              <div
-                key={task.id}
-                className={`kanban-schedule-item ${selectedScheduleId === task.id ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedScheduleId(task.id);
-                }}
-              >
-                <div className="kanban-schedule-item-header">
-                  <span className="kanban-schedule-item-title">{task.name}</span>
-                  <span className={`kanban-badge ${task.enabled ? 'awaiting_review' : 'idle'}`}>{task.enabled ? 'enabled' : 'paused'}</span>
+            {sortedScheduledTasks.map((task) => {
+              const isRunning = runningScheduledTaskIds.has(task.id);
+              return (
+                <div
+                  key={task.id}
+                  className={`kanban-schedule-item ${selectedScheduleId === task.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedScheduleId(task.id);
+                  }}
+                >
+                  <div className="kanban-schedule-item-header">
+                    <span className="kanban-schedule-item-title">{task.name}</span>
+                    <span className={`kanban-badge ${task.enabled ? 'awaiting_review' : 'idle'}`}>{task.enabled ? 'enabled' : 'paused'}</span>
+                  </div>
+                  <div className="kanban-schedule-item-command">{task.command}</div>
+                  <div className="kanban-schedule-item-times">
+                    <span>{formatScheduleSummary(task)}</span>
+                    <span>Next {formatTime(task.nextRunAt) || 'manual'}</span>
+                  </div>
+                  <div className="kanban-schedule-item-actions">
+                    <button type="button" className="kanban-template-btn" onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditScheduledTask(task);
+                    }}>Edit</button>
+                    <button type="button" className="kanban-template-btn" onClick={async (e) => {
+                      e.stopPropagation();
+                      await onRunScheduledTaskNow(task.id);
+                    }}>Run Now</button>
+                    <button
+                      type="button"
+                      className="kanban-template-btn schedule-delete-btn"
+                      disabled={isRunning}
+                      title={isRunning ? 'A run from this schedule is currently in progress.' : 'Delete this schedule'}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (isRunning) return;
+                        await handleDeleteScheduledTaskClick(task.id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="kanban-schedule-item-command">{task.command}</div>
-                <div className="kanban-schedule-item-times">
-                  <span>{formatScheduleSummary(task)}</span>
-                  <span>Next {formatTime(task.nextRunAt) || 'manual'}</span>
-                </div>
-                <div className="kanban-schedule-item-actions">
-                  <button type="button" className="kanban-template-btn" onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditScheduledTask(task);
-                  }}>Edit</button>
-                  <button type="button" className="kanban-template-btn" onClick={async (e) => {
-                    e.stopPropagation();
-                    await onRunScheduledTaskNow(task.id);
-                  }}>Run Now</button>
-                  <button type="button" className="kanban-template-btn schedule-delete-btn" onClick={async (e) => {
-                    e.stopPropagation();
-                    await handleDeleteScheduledTaskClick(task.id);
-                  }}>Delete</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
