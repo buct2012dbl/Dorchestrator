@@ -543,12 +543,6 @@ function forwardAgentPtyData(agentId, data) {
   }
 }
 
-function mirrorAgentPtyNotice(agentId, data) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('pty-data', { agentId, data });
-  }
-}
-
 // ---- TCP bridge server for inter-agent messaging ----
 let bridgePort = 0;
 
@@ -642,73 +636,70 @@ function startBridgeServer() {
     let buf = '';
     socket.on('data', async (chunk) => {
       buf += chunk.toString();
-      let idx;
-      while ((idx = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, idx);
-        buf = buf.slice(idx + 1);
-        if (!line.trim()) continue;
+      const idx = buf.indexOf('\n');
+      if (idx === -1) return;
+      const line = buf.slice(0, idx);
+      buf = buf.slice(idx + 1);
+      let msg;
+      try { msg = JSON.parse(line); } catch { socket.write(JSON.stringify({ success: false, error: 'Bad JSON' }) + '\n'); return; }
 
-        let msg;
-        try { msg = JSON.parse(line); } catch { socket.write(JSON.stringify({ success: false, error: 'Bad JSON' }) + '\n'); continue; }
+      const { fromAgentId, targetAgentId, message, kind = 'message' } = msg;
+      const normalizedTargetAgentId = normalizeBridgeAgentId(targetAgentId);
+      console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}, ${message ? message.length : 0} chars)`);
 
-        const { fromAgentId, targetAgentId, message, kind = 'message' } = msg;
-        const normalizedTargetAgentId = normalizeBridgeAgentId(targetAgentId);
-        console.log(`[Bridge] ${fromAgentId} → ${normalizedTargetAgentId} (${kind}, ${message ? message.length : 0} chars)`);
+      const fromAgent = findAgentById(fromAgentId);
+      const fromName = fromAgent?.data?.name || fromAgentId;
 
-        const fromAgent = findAgentById(fromAgentId);
-        const fromName = fromAgent?.data?.name || fromAgentId;
+      // Check target agent's terminal type
+      const targetAgent = findAgentById(normalizedTargetAgentId);
+      const terminalType = targetAgent?.data?.terminalType || 'claude-code';
+      const targetName = targetAgent?.data?.name || normalizedTargetAgentId;
 
-        // Check target agent's terminal type
-        const targetAgent = findAgentById(normalizedTargetAgentId);
-        const terminalType = targetAgent?.data?.terminalType || 'claude-code';
-        const targetName = targetAgent?.data?.name || normalizedTargetAgentId;
-
-        try {
-          const bridgeEvents = buildBridgeTimelineEvents({
-            kind,
-            fromName,
-            targetName,
-            message,
-          });
-          appendKanbanTaskAgentTimelineEvent(fromAgentId, bridgeEvents.senderEvent);
-          appendKanbanTaskAgentTimelineEvent(normalizedTargetAgentId, bridgeEvents.targetEvent);
-          if (kind === 'response') {
-            markKanbanTaskAgentCompletedById(fromAgentId);
-          }
-
-          // Auto-start the target PTY on demand so bridge tools work even if the panel
-          // has not been opened yet in the renderer.
-          const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
-
-          const fullMessage = kind === 'response'
-            ? `[Response from ${fromName}]: ${message}`
-            : `[Message from ${fromName}]: ${message}`;
-          console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
-
-          if (kind === 'response') {
-            // Responses are informational and should not be re-processed as fresh work,
-            // otherwise agents can get stuck acknowledging each other forever.
-            mirrorAgentPtyNotice(normalizedTargetAgentId, `\r\n\x1b[36m${fullMessage}\x1b[0m\r\n\r\n`);
-          } else if (terminalType === 'codex') {
-            // Codex does not reliably process foreign input injected into the live PTY.
-            // Reuse the dedicated exec path so the message is actually handled.
-            void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
-              .then((result) => {
-                console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
-              })
-              .catch((err) => {
-                console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
-              });
-          } else {
-            ptyProcess.write(fullMessage + '\r');
-          }
-
-          // Return immediately - receiver will send response via send_response tool
-          socket.write(JSON.stringify({ success: true, delivered: true }) + '\n');
-        } catch (err) {
-          console.error('[Bridge] Error:', err.message);
-          socket.write(JSON.stringify({ success: false, error: err.message }) + '\n');
+      try {
+        const bridgeEvents = buildBridgeTimelineEvents({
+          kind,
+          fromName,
+          targetName,
+          message,
+        });
+        appendKanbanTaskAgentTimelineEvent(fromAgentId, bridgeEvents.senderEvent);
+        appendKanbanTaskAgentTimelineEvent(normalizedTargetAgentId, bridgeEvents.targetEvent);
+        if (kind === 'response') {
+          markKanbanTaskAgentCompletedById(fromAgentId);
         }
+
+        // Auto-start the target PTY on demand so bridge tools work even if the panel
+        // has not been opened yet in the renderer.
+        const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
+
+        const fullMessage = kind === 'response'
+          ? `[Response from ${fromName}]: ${message}`
+          : `[Message from ${fromName}]: ${message}`;
+        console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
+
+        if (kind === 'response') {
+          // Responses are informational and should not be re-processed as fresh work,
+          // otherwise agents can get stuck acknowledging each other forever.
+          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n\r\n`);
+        } else if (terminalType === 'codex') {
+          // Codex does not reliably process foreign input injected into the live PTY.
+          // Reuse the dedicated exec path so the message is actually handled.
+          void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
+            .then((result) => {
+              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
+            })
+            .catch((err) => {
+              console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
+            });
+        } else {
+          ptyProcess.write(fullMessage + '\r');
+        }
+
+        // Return immediately - receiver will send response via send_response tool
+        socket.write(JSON.stringify({ success: true, delivered: true }) + '\n');
+      } catch (err) {
+        console.error('[Bridge] Error:', err.message);
+        socket.write(JSON.stringify({ success: false, error: err.message }) + '\n');
       }
     });
     socket.on('error', () => {});
@@ -830,7 +821,7 @@ function getAgentResponse(agentId, message, options = {}) {
       const suppressTerminalOutput = options.suppressTerminalOutput === true;
 
       if (!suppressTerminalOutput || options.showIncomingMessage !== false) {
-        mirrorAgentPtyNotice(agentId, `\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
+        ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
       }
 
       const codexPath = process.env.CODEX_PATH || 'codex';
