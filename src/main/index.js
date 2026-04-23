@@ -35,10 +35,6 @@ const {
   killTrackedPtyById,
 } = require('./ptyLifecycle');
 const { terminateSpawnedProcess } = require('./childProcessCleanup');
-const {
-  buildBridgeDisplayMessage,
-  buildBridgePrompt,
-} = require('./bridgeMessaging');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -699,23 +695,27 @@ function startBridgeServer() {
         // has not been opened yet in the renderer.
         const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
 
-        const fullMessage = buildBridgeDisplayMessage({ kind, fromName, message });
-        const bridgePrompt = buildBridgePrompt({ kind, fromName, fromAgentId, message });
+        const fullMessage = kind === 'response'
+          ? `[Response from ${fromName}]: ${message}`
+          : `[Message from ${fromName}]: ${message}`;
         console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
 
-        if (terminalType === 'codex' || terminalType === 'coding-agent') {
-          // Background exec is more reliable than injecting collaboration messages into
-          // the live terminal prompt for non-interactive bridge handling.
-          void getAgentResponse(normalizedTargetAgentId, bridgePrompt, { suppressTerminalOutput: true })
+        if (kind === 'response') {
+          // Responses are informational and should not be re-processed as fresh work,
+          // otherwise agents can get stuck acknowledging each other forever.
+          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n\r\n`);
+        } else if (terminalType === 'codex') {
+          // Codex does not reliably process foreign input injected into the live PTY.
+          // Reuse the dedicated exec path so the message is actually handled.
+          void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
             .then((result) => {
-              console.log(`[Bridge] Background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
+              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
             .catch((err) => {
-              console.error(`[Bridge] Background handling failed for ${normalizedTargetAgentId}:`, err.message);
+              console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
             });
         } else {
-          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n`);
-          ptyProcess.write(bridgePrompt + '\r');
+          ptyProcess.write(fullMessage + '\r');
         }
 
         // Return immediately - receiver will send response via send_response tool
