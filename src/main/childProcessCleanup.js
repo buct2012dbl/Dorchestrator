@@ -31,32 +31,6 @@ function terminateSpawnedProcess(childProcess, options = {}) {
   return { terminated, forceKillTimer };
 }
 
-function terminateTimedOutExecProcess(childProcess, options = {}) {
-  const {
-    label = 'process',
-    processError = null,
-    graceMs = 1000,
-    schedule = setTimeout,
-  } = options;
-
-  const { terminated, forceKillTimer } = terminateSpawnedProcess(childProcess, {
-    graceMs,
-    schedule,
-  });
-
-  let nextProcessError = processError;
-  if (!terminated && !nextProcessError && childProcess?.exitCode === null && childProcess?.signalCode === null) {
-    nextProcessError = `Timed out waiting for ${label} response and failed to terminate the exec process cleanly.`;
-  }
-
-  return {
-    terminated,
-    forceKillTimer,
-    processError: nextProcessError,
-  };
-}
-
 module.exports = {
   terminateSpawnedProcess,
-  terminateTimedOutExecProcess,
 };

@@ -34,12 +34,11 @@ const {
   resizeTrackedPty,
   killTrackedPtyById,
 } = require('./ptyLifecycle');
-const { terminateTimedOutExecProcess } = require('./childProcessCleanup');
+const { terminateSpawnedProcess } = require('./childProcessCleanup');
 const {
   buildBridgeDisplayMessage,
   buildBridgePrompt,
 } = require('./bridgeMessaging');
-const { buildClaudeBridgeExecArgs } = require('./claudeBridgeExec');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -704,16 +703,10 @@ function startBridgeServer() {
         const bridgePrompt = buildBridgePrompt({ kind, fromName, fromAgentId, message });
         console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
 
-        ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n`);
-
-        if (terminalType === 'claude-code' || terminalType === 'codex' || terminalType === 'coding-agent') {
+        if (terminalType === 'codex' || terminalType === 'coding-agent') {
           // Background exec is more reliable than injecting collaboration messages into
           // the live terminal prompt for non-interactive bridge handling.
-          void getAgentResponse(normalizedTargetAgentId, bridgePrompt, {
-            suppressTerminalOutput: true,
-            showIncomingMessage: false,
-            useBackgroundExec: terminalType === 'claude-code',
-          })
+          void getAgentResponse(normalizedTargetAgentId, bridgePrompt, { suppressTerminalOutput: true })
             .then((result) => {
               console.log(`[Bridge] Background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
@@ -721,6 +714,7 @@ function startBridgeServer() {
               console.error(`[Bridge] Background handling failed for ${normalizedTargetAgentId}:`, err.message);
             });
         } else {
+          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n`);
           ptyProcess.write(bridgePrompt + '\r');
         }
 
@@ -834,12 +828,11 @@ function getAgentResponse(agentId, message, options = {}) {
       });
 
       safetyTimer = setTimeout(() => {
-        const timeoutResult = terminateTimedOutExecProcess(execProcess, {
-          label: 'built-in coding-agent',
-          processError,
-        });
-        forceKillTimer = timeoutResult.forceKillTimer;
-        processError = timeoutResult.processError;
+        const { terminated, forceKillTimer: nextForceKillTimer } = terminateSpawnedProcess(execProcess);
+        forceKillTimer = nextForceKillTimer;
+        if (!terminated && !processError && execProcess.exitCode === null && execProcess.signalCode === null) {
+          processError = 'Timed out waiting for built-in coding-agent response and failed to terminate the exec process cleanly.';
+        }
         finishCodingAgentExec('(timeout)');
       }, 180000);
 
@@ -849,97 +842,6 @@ function getAgentResponse(agentId, message, options = {}) {
     const ptyProcess = ptys.get(agentId);
     if (!ptyProcess) {
       resolve({ response: '(agent not running)', transcript: '' });
-      return;
-    }
-
-    if (terminalType === 'claude-code' && options.useBackgroundExec) {
-      console.log(`[Bridge] Claude Code agent detected for ${agentId}; spawning print command (${message.length} chars)`);
-      const suppressTerminalOutput = options.suppressTerminalOutput === true;
-
-      if (!suppressTerminalOutput || options.showIncomingMessage !== false) {
-        ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
-      }
-
-      const claudePath = process.env.CLAUDE_PATH || CLAUDE_PATH;
-      const args = buildClaudeBridgeExecArgs({
-        model: targetAgent?.data?.model,
-        systemPrompt: targetAgent?.data?.systemPrompt,
-        message,
-      });
-      const execEnv = buildPtyEnvironment();
-      prepareAgentMcpSession(agentId, terminalType, claudePath, args, execEnv, '[Bridge]');
-
-      const execProcess = spawn(claudePath, args, {
-        cwd: getPtyWorkingDirectory(),
-        env: execEnv,
-      });
-
-      let output = '';
-      let renderedTranscript = '';
-      let done = false;
-      let safetyTimer = null;
-      let forceKillTimer = null;
-      let processError = null;
-      let exitCode = null;
-
-      const finishClaudeExec = (fallbackResponse = '(no response)') => {
-        if (done) return;
-        done = true;
-        if (safetyTimer) clearTimeout(safetyTimer);
-        if (forceKillTimer) clearTimeout(forceKillTimer);
-
-        const clean = stripAnsiAndControl(output).trim();
-        const finalResponse = clean || fallbackResponse;
-
-        resolve({
-          response: finalResponse,
-          transcript: renderedTranscript.trimEnd() || clean,
-          error: processError || (finalResponse === '(no response)' ? `Task failed before producing a final response${exitCode !== null ? ` (exit ${exitCode})` : ''}.` : null),
-        });
-      };
-
-      execProcess.stdout.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        const normalized = stripAnsiAndControl(text);
-        if (!normalized.trim()) return;
-        renderedTranscript += `${normalized}\n`;
-        if (!suppressTerminalOutput) {
-          ptyProcess.write(`${normalized}\r\n`);
-        }
-      });
-
-      execProcess.stderr.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        const normalized = stripAnsiAndControl(text);
-        if (!normalized.trim()) return;
-        processError = processError ? `${processError}\n${normalized}` : normalized;
-        renderedTranscript += `[error] ${normalized}\n`;
-        if (!suppressTerminalOutput) {
-          ptyProcess.write(`[error] ${normalized}\r\n`);
-        }
-      });
-
-      execProcess.on('error', (err) => {
-        processError = processError ? `${processError}\n${err.message}` : err.message;
-      });
-
-      execProcess.on('close', (code) => {
-        exitCode = code;
-        finishClaudeExec();
-      });
-
-      safetyTimer = setTimeout(() => {
-        const timeoutResult = terminateTimedOutExecProcess(execProcess, {
-          label: 'Claude Code bridge',
-          processError,
-        });
-        forceKillTimer = timeoutResult.forceKillTimer;
-        processError = timeoutResult.processError;
-        finishClaudeExec('(timeout)');
-      }, 180000);
-
       return;
     }
 
@@ -978,10 +880,8 @@ function getAgentResponse(agentId, message, options = {}) {
       let stdoutBuffer = '';
       let done = false;
       let safetyTimer = null;
-      let forceKillTimer = null;
       let finalMessageFromEvents = '';
       let errorMessageFromEvents = '';
-      let processError = null;
       const onCodexEvent = typeof options.onCodexEvent === 'function'
         ? options.onCodexEvent
         : (event) => appendKanbanTaskAgentTimelineEvent(agentId, event);
@@ -990,7 +890,6 @@ function getAgentResponse(agentId, message, options = {}) {
         if (done) return;
         done = true;
         if (safetyTimer) clearTimeout(safetyTimer);
-        if (forceKillTimer) clearTimeout(forceKillTimer);
         if (!suppressTerminalOutput) {
           ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
         }
@@ -1017,7 +916,7 @@ function getAgentResponse(agentId, message, options = {}) {
         resolve({
           response: finalResponse,
           transcript: renderedTranscript.trimEnd(),
-          error: errorMessageFromEvents || processError || null,
+          error: errorMessageFromEvents || null,
         });
       };
 
@@ -1070,7 +969,6 @@ function getAgentResponse(agentId, message, options = {}) {
             ptyProcess.write(`${normalized}\r\n`);
           }
           renderedTranscript += `${normalized}\n`;
-          processError = processError ? `${processError}\n${normalized}` : normalized;
         }
       });
 
@@ -1082,12 +980,6 @@ function getAgentResponse(agentId, message, options = {}) {
 
       // Safety timeout
       safetyTimer = setTimeout(() => {
-        const timeoutResult = terminateTimedOutExecProcess(execProcess, {
-          label: 'Codex',
-          processError,
-        });
-        forceKillTimer = timeoutResult.forceKillTimer;
-        processError = timeoutResult.processError;
         finishCodexExec('(timeout)');
       }, 180000);
 

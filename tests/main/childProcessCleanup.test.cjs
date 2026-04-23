@@ -1,9 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  terminateSpawnedProcess,
-  terminateTimedOutExecProcess,
-} = require('../../src/main/childProcessCleanup');
+const { terminateSpawnedProcess } = require('../../src/main/childProcessCleanup');
 
 test('terminateSpawnedProcess sends SIGTERM and schedules SIGKILL fallback until exit', () => {
   const signals = [];
@@ -77,48 +74,4 @@ test('terminateSpawnedProcess does not force-kill once the process has exited', 
   scheduledCallback();
 
   assert.deepEqual(signals, ['SIGTERM']);
-});
-
-test('terminateTimedOutExecProcess reports cleanup failure when the exec process cannot be terminated', () => {
-  const childProcess = {
-    exitCode: null,
-    signalCode: null,
-    kill() {
-      return false;
-    },
-  };
-
-  const result = terminateTimedOutExecProcess(childProcess, {
-    label: 'Codex',
-    schedule() {
-      return { unref() {} };
-    },
-  });
-
-  assert.equal(result.terminated, false);
-  assert.equal(
-    result.processError,
-    'Timed out waiting for Codex response and failed to terminate the exec process cleanly.',
-  );
-});
-
-test('terminateTimedOutExecProcess preserves an existing process error', () => {
-  const childProcess = {
-    exitCode: null,
-    signalCode: null,
-    kill() {
-      return true;
-    },
-  };
-
-  const result = terminateTimedOutExecProcess(childProcess, {
-    label: 'Codex',
-    processError: 'stderr failed first',
-    schedule() {
-      return { unref() {} };
-    },
-  });
-
-  assert.equal(result.terminated, true);
-  assert.equal(result.processError, 'stderr failed first');
 });
