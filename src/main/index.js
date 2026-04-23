@@ -34,6 +34,7 @@ const {
   resizeTrackedPty,
   killTrackedPtyById,
 } = require('./ptyLifecycle');
+const { terminateSpawnedProcess } = require('./childProcessCleanup');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -768,6 +769,7 @@ function getAgentResponse(agentId, message, options = {}) {
       let renderedTranscript = '';
       let done = false;
       let safetyTimer = null;
+      let forceKillTimer = null;
       let processError = null;
       let exitCode = null;
 
@@ -775,6 +777,7 @@ function getAgentResponse(agentId, message, options = {}) {
         if (done) return;
         done = true;
         if (safetyTimer) clearTimeout(safetyTimer);
+        if (forceKillTimer) clearTimeout(forceKillTimer);
 
         let finalResponse = fallbackResponse;
         try {
@@ -825,6 +828,11 @@ function getAgentResponse(agentId, message, options = {}) {
       });
 
       safetyTimer = setTimeout(() => {
+        const { terminated, forceKillTimer: nextForceKillTimer } = terminateSpawnedProcess(execProcess);
+        forceKillTimer = nextForceKillTimer;
+        if (!terminated && !processError && execProcess.exitCode === null && execProcess.signalCode === null) {
+          processError = 'Timed out waiting for built-in coding-agent response and failed to terminate the exec process cleanly.';
+        }
         finishCodingAgentExec('(timeout)');
       }, 180000);
 
