@@ -129,8 +129,30 @@ function findClaude() {
   return 'claude';
 }
 
+function findCodex() {
+  try {
+    const r = execSync('which codex', { encoding: 'utf8', timeout: 2000 }).trim();
+    if (r && fs.existsSync(r)) return r;
+  } catch {}
+  const nvmNode = path.join(os.homedir(), '.nvm', 'versions', 'node');
+  if (fs.existsSync(nvmNode)) {
+    try {
+      const versions = fs.readdirSync(nvmNode).sort().reverse();
+      for (const v of versions) {
+        const p = path.join(nvmNode, v, 'bin', 'codex');
+        if (fs.existsSync(p)) return p;
+      }
+    } catch {}
+  }
+  for (const p of ['/usr/local/bin/codex', '/opt/homebrew/bin/codex']) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'codex';
+}
+
 const NODE_PATH = findNode();
 const CLAUDE_PATH = findClaude();
+const CODEX_PATH = findCodex();
 
 function getCodingAgentCliPath() {
   if (app.isPackaged) {
@@ -163,7 +185,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     command = process.env.SHELL || '/bin/zsh';
     args = [];
   } else if (terminalType === 'codex') {
-    command = process.env.CODEX_PATH || 'codex';
+    command = process.env.CODEX_PATH || CODEX_PATH;
     args = getCodexAutoApproveArgs();
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
@@ -824,7 +846,7 @@ function getAgentResponse(agentId, message, options = {}) {
         ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
       }
 
-      const codexPath = process.env.CODEX_PATH || 'codex';
+      const codexPath = process.env.CODEX_PATH || CODEX_PATH;
       const codexOutputPath = path.join(os.tmpdir(), `ao-codex-last-message-${agentId}-${Date.now()}.txt`);
       const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check', '--json', '--output-last-message', codexOutputPath];
       if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
