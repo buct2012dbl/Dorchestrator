@@ -1,4 +1,4 @@
-function formatBridgePromptForClaude(message) {
+function formatBridgePromptForTerminal(message) {
   const normalized = String(message || '')
     .replace(/\r\n?/g, '\n')
     .split('\n')
@@ -13,5 +13,5 @@ function formatBridgePromptForClaude(message) {
 }
 
 module.exports = {
-  formatBridgePromptForClaude,
+  formatBridgePromptForTerminal,
 };

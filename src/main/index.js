@@ -34,7 +34,7 @@ const {
   resizeTrackedPty,
   killTrackedPtyById,
 } = require('./ptyLifecycle');
-const { formatBridgePromptForClaude } = require('./bridgePrompt');
+const { formatBridgePromptForTerminal } = require('./bridgePrompt');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -712,9 +712,16 @@ function startBridgeServer() {
             .catch((err) => {
               console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
             });
+        } else if (terminalType === 'coding-agent') {
+          const prompt = formatBridgePromptForTerminal(fullMessage);
+          if (!prompt) {
+            throw new Error('Bridge message was empty after normalization.');
+          }
+          ptyProcess.write(prompt);
+          ptyProcess.write('\r');
         } else {
           void getAgentResponse(normalizedTargetAgentId, fullMessage, {
-            suppressTerminalOutput: terminalType !== 'coding-agent',
+            suppressTerminalOutput: true,
           })
             .then((result) => {
               console.log(`[Bridge] Claude background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
@@ -1062,7 +1069,7 @@ function getAgentResponse(agentId, message, options = {}) {
     });
 
     // Write message to PTY stdin (works for Claude Code with MCP)
-    const prompt = formatBridgePromptForClaude(message);
+    const prompt = formatBridgePromptForTerminal(message);
     if (!prompt) {
       console.log(`[Bridge] Skipping empty Claude Code prompt for ${agentId}`);
       resolve({
