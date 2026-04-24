@@ -23,6 +23,7 @@ const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
 const { shouldFailKanbanTaskExecution } = require('./kanbanTaskResponse');
 const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
+const { shouldAutoDispatchBridgeDelivery } = require('./kanbanBridgeDispatch');
 const {
   createKanbanTaskBarrier,
   markKanbanTaskBarrierAgentCompleted,
@@ -34,7 +35,7 @@ const {
   resizeTrackedPty,
   killTrackedPtyById,
 } = require('./ptyLifecycle');
-const { formatBridgePromptForTerminal } = require('./bridgePrompt');
+const { buildBridgeDeliveryMessage, formatBridgePromptForTerminal } = require('./bridgePrompt');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -677,6 +678,7 @@ function startBridgeServer() {
       const targetAgent = findAgentById(normalizedTargetAgentId);
       const terminalType = targetAgent?.data?.terminalType || 'claude-code';
       const targetName = targetAgent?.data?.name || normalizedTargetAgentId;
+      const targetTaskInfo = taskAgentIndex.get(normalizedTargetAgentId);
 
       try {
         const bridgeEvents = buildBridgeTimelineEvents({
@@ -695,10 +697,21 @@ function startBridgeServer() {
         // has not been opened yet in the renderer.
         const ptyProcess = await ensureAgentPtyRunning(normalizedTargetAgentId);
 
-        const fullMessage = kind === 'response'
-          ? `[Response from ${fromName}]: ${message}`
-          : `[Message from ${fromName}]: ${message}`;
+        const fullMessage = buildBridgeDeliveryMessage({
+          kind,
+          fromName,
+          message,
+        });
         console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
+
+        if (!shouldAutoDispatchBridgeDelivery({
+          kind,
+          targetTaskId: targetTaskInfo?.taskId || null,
+        })) {
+          console.log(`[Bridge] Recorded ${kind} for ${normalizedTargetAgentId} without starting a new Kanban execution round`);
+          socket.write(JSON.stringify({ success: true, delivered: true, autoDispatched: false }) + '\n');
+          return;
+        }
 
         await waitForAgentPtyReady(normalizedTargetAgentId);
 
@@ -732,7 +745,7 @@ function startBridgeServer() {
         }
 
         // Return immediately - receiver will send response via send_response tool
-        socket.write(JSON.stringify({ success: true, delivered: true }) + '\n');
+        socket.write(JSON.stringify({ success: true, delivered: true, autoDispatched: true }) + '\n');
       } catch (err) {
         console.error('[Bridge] Error:', err.message);
         socket.write(JSON.stringify({ success: false, error: err.message }) + '\n');

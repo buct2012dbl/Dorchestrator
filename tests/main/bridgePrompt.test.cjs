@@ -1,7 +1,34 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { formatBridgePromptForTerminal } = require('../../src/main/bridgePrompt');
+const {
+  buildBridgeDeliveryMessage,
+  formatBridgePromptForTerminal,
+} = require('../../src/main/bridgePrompt');
+
+test('buildBridgeDeliveryMessage marks delegated work as something that should be answered via send_response', () => {
+  const result = buildBridgeDeliveryMessage({
+    kind: 'message',
+    fromName: 'CEO',
+    message: 'Please inspect the parser bug.',
+  });
+
+  assert.match(result, /^\[Message from CEO\]:/);
+  assert.match(result, /This is a delegated task\./);
+  assert.match(result, /reply with send_response to the original sender\./);
+});
+
+test('buildBridgeDeliveryMessage marks responses as terminal context instead of new work', () => {
+  const result = buildBridgeDeliveryMessage({
+    kind: 'response',
+    fromName: 'Programmer',
+    message: 'I said hello and finished.',
+  });
+
+  assert.match(result, /^\[Response from Programmer\]:/);
+  assert.match(result, /Treat it as context or a result, not as a new task\./);
+  assert.match(result, /Do not send a response back unless you have a concrete follow-up request\./);
+});
 
 test('formatBridgePromptForTerminal flattens multiline bridge payloads into a submit-safe prompt', () => {
   const result = formatBridgePromptForTerminal(`
@@ -25,14 +52,13 @@ test('formatBridgePromptForTerminal returns empty string for whitespace-only pay
 });
 
 test('formatBridgePromptForTerminal preserves response prefix at the start of the prompt', () => {
-  const result = formatBridgePromptForTerminal(`
-    [Response from Tester]:
+  const result = formatBridgePromptForTerminal(buildBridgeDeliveryMessage({
+    kind: 'response',
+    fromName: 'Tester',
+    message: 'Fixed the failing test and confirmed the new path.',
+  }));
 
-    Fixed the failing test and confirmed the new path.
-  `);
-
-  assert.equal(
-    result,
-    '[Response from Tester]: Fixed the failing test and confirmed the new path.'
-  );
+  assert.match(result, /^\[Response from Tester\]:/);
+  assert.match(result, /Fixed the failing test and confirmed the new path\./);
+  assert.match(result, /Do not send a response back unless you have a concrete follow-up request\./);
 });
