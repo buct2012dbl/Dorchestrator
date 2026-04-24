@@ -6,6 +6,16 @@ function createKanbanTaskBarrier({ runId, agentIds }) {
   };
 }
 
+function addKanbanTaskBarrierExpectedAgent(barrier, agentId) {
+  if (!barrier || !agentId) return barrier;
+  if (barrier.expectedAgentIds.includes(agentId)) return barrier;
+
+  return {
+    ...barrier,
+    expectedAgentIds: [...barrier.expectedAgentIds, agentId],
+  };
+}
+
 function markKanbanTaskBarrierAgentCompleted(barrier, agentId) {
   if (!barrier || !agentId) return barrier;
   if (!barrier.expectedAgentIds.includes(agentId)) return barrier;
@@ -23,6 +33,7 @@ function isKanbanTaskBarrierSatisfied(barrier) {
 }
 
 module.exports = {
+  addKanbanTaskBarrierExpectedAgent,
   createKanbanTaskBarrier,
   markKanbanTaskBarrierAgentCompleted,
   isKanbanTaskBarrierSatisfied,

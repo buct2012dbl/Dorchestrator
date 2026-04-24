@@ -30,6 +30,7 @@ const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanban
 const { shouldAutoDispatchBridgeDelivery } = require('./kanbanBridgeDispatch');
 const { resolveKanbanTaskFinalResponse, isToolCallTranscript } = require('./kanbanTaskFinalResponse');
 const {
+  addKanbanTaskBarrierExpectedAgent,
   createKanbanTaskBarrier,
   markKanbanTaskBarrierAgentCompleted,
   isKanbanTaskBarrierSatisfied,
@@ -678,6 +679,7 @@ function startBridgeServer() {
 
       const fromAgent = findAgentById(fromAgentId);
       const fromName = fromAgent?.data?.name || fromAgentId;
+      const fromTaskInfo = taskAgentIndex.get(fromAgentId);
 
       // Check target agent's terminal type
       const targetAgent = findAgentById(normalizedTargetAgentId);
@@ -694,6 +696,18 @@ function startBridgeServer() {
         });
         appendKanbanTaskAgentTimelineEvent(fromAgentId, bridgeEvents.senderEvent);
         appendKanbanTaskAgentTimelineEvent(normalizedTargetAgentId, bridgeEvents.targetEvent);
+        if (
+          kind === 'message'
+          && fromTaskInfo?.taskId
+          && targetTaskInfo?.taskId
+          && fromTaskInfo.taskId === targetTaskInfo.taskId
+        ) {
+          const active = activeKanbanTasks.get(fromTaskInfo.taskId);
+          const runId = active?.task?.currentRunId;
+          if (runId) {
+            addKanbanTaskExpectedAgent(fromTaskInfo.taskId, runId, normalizedTargetAgentId);
+          }
+        }
         if (kind === 'response') {
           markKanbanTaskAgentCompletedById(fromAgentId);
         }
@@ -725,6 +739,7 @@ function startBridgeServer() {
           // Reuse the dedicated exec path so the message is actually handled.
           void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
             .then((result) => {
+              markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
               console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
             .catch((err) => {
@@ -742,6 +757,7 @@ function startBridgeServer() {
             suppressTerminalOutput: true,
           })
             .then((result) => {
+              markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
               console.log(`[Bridge] Claude background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
             })
             .catch((err) => {
@@ -1737,6 +1753,12 @@ function markKanbanTaskAgentCompleted(taskId, runId, agentId) {
   active.barrier = markKanbanTaskBarrierAgentCompleted(active.barrier, agentId);
 }
 
+function addKanbanTaskExpectedAgent(taskId, runId, agentId) {
+  const active = activeKanbanTasks.get(taskId);
+  if (!active?.barrier || active.barrier.runId !== runId) return;
+  active.barrier = addKanbanTaskBarrierExpectedAgent(active.barrier, agentId);
+}
+
 function markKanbanTaskAgentCompletedById(agentId) {
   const taskInfo = taskAgentIndex.get(agentId);
   if (!taskInfo) return;
@@ -2256,17 +2278,11 @@ async function runKanbanTask(taskId, replyMessage = '') {
   });
   setActiveKanbanTask(activeTask);
   if (task.targetType === 'swarm') {
-    const barrierAgentIds = (runtimeGraph.agents || [])
-      .filter((agent) => {
-        const terminalType = agent?.data?.terminalType || agent?.data?.cliType || 'claude-code';
-        return terminalType !== 'shell' && terminalType !== 'empty';
-      })
-      .map((agent) => agent.id);
     const active = activeKanbanTasks.get(taskId);
     if (active) {
       active.barrier = createKanbanTaskBarrier({
         runId,
-        agentIds: barrierAgentIds,
+        agentIds: [runtimeGraph.entryAgentId],
       });
     }
   }
