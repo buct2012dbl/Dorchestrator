@@ -21,9 +21,14 @@ const {
 } = require('./kanbanSchedule');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
-const { shouldFailKanbanTaskExecution } = require('./kanbanTaskResponse');
+const {
+  isGenericUnusableFinalResponseError,
+  shouldFailKanbanTaskExecution,
+  shouldFailKanbanSwarmExecution,
+} = require('./kanbanTaskResponse');
 const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
 const { shouldAutoDispatchBridgeDelivery } = require('./kanbanBridgeDispatch');
+const { resolveKanbanTaskFinalResponse, isToolCallTranscript } = require('./kanbanTaskFinalResponse');
 const {
   createKanbanTaskBarrier,
   markKanbanTaskBarrierAgentCompleted,
@@ -1174,7 +1179,6 @@ function extractClaudeCliError(rawOutput) {
   const patterns = [
     /Found \d+ invalid settings file.*?\/doctor for details/i,
     /Auto-update failed.*?@anthropic-ai\/claude-code/i,
-    /ctrl-g to edit prompt in vi/i,
     /\[error\]\s*(.+)/i,
   ];
 
@@ -1191,6 +1195,10 @@ function extractClaudeCliError(rawOutput) {
 function isUsableClaudeFinalResponse(response, rawOutput, prompt) {
   const cleanResponse = stripAnsiAndControl(response || '').trim();
   if (!cleanResponse) {
+    return false;
+  }
+
+  if (isToolCallTranscript(cleanResponse)) {
     return false;
   }
 
@@ -2275,22 +2283,54 @@ async function runKanbanTask(taskId, replyMessage = '') {
     });
     const response = execution?.response || '';
     const capturedTranscript = execution?.transcript || '';
-    if (shouldFailKanbanTaskExecution({ response, error: execution?.error })) {
-      throw new Error(execution.error);
-    }
-    if ((!response || response === '(no response)') && capturedTranscript && /\[error\]/i.test(capturedTranscript)) {
-      const transcriptError = capturedTranscript
+    const transcriptFailure = ((!response || response === '(no response)') && capturedTranscript && /\[error\]/i.test(capturedTranscript))
+      ? capturedTranscript
         .split('\n')
         .filter((line) => /\[error\]/i.test(line))
         .pop()
         ?.replace(/^\[error\]\s*/i, '')
-        .trim();
-      throw new Error(transcriptError || 'Task failed before producing a final response.');
+        .trim()
+      : null;
+    if (task.targetType !== 'swarm' && shouldFailKanbanTaskExecution({ response, error: execution?.error })) {
+      throw new Error(execution.error);
+    }
+    if (task.targetType !== 'swarm' && transcriptFailure) {
+      throw new Error(transcriptFailure || 'Task failed before producing a final response.');
     }
     if (task.targetType === 'swarm') {
       markKanbanTaskAgentCompleted(taskId, runId, runtimeGraph.entryAgentId);
       await waitForKanbanTaskBarrier(taskId, runId);
       await waitForKanbanTaskSettlement(taskId, runId);
+    }
+    const activeAfterSettlement = activeKanbanTasks.get(taskId);
+    let settledRun = activeAfterSettlement?.task?.runs?.find((item) => item.id === runId) || null;
+    let finalResponse = resolveKanbanTaskFinalResponse({
+      run: settledRun,
+      preferredResponse: response,
+    });
+    if (!finalResponse) {
+      const latestTask = loadKanbanState().tasks.find((item) => item.id === taskId) || null;
+      const persistedRun = latestTask?.runs?.find((item) => item.id === runId) || null;
+      if (persistedRun) {
+        settledRun = persistedRun;
+        finalResponse = resolveKanbanTaskFinalResponse({
+          run: persistedRun,
+          preferredResponse: response,
+        });
+      }
+    }
+    if (task.targetType === 'swarm' && shouldFailKanbanSwarmExecution({
+      finalResponse,
+      error: execution?.error,
+      transcriptFailure,
+    })) {
+      throw new Error(
+        (
+          isGenericUnusableFinalResponseError(execution?.error)
+            ? transcriptFailure
+            : execution?.error
+        ) || transcriptFailure || 'Task failed before producing a final response.'
+      );
     }
     const completedTask = updateKanbanTask(taskId, (currentTask) => {
       currentTask.stage = 'in_review';
@@ -2300,30 +2340,30 @@ async function runKanbanTask(taskId, replyMessage = '') {
       currentTask.history.push({
         id: `${runId}-result`,
         type: 'result',
-        text: response || '',
+        text: finalResponse || '',
         createdAt: new Date().toISOString(),
       });
       const run = currentTask.runs.find((item) => item.id === runId);
       if (run) {
         run.completedAt = new Date().toISOString();
         run.status = 'success';
-        run.finalResponse = response || '';
+        run.finalResponse = finalResponse || '';
         if (capturedTranscript && !(run.transcript || '').includes(capturedTranscript)) {
           run.transcript = `${run.transcript || ''}${capturedTranscript}`;
         }
         run.timelineEvents = run.timelineEvents || [];
-        if (useTimelineRender && response) {
+        if (useTimelineRender && finalResponse) {
           run.timelineEvents.push(createKanbanTimelineEvent({
             kind: 'assistant',
             phase: 'completed',
             title: 'Reply',
-            text: response,
+            text: finalResponse,
           }));
         }
         const transcript = run.transcript || '';
         const transcriptBody = transcript.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '').trim();
-        if ((!transcriptBody || transcriptBody === `> Task prompt\n${run.prompt}`) && response) {
-          run.transcript = `${transcript}\u001b[32m${response}\u001b[0m\r\n`;
+        if ((!transcriptBody || transcriptBody === `> Task prompt\n${run.prompt}`) && finalResponse) {
+          run.transcript = `${transcript}\u001b[32m${finalResponse}\u001b[0m\r\n`;
         }
       }
       return currentTask;
