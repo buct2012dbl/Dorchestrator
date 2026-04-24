@@ -34,6 +34,7 @@ const {
   resizeTrackedPty,
   killTrackedPtyById,
 } = require('./ptyLifecycle');
+const { formatBridgePromptForClaude } = require('./bridgePrompt');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -699,11 +700,9 @@ function startBridgeServer() {
           : `[Message from ${fromName}]: ${message}`;
         console.log(`[Bridge] Delivering message to ${normalizedTargetAgentId}`);
 
-        if (kind === 'response') {
-          // Responses are informational and should not be re-processed as fresh work,
-          // otherwise agents can get stuck acknowledging each other forever.
-          ptyProcess.write(`\r\n\x1b[36m${fullMessage}\x1b[0m\r\n\r\n`);
-        } else if (terminalType === 'codex') {
+        await waitForAgentPtyReady(normalizedTargetAgentId);
+
+        if (terminalType === 'codex') {
           // Codex does not reliably process foreign input injected into the live PTY.
           // Reuse the dedicated exec path so the message is actually handled.
           void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
@@ -714,7 +713,15 @@ function startBridgeServer() {
               console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
             });
         } else {
-          ptyProcess.write(fullMessage + '\r');
+          void getAgentResponse(normalizedTargetAgentId, fullMessage, {
+            suppressTerminalOutput: terminalType !== 'coding-agent',
+          })
+            .then((result) => {
+              console.log(`[Bridge] Claude background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
+            })
+            .catch((err) => {
+              console.error(`[Bridge] Claude background handling failed for ${normalizedTargetAgentId}:`, err.message);
+            });
         }
 
         // Return immediately - receiver will send response via send_response tool
@@ -744,6 +751,12 @@ function getAgentResponse(agentId, message, options = {}) {
 
     if (terminalType === 'coding-agent') {
       console.log(`[Bridge] Built-in coding-agent detected for ${agentId}; spawning exec command (${message.length} chars)`);
+      const suppressTerminalOutput = options.suppressTerminalOutput === true;
+      const ptyProcess = ptys.get(agentId);
+
+      if (ptyProcess && (!suppressTerminalOutput || options.showIncomingMessage !== false)) {
+        ptyProcess.write(`\r\n\x1b[36m[Incoming message]\x1b[0m ${message}\r\n\r\n`);
+      }
 
       const codingAgentPath = getCodingAgentCliPath();
       const outputPath = path.join(os.tmpdir(), `ao-coding-agent-last-message-${agentId}-${Date.now()}.txt`);
@@ -775,6 +788,9 @@ function getAgentResponse(agentId, message, options = {}) {
         if (done) return;
         done = true;
         if (safetyTimer) clearTimeout(safetyTimer);
+        if (ptyProcess && !suppressTerminalOutput) {
+          ptyProcess.write(`\x1b[36m[Response sent]\x1b[0m\r\n\r\n`);
+        }
 
         let finalResponse = fallbackResponse;
         try {
@@ -807,6 +823,9 @@ function getAgentResponse(agentId, message, options = {}) {
 
         if (normalized.trim()) {
           renderedTranscript += normalized;
+          if (ptyProcess && !suppressTerminalOutput) {
+            ptyProcess.write(normalized.replace(/\n/g, '\r\n'));
+          }
         }
       });
 
@@ -816,6 +835,9 @@ function getAgentResponse(agentId, message, options = {}) {
         if (text.trim()) {
           processError = processError ? `${processError}\n${text.trim()}` : text.trim();
           renderedTranscript += text;
+          if (ptyProcess && !suppressTerminalOutput) {
+            ptyProcess.write(text.replace(/\n/g, '\r\n'));
+          }
         }
       });
 
@@ -1040,8 +1062,19 @@ function getAgentResponse(agentId, message, options = {}) {
     });
 
     // Write message to PTY stdin (works for Claude Code with MCP)
-    console.log(`[Bridge] Sending message to Claude Code agent ${agentId} (${message.length} chars)`);
-    ptyProcess.write(message + '\r');
+    const prompt = formatBridgePromptForClaude(message);
+    if (!prompt) {
+      console.log(`[Bridge] Skipping empty Claude Code prompt for ${agentId}`);
+      resolve({
+        response: '(empty bridge message)',
+        transcript: '',
+        error: 'Bridge message was empty after normalization.',
+      });
+      return;
+    }
+    console.log(`[Bridge] Sending message to Claude Code agent ${agentId} (${prompt.length} chars after normalization)`);
+    ptyProcess.write(prompt);
+    ptyProcess.write('\r');
     resetIdle();
 
     // Safety timeout: 3 minutes
