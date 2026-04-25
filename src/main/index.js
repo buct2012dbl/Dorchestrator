@@ -29,6 +29,7 @@ const {
 const { hasKanbanTaskSettled, getKanbanTaskSettlementDelay } = require('./kanbanTaskSettlement');
 const { shouldAutoDispatchBridgeDelivery } = require('./kanbanBridgeDispatch');
 const { resolveKanbanTaskFinalResponse, isToolCallTranscript } = require('./kanbanTaskFinalResponse');
+const { SwarmBridgeDispatchQueue } = require('./swarmBridgeDispatchQueue');
 const {
   addKanbanTaskBarrierExpectedAgent,
   createKanbanTaskBarrier,
@@ -575,6 +576,7 @@ function forwardAgentPtyData(agentId, data) {
 
 // ---- TCP bridge server for inter-agent messaging ----
 let bridgePort = 0;
+const swarmBridgeDispatchQueue = new SwarmBridgeDispatchQueue();
 
 async function ensureAgentPtyRunning(agentId) {
   let ptyProcess = ptys.get(agentId);
@@ -732,38 +734,47 @@ function startBridgeServer() {
           return;
         }
 
-        await waitForAgentPtyReady(normalizedTargetAgentId);
+        const dispatchDelivery = async () => {
+          await waitForAgentPtyReady(normalizedTargetAgentId);
 
-        if (terminalType === 'codex') {
-          // Codex does not reliably process foreign input injected into the live PTY.
-          // Reuse the dedicated exec path so the message is actually handled.
-          void getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true })
-            .then((result) => {
-              markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
-              console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
-            })
-            .catch((err) => {
-              console.error(`[Bridge] Codex background handling failed for ${normalizedTargetAgentId}:`, err.message);
-            });
-        } else if (terminalType === 'coding-agent') {
-          const prompt = formatBridgePromptForTerminal(fullMessage);
-          if (!prompt) {
-            throw new Error('Bridge message was empty after normalization.');
+          if (terminalType === 'codex') {
+            // Codex does not reliably process foreign input injected into the live PTY.
+            // Reuse the dedicated exec path so the message is actually handled.
+            const result = await getAgentResponse(normalizedTargetAgentId, fullMessage, { suppressTerminalOutput: true });
+            markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
+            console.log(`[Bridge] Codex background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
+            return;
           }
-          ptyProcess.write(prompt);
-          ptyProcess.write('\r');
-        } else {
-          void getAgentResponse(normalizedTargetAgentId, fullMessage, {
+
+          if (terminalType === 'coding-agent') {
+            const prompt = formatBridgePromptForTerminal(fullMessage);
+            if (!prompt) {
+              throw new Error('Bridge message was empty after normalization.');
+            }
+            ptyProcess.write(prompt);
+            ptyProcess.write('\r');
+            return;
+          }
+
+          const result = await getAgentResponse(normalizedTargetAgentId, fullMessage, {
             suppressTerminalOutput: true,
-          })
-            .then((result) => {
-              markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
-              console.log(`[Bridge] Claude background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
-            })
-            .catch((err) => {
-              console.error(`[Bridge] Claude background handling failed for ${normalizedTargetAgentId}:`, err.message);
-            });
-        }
+          });
+          markKanbanTaskAgentCompletedById(normalizedTargetAgentId);
+          console.log(`[Bridge] Claude background handling completed for ${normalizedTargetAgentId} (${String(result?.response || '').length} chars)`);
+        };
+
+        const dispatchPromise = targetTaskInfo?.taskId
+          ? dispatchDelivery()
+          : swarmBridgeDispatchQueue.enqueue(normalizedTargetAgentId, dispatchDelivery);
+
+        void dispatchPromise.catch((err) => {
+          const handlerName = terminalType === 'codex'
+            ? 'Codex'
+            : terminalType === 'coding-agent'
+              ? 'coding-agent'
+              : 'Claude';
+          console.error(`[Bridge] ${handlerName} background handling failed for ${normalizedTargetAgentId}:`, err.message);
+        });
 
         // Return immediately - receiver will send response via send_response tool
         socket.write(JSON.stringify({ success: true, delivered: true, autoDispatched: true }) + '\n');
