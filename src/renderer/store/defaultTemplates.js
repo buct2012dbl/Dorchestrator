@@ -9,7 +9,7 @@ export const DEFAULT_TEMPLATES = [
         { id: 't1', row: 0, col: 0, config: { cliType: 'claude-code', model: 'claude-sonnet-4-6', name: 'Claude 1', systemPrompt: '' } },
         { id: 't2', row: 0, col: 1, config: { cliType: 'codex', model: 'gpt-5.4', name: 'Codex', systemPrompt: '' } },
         { id: 't3', row: 1, col: 0, config: { cliType: 'shell', name: 'Shell', systemPrompt: '' } },
-        { id: 't4', row: 1, col: 1, config: { cliType: 'empty', name: 'Empty', systemPrompt: '' } }
+        { id: 't4', row: 1, col: 1, config: { cliType: 'shell', name: 'Shell 2', systemPrompt: '' } }
       ]
     }
   },

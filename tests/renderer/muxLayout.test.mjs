@@ -8,6 +8,7 @@ import {
   serializeRuntimeLayout,
   shouldReuseLocalRuntimeTerminals,
 } from '../../src/renderer/components/mux/muxLayout.mjs';
+import { normalizeMuxTemplate } from '../../src/renderer/components/mux/templateConfig.mjs';
 
 test('rebalanceTerminals preserves row-scoped fills instead of collapsing all rows together', () => {
   const terminals = [
@@ -107,4 +108,36 @@ test('computePanelRects keeps panel gaps consistent inside the container', () =>
     width: 491,
     height: 588,
   });
+});
+
+test('normalizeMuxTemplate upgrades legacy empty terminals to shell terminals', () => {
+  const template = normalizeMuxTemplate({
+    id: 'legacy',
+    layout: {
+      rows: 1,
+      cols: 1,
+      terminals: [
+        {
+          id: 't1',
+          row: 0,
+          col: 0,
+          config: { cliType: 'empty', name: 'Legacy Empty', model: 'claude-sonnet-4-6' },
+        },
+      ],
+    },
+    runtimeLayout: {
+      terminals: [
+        {
+          id: 'runtime-1',
+          bounds: { x: 0, y: 0, width: 1, height: 1 },
+          config: { cliType: 'empty', name: 'Runtime Empty', model: 'gpt-5.4' },
+        },
+      ],
+    },
+  });
+
+  assert.equal(template.layout.terminals[0].config.cliType, 'shell');
+  assert.equal(template.layout.terminals[0].config.model, '');
+  assert.equal(template.runtimeLayout.terminals[0].config.cliType, 'shell');
+  assert.equal(template.runtimeLayout.terminals[0].config.model, '');
 });

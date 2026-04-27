@@ -1,3 +1,8 @@
+import {
+  normalizeMuxCliType,
+  normalizeMuxTerminalConfig,
+} from './templateConfig.mjs';
+
 const MIN_SPLIT_FRACTION = 0.12;
 const GAP = 6;
 
@@ -21,7 +26,7 @@ export function createRuntimeTerminals(template) {
   if (template?.runtimeLayout?.terminals?.length) {
     return template.runtimeLayout.terminals.map((termConfig) => ({
       id: `mux-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      config: { ...termConfig.config },
+      config: normalizeMuxTerminalConfig(termConfig.config),
       bounds: { ...termConfig.bounds },
       mergePartnerId: null,
       mergeBounds: null,
@@ -33,7 +38,7 @@ export function createRuntimeTerminals(template) {
   const { rows, cols, terminals = [] } = template.layout;
   return terminals.map((termConfig) => ({
     id: `mux-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    config: { ...termConfig.config },
+    config: normalizeMuxTerminalConfig(termConfig.config),
     bounds: {
       x: termConfig.col / cols,
       y: termConfig.row / rows,
@@ -70,7 +75,7 @@ export function getTemplateSpawnSignature(template) {
       id: term.id,
       row: term.row,
       col: term.col,
-      cliType: term.config?.cliType || 'empty',
+      cliType: normalizeMuxCliType(term.config?.cliType),
       model: term.config?.model || '',
       name: term.config?.name || '',
       systemPrompt: term.config?.systemPrompt || '',
@@ -82,7 +87,7 @@ export function getTemplateSpawnSignature(template) {
 function getRuntimeLayoutEntries(runtimeLayout) {
   return (runtimeLayout?.terminals || []).map((term) => ({
     bounds: term.bounds,
-    cliType: term.config?.cliType || 'empty',
+    cliType: normalizeMuxCliType(term.config?.cliType),
     model: term.config?.model || '',
     name: term.config?.name || '',
     systemPrompt: term.config?.systemPrompt || '',

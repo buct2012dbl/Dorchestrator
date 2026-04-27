@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getDefaultModelForTerminalType, getModelsForTerminalType } from '../../constants/models';
 import {
-  getDefaultModelForTerminalType,
-  getModelsForTerminalType,
-} from '../../constants/models';
+  DEFAULT_MUX_CLI_TYPE,
+  normalizeMuxCliType,
+  normalizeMuxTerminalConfig,
+  normalizeMuxTerminalRecord,
+} from './templateConfig.mjs';
 import './TemplateEditorModal.css';
 
 const generateTerminals = (r, c) => {
@@ -14,9 +17,9 @@ const generateTerminals = (r, c) => {
         row,
         col,
         config: {
-          cliType: 'empty',
+          cliType: DEFAULT_MUX_CLI_TYPE,
           name: `Terminal ${row + 1}-${col + 1}`,
-          model: 'claude-sonnet-4-6',
+          model: '',
           systemPrompt: '',
         },
       });
@@ -26,26 +29,7 @@ const generateTerminals = (r, c) => {
 };
 
 const normalizeTerminalConfig = (terminal) => {
-  const cliType = terminal.config.cliType || 'empty';
-  const normalized = {
-    ...terminal,
-    config: {
-      ...terminal.config,
-      cliType,
-    },
-  };
-
-  if (cliType === 'empty' || cliType === 'shell') {
-    normalized.config.model = '';
-    return normalized;
-  }
-
-  const validModels = getModelsForTerminalType(cliType);
-  if (!validModels.includes(normalized.config.model)) {
-    normalized.config.model = getDefaultModelForTerminalType(cliType);
-  }
-
-  return normalized;
+  return normalizeMuxTerminalRecord(terminal);
 };
 
 function TemplateEditorModal({ template, onSave, onCancel }) {
@@ -148,7 +132,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
   const handleCliTypeChange = (terminal, cliType) => {
     const nextConfig = { cliType };
 
-    if (cliType === 'empty' || cliType === 'shell') {
+    if (cliType === 'shell') {
       nextConfig.model = '';
     } else {
       nextConfig.model = getDefaultModelForTerminalType(cliType);
@@ -247,7 +231,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                       onClick={() => setSelectedCell(i)}
                     >
                       <div className="cell-number">{i + 1}</div>
-                      <div className="cell-type">{term?.config.cliType || 'empty'}</div>
+                      <div className="cell-type">{normalizeMuxCliType(term?.config.cliType)}</div>
                     </div>
                   );
                 })}
@@ -271,10 +255,9 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                 <div className="form-group">
                   <label>CLI Type</label>
                   <select
-                    value={selectedTerminal.config.cliType}
+                    value={normalizeMuxCliType(selectedTerminal.config.cliType)}
                     onChange={(e) => handleCliTypeChange(selectedTerminal, e.target.value)}
                   >
-                    <option value="empty">Empty (no CLI)</option>
                     <option value="shell">Shell</option>
                     <option value="claude-code">Claude Code</option>
                     <option value="codex">Codex</option>
@@ -282,7 +265,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                   </select>
                 </div>
 
-                {selectedTerminal.config.cliType !== 'empty' && selectedTerminal.config.cliType !== 'shell' && (
+                {normalizeMuxCliType(selectedTerminal.config.cliType) !== 'shell' && (
                   <>
                     <div className="form-group">
                       <label>Model</label>
@@ -290,7 +273,7 @@ function TemplateEditorModal({ template, onSave, onCancel }) {
                         value={selectedTerminal.config.model}
                         onChange={(e) => updateTerminalConfig(selectedTerminal.row, selectedTerminal.col, 'model', e.target.value)}
                       >
-                        {getModelsForTerminalType(selectedTerminal.config.cliType).map((model) => (
+                        {getModelsForTerminalType(normalizeMuxCliType(selectedTerminal.config.cliType)).map((model) => (
                           <option key={model} value={model}>{model}</option>
                         ))}
                       </select>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MuxSidebar from './MuxSidebar';
 import MuxTerminalView from './MuxTerminalView';
 import TemplateEditorModal from './TemplateEditorModal';
+import { normalizeMuxTemplate } from './templateConfig.mjs';
 import { DEFAULT_TEMPLATES } from '../../store/defaultTemplates';
 import './MuxWorkspace.css';
 
@@ -34,7 +35,13 @@ function MuxWorkspace({ onActiveTerminalChange }) {
         finalTemplates = DEFAULT_TEMPLATES;
         DEFAULT_TEMPLATES.forEach((t) => window.electronAPI.saveMuxTemplate(t));
       } else {
-        finalTemplates = loadedTemplates;
+        finalTemplates = loadedTemplates.map(normalizeMuxTemplate);
+        loadedTemplates.forEach((template, index) => {
+          const normalizedTemplate = finalTemplates[index];
+          if (JSON.stringify(template) !== JSON.stringify(normalizedTemplate)) {
+            window.electronAPI.saveMuxTemplate(normalizedTemplate);
+          }
+        });
       }
 
       const nextSelectedTemplate = savedId && finalTemplates.find((t) => t.id === savedId)
