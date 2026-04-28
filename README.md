@@ -164,7 +164,7 @@ The packaged app will be in the `dist/` directory.
 #### Main Process (`src/main/index.js`)
 - PTY lifecycle management (spawn, resize, kill)
 - Supports both `claude` and `codex` CLI per agent
-- TCP bridge server for inter-agent messaging (Claude Code only)
+- TCP bridge server for inter-agent messaging
 - MCP config generation per agent
 - Workspace and auth settings persistence
 - Kanban task runtime orchestration, background execution, persistence, and timeline event capture
