@@ -21,7 +21,10 @@ const {
 } = require('./kanbanSchedule');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
-const { removeKanbanTasksForDeletedSharedAgent } = require('./kanbanStateIntegrity');
+const {
+  removeKanbanTasksForDeletedSharedAgent,
+  removeKanbanTasksForDeletedSwarm,
+} = require('./kanbanStateIntegrity');
 const {
   isGenericUnusableFinalResponseError,
   shouldFailKanbanTaskExecution,
@@ -2601,7 +2604,23 @@ ipcMain.handle('save-swarm', async (event, swarm) => {
 });
 
 ipcMain.handle('delete-swarm', async (event, id) => {
-  return swarmManager.deleteSwarm(id);
+  const success = swarmManager.deleteSwarm(id);
+  if (!success) {
+    return false;
+  }
+
+  const currentState = loadKanbanState();
+  const { state: nextState, removedTasks } = removeKanbanTasksForDeletedSwarm(currentState, id);
+  if (removedTasks.length > 0) {
+    for (const task of removedTasks) {
+      unregisterRuntimeTaskGraph(task.id);
+      activeKanbanTasks.delete(task.id);
+    }
+    saveKanbanState(nextState);
+    emitKanbanStateUpdate(loadKanbanState());
+  }
+
+  return true;
 });
 
 ipcMain.handle('get-selected-swarm', async () => {
