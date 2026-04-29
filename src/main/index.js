@@ -21,6 +21,7 @@ const {
 } = require('./kanbanSchedule');
 const { extractCliTimelineEvents } = require('./kanbanTimeline');
 const { buildBridgeTimelineEvents } = require('./kanbanBridgeEvents');
+const { removeKanbanTasksForDeletedSharedAgent } = require('./kanbanStateIntegrity');
 const {
   isGenericUnusableFinalResponseError,
   shouldFailKanbanTaskExecution,
@@ -1742,6 +1743,9 @@ function persistKanbanTaskImmediately(taskId) {
 }
 
 function setActiveKanbanTask(task) {
+  if (!task?.id) {
+    return;
+  }
   const existing = activeKanbanTasks.get(task.id);
   activeKanbanTasks.set(task.id, {
     ...existing,
@@ -2617,7 +2621,23 @@ ipcMain.handle('save-shared-agent', async (event, agent) => {
 });
 
 ipcMain.handle('delete-shared-agent', async (event, id) => {
-  return sharedAgentManager.deleteAgent(id);
+  const success = sharedAgentManager.deleteAgent(id);
+  if (!success) {
+    return false;
+  }
+
+  const currentState = loadKanbanState();
+  const { state: nextState, removedTasks } = removeKanbanTasksForDeletedSharedAgent(currentState, id);
+  if (removedTasks.length > 0) {
+    for (const task of removedTasks) {
+      unregisterRuntimeTaskGraph(task.id);
+      activeKanbanTasks.delete(task.id);
+    }
+    saveKanbanState(nextState);
+    emitKanbanStateUpdate(loadKanbanState());
+  }
+
+  return true;
 });
 
 ipcMain.handle('load-kanban-state', async () => {
