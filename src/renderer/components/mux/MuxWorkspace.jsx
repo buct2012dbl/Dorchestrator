@@ -151,11 +151,14 @@ function MuxWorkspace({ onActiveTerminalChange }) {
   };
 
   const confirmDelete = () => {
+    const remainingTemplates = templates.filter((template) => template.id !== deleteId);
+    const nextSelectedTemplateId = selectedTemplate === deleteId
+      ? (remainingTemplates[0]?.id || null)
+      : selectedTemplate;
+
     window.electronAPI.deleteMuxTemplate(deleteId);
-    setTemplates(prev => prev.filter(t => t.id !== deleteId));
-    if (selectedTemplate === deleteId) {
-      setSelectedTemplate(null);
-    }
+    setTemplates(remainingTemplates);
+    setSelectedTemplate(nextSelectedTemplateId);
     setShowDeleteConfirm(false);
     setDeleteId(null);
   };

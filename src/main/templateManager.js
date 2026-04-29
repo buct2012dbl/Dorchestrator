@@ -78,19 +78,36 @@ class TemplateManager {
   deleteTemplate(id) {
     if (!this.configPath) {
       console.log('[TemplateManager] No workspace set, skipping delete');
-      return false;
+      return {
+        success: false,
+        selectedTemplateId: null,
+      };
     }
 
     try {
       const templates = this.loadTemplates();
+      const previousSelectedTemplateId = this.getSelectedTemplateId();
       const filtered = templates.filter(t => t.id !== id);
+      const deletedExistingTemplate = filtered.length !== templates.length;
+      const nextSelectedTemplateId = previousSelectedTemplateId === id
+        ? (filtered[0]?.id || null)
+        : previousSelectedTemplateId;
 
       fs.writeFileSync(this.configPath, JSON.stringify(filtered, null, 2));
+      if (deletedExistingTemplate) {
+        this.setSelectedTemplateId(nextSelectedTemplateId);
+      }
       console.log(`[TemplateManager] Deleted template ${id}`);
-      return true;
+      return {
+        success: true,
+        selectedTemplateId: nextSelectedTemplateId,
+      };
     } catch (err) {
       console.error('[TemplateManager] Failed to delete:', err);
-      return false;
+      return {
+        success: false,
+        selectedTemplateId: null,
+      };
     }
   }
 
