@@ -22,6 +22,10 @@ interface McpToolDefinition {
   };
 }
 
+function getMcpToolId(serverName: string, toolName: string): string {
+  return `mcp:${serverName}:${toolName}`;
+}
+
 class McpClient {
   private child: ChildProcessWithoutNullStreams | null = null;
   private nextId = 1;
@@ -176,7 +180,7 @@ function createMcpTool(serverName: string, tool: McpToolDefinition, client: McpC
   const required = tool.inputSchema?.required || [];
 
   return {
-    id: tool.name,
+    id: getMcpToolId(serverName, tool.name),
     description: tool.description || `Remote MCP tool from ${serverName}`,
     parameters: {
       type: 'object',
@@ -256,8 +260,9 @@ export async function registerMcpToolsFromEnvironment(register: (tool: Tool) => 
 
     const tools = await client.listTools();
     for (const tool of tools) {
-      register(createMcpTool(serverName, tool, client));
-      registeredToolIds.push(tool.name);
+      const localTool = createMcpTool(serverName, tool, client);
+      register(localTool);
+      registeredToolIds.push(localTool.id);
     }
   }
 
@@ -269,3 +274,5 @@ export async function registerMcpToolsFromEnvironment(register: (tool: Tool) => 
 
   return registeredToolIds;
 }
+
+export { getMcpToolId };
