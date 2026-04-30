@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+function getMcpToolId(serverName, toolName) {
+    return `mcp:${serverName}:${toolName}`;
+}
 class McpClient {
     serverName;
     config;
@@ -134,7 +137,7 @@ function createMcpTool(serverName, tool, client) {
     const properties = tool.inputSchema?.properties || {};
     const required = tool.inputSchema?.required || [];
     return {
-        id: tool.name,
+        id: getMcpToolId(serverName, tool.name),
         description: tool.description || `Remote MCP tool from ${serverName}`,
         parameters: {
             type: 'object',
@@ -193,28 +196,42 @@ function normalizeMcpResult(result) {
 }
 export async function registerMcpToolsFromEnvironment(register) {
     const configPath = process.env.CODING_AGENT_MCP_CONFIG;
-    if (!configPath)
-        return [];
+    if (!configPath) {
+        return {
+            toolIds: [],
+            dispose() { },
+        };
+    }
     const configContent = await readFile(configPath, 'utf8');
     const config = JSON.parse(configContent);
     const mcpServers = config.mcpServers || {};
     const registeredToolIds = [];
     const clients = [];
+    let disposed = false;
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
         const client = new McpClient(serverName, serverConfig);
         await client.connect();
         clients.push(client);
         const tools = await client.listTools();
         for (const tool of tools) {
-            register(createMcpTool(serverName, tool, client));
-            registeredToolIds.push(tool.name);
+            const localTool = createMcpTool(serverName, tool, client);
+            register(localTool);
+            registeredToolIds.push(localTool.id);
         }
     }
-    process.on('exit', () => {
+    const dispose = () => {
+        if (disposed)
+            return;
+        disposed = true;
         for (const client of clients) {
             client.close();
         }
-    });
-    return registeredToolIds;
+    };
+    process.on('exit', dispose);
+    return {
+        toolIds: registeredToolIds,
+        dispose,
+    };
 }
+export { getMcpToolId };
 //# sourceMappingURL=mcp-tools.js.map

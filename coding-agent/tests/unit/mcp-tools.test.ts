@@ -3,6 +3,7 @@ import type { Tool } from '../../src/tools/tool-registry.js';
 
 const mockReadFile = vi.fn();
 const mockSpawn = vi.fn();
+const exitHandlers = new Set<() => void>();
 
 vi.mock('node:fs/promises', () => ({
   readFile: mockReadFile,
@@ -11,6 +12,18 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('node:child_process', () => ({
   spawn: mockSpawn,
 }));
+
+vi.stubGlobal('process', {
+  ...process,
+  env: process.env,
+  cwd: process.cwd.bind(process),
+  on: vi.fn((event: string, handler: () => void) => {
+    if (event === 'exit') {
+      exitHandlers.add(handler);
+    }
+    return process;
+  }),
+});
 
 function createMockChild(toolNames: string[]) {
   let stdoutHandler: ((chunk: string) => void) | null = null;
@@ -79,6 +92,7 @@ describe('registerMcpToolsFromEnvironment', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    exitHandlers.clear();
   });
 
   afterEach(() => {
@@ -105,13 +119,39 @@ describe('registerMcpToolsFromEnvironment', () => {
     const { registerMcpToolsFromEnvironment } = await import('../../src/tools/mcp-tools.js');
     const tools: Tool[] = [];
 
-    const registeredIds = await registerMcpToolsFromEnvironment((tool) => {
+    const registration = await registerMcpToolsFromEnvironment((tool) => {
       tools.push(tool);
     });
 
-    expect(registeredIds).toEqual(['mcp:alpha:search', 'mcp:beta:search']);
+    expect(registration.toolIds).toEqual(['mcp:alpha:search', 'mcp:beta:search']);
     expect(tools.map((tool) => tool.id)).toEqual(['mcp:alpha:search', 'mcp:beta:search']);
     expect(tools[0]?.description).toContain('search description');
     expect(tools[1]?.description).toContain('search description');
+  });
+
+  it('returns a disposer that closes spawned MCP clients', async () => {
+    process.env.CODING_AGENT_MCP_CONFIG = '/tmp/mcp-config.json';
+    mockReadFile.mockResolvedValue(JSON.stringify({
+      mcpServers: {
+        alpha: { command: 'alpha-server' },
+        beta: { command: 'beta-server' },
+      },
+    }));
+
+    const alphaChild = createMockChild(['search']);
+    const betaChild = createMockChild(['search']);
+    mockSpawn
+      .mockReturnValueOnce(alphaChild)
+      .mockReturnValueOnce(betaChild);
+
+    const { registerMcpToolsFromEnvironment } = await import('../../src/tools/mcp-tools.js');
+
+    const registration = await registerMcpToolsFromEnvironment(() => {});
+    registration.dispose();
+    registration.dispose();
+
+    expect(alphaChild.kill).toHaveBeenCalledTimes(1);
+    expect(betaChild.kill).toHaveBeenCalledTimes(1);
+    expect(exitHandlers.size).toBe(1);
   });
 });

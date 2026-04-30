@@ -22,6 +22,10 @@ import { writeFile } from 'node:fs/promises';
 
 const program = new Command();
 
+type CleanupHandle = {
+  dispose(): void;
+};
+
 function renderLaunchScreen(agentId: string, model: string, agentCount: number, toolCount: number): void {
   const title = [
     '╔╦╗╔═╗╦═╗╔═╗╦ ╦╔═╗╔═╗╔╦╗╦═╗╔═╗╔╦╗╔═╗╦═╗',
@@ -103,10 +107,13 @@ async function createConfiguredOrchestrator(options: {
   toolRegistry.register(deleteSharedContextTool);
 
   let mcpToolIds: string[] = [];
+  let mcpCleanup: CleanupHandle = { dispose() {} };
   try {
-    mcpToolIds = await registerMcpToolsFromEnvironment((tool) => {
+    const mcpRegistration = await registerMcpToolsFromEnvironment((tool) => {
       toolRegistry.register(tool);
     });
+    mcpToolIds = mcpRegistration.toolIds;
+    mcpCleanup = mcpRegistration;
   } catch (error) {
     console.warn(chalk.yellow(`Failed to initialize MCP tools: ${error instanceof Error ? error.message : String(error)}`));
   }
@@ -149,6 +156,10 @@ async function createConfiguredOrchestrator(options: {
   return {
     config,
     orchestrator,
+    dispose: () => {
+      mcpCleanup.dispose();
+      orchestrator.shutdown();
+    },
   };
 }
 
@@ -205,13 +216,16 @@ program
   .option('-m, --model <name>', 'Model to use (overrides config)')
   .option('-s, --system-prompt <text>', 'System prompt to append')
   .action(async (options) => {
+    let dispose = () => {};
     try {
-      const { config, orchestrator } = await createConfiguredOrchestrator({
+      const configured = await createConfiguredOrchestrator({
         config: options.config,
         agent: options.agent,
         model: options.model,
         systemPrompt: options.systemPrompt,
       });
+      const { config, orchestrator } = configured;
+      dispose = configured.dispose;
 
       const activeAgent = orchestrator.getAgent(options.agent);
       renderLaunchScreen(
@@ -226,6 +240,8 @@ program
     } catch (error) {
       console.error(chalk.red('Error:'), error);
       process.exit(1);
+    } finally {
+      dispose();
     }
   });
 
@@ -245,7 +261,7 @@ program
       process.exit(1);
     }
 
-    let orchestrator: Orchestrator | null = null;
+    let dispose = () => {};
     try {
       const configured = await createConfiguredOrchestrator({
         config: options.config,
@@ -253,7 +269,8 @@ program
         model: options.model,
         systemPrompt: options.systemPrompt,
       });
-      orchestrator = configured.orchestrator;
+      const orchestrator = configured.orchestrator;
+      dispose = configured.dispose;
 
       const response = await orchestrator.executeTask(options.agent, prompt);
 
@@ -268,7 +285,7 @@ program
       console.error(chalk.red('Error:'), error);
       process.exitCode = 1;
     } finally {
-      orchestrator?.shutdown();
+      dispose();
     }
   });
 

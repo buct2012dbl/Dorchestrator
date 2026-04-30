@@ -82,10 +82,13 @@ async function createConfiguredOrchestrator(options) {
     toolRegistry.register(listSharedContextTool);
     toolRegistry.register(deleteSharedContextTool);
     let mcpToolIds = [];
+    let mcpCleanup = { dispose() { } };
     try {
-        mcpToolIds = await registerMcpToolsFromEnvironment((tool) => {
+        const mcpRegistration = await registerMcpToolsFromEnvironment((tool) => {
             toolRegistry.register(tool);
         });
+        mcpToolIds = mcpRegistration.toolIds;
+        mcpCleanup = mcpRegistration;
     }
     catch (error) {
         console.warn(chalk.yellow(`Failed to initialize MCP tools: ${error instanceof Error ? error.message : String(error)}`));
@@ -120,6 +123,10 @@ async function createConfiguredOrchestrator(options) {
     return {
         config,
         orchestrator,
+        dispose: () => {
+            mcpCleanup.dispose();
+            orchestrator.shutdown();
+        },
     };
 }
 function buildDynamicAgentConfig(agentId, model, systemPrompt) {
@@ -153,13 +160,16 @@ program
     .option('-m, --model <name>', 'Model to use (overrides config)')
     .option('-s, --system-prompt <text>', 'System prompt to append')
     .action(async (options) => {
+    let dispose = () => { };
     try {
-        const { config, orchestrator } = await createConfiguredOrchestrator({
+        const configured = await createConfiguredOrchestrator({
             config: options.config,
             agent: options.agent,
             model: options.model,
             systemPrompt: options.systemPrompt,
         });
+        const { config, orchestrator } = configured;
+        dispose = configured.dispose;
         const activeAgent = orchestrator.getAgent(options.agent);
         renderLaunchScreen(options.agent, activeAgent?.config.model || options.model || config.defaults.model, config.agents.length, toolRegistry.getAll().length);
         // Start REPL
@@ -168,6 +178,9 @@ program
     catch (error) {
         console.error(chalk.red('Error:'), error);
         process.exit(1);
+    }
+    finally {
+        dispose();
     }
 });
 program
@@ -185,7 +198,7 @@ program
         console.error(chalk.red('Error: prompt is required'));
         process.exit(1);
     }
-    let orchestrator = null;
+    let dispose = () => { };
     try {
         const configured = await createConfiguredOrchestrator({
             config: options.config,
@@ -193,7 +206,8 @@ program
             model: options.model,
             systemPrompt: options.systemPrompt,
         });
-        orchestrator = configured.orchestrator;
+        const orchestrator = configured.orchestrator;
+        dispose = configured.dispose;
         const response = await orchestrator.executeTask(options.agent, prompt);
         if (options.outputLastMessage) {
             await writeFile(options.outputLastMessage, response, 'utf8');
@@ -207,7 +221,7 @@ program
         process.exitCode = 1;
     }
     finally {
-        orchestrator?.shutdown();
+        dispose();
     }
 });
 program

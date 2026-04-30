@@ -22,6 +22,11 @@ interface McpToolDefinition {
   };
 }
 
+export interface McpRegistrationResult {
+  toolIds: string[];
+  dispose(): void;
+}
+
 function getMcpToolId(serverName: string, toolName: string): string {
   return `mcp:${serverName}:${toolName}`;
 }
@@ -243,15 +248,21 @@ function normalizeMcpResult(result: any): any {
   };
 }
 
-export async function registerMcpToolsFromEnvironment(register: (tool: Tool) => void): Promise<string[]> {
+export async function registerMcpToolsFromEnvironment(register: (tool: Tool) => void): Promise<McpRegistrationResult> {
   const configPath = process.env.CODING_AGENT_MCP_CONFIG;
-  if (!configPath) return [];
+  if (!configPath) {
+    return {
+      toolIds: [],
+      dispose() {},
+    };
+  }
 
   const configContent = await readFile(configPath, 'utf8');
   const config = JSON.parse(configContent) as McpConfigFile;
   const mcpServers = config.mcpServers || {};
   const registeredToolIds: string[] = [];
   const clients: McpClient[] = [];
+  let disposed = false;
 
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
     const client = new McpClient(serverName, serverConfig);
@@ -266,13 +277,20 @@ export async function registerMcpToolsFromEnvironment(register: (tool: Tool) => 
     }
   }
 
-  process.on('exit', () => {
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     for (const client of clients) {
       client.close();
     }
-  });
+  };
 
-  return registeredToolIds;
+  process.on('exit', dispose);
+
+  return {
+    toolIds: registeredToolIds,
+    dispose,
+  };
 }
 
 export { getMcpToolId };

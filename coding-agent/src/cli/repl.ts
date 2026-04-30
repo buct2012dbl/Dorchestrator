@@ -70,7 +70,6 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
       console.log(chalk.gray('This usually means stdin is not attached to a live TTY.'));
     }
     orchestrator.shutdown();
-    process.exit(0);
   });
 
   process.on('SIGINT', () => {
@@ -96,8 +95,7 @@ export async function startRepl(orchestrator: Orchestrator, agentId: string): Pr
         console.log(chalk.hex('#fbbf24')('\nSession closed.'));
         intentionalClose = true;
         rl.close();
-        orchestrator.shutdown();
-        process.exit(0);
+        return;
       }
 
       if (normalized === 'stats') {
