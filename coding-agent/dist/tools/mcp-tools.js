@@ -1,7 +1,13 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+function encodeMcpToolIdSegment(value) {
+    return value.replace(/[^a-zA-Z0-9_-]/g, (char) => {
+        const code = char.codePointAt(0);
+        return code === undefined ? '_' : `_${code.toString(16)}_`;
+    });
+}
 function getMcpToolId(serverName, toolName) {
-    return `mcp:${serverName}:${toolName}`;
+    return `mcp_${encodeMcpToolIdSegment(serverName)}__${encodeMcpToolIdSegment(toolName)}`;
 }
 class McpClient {
     serverName;

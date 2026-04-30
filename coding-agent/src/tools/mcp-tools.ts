@@ -27,8 +27,15 @@ export interface McpRegistrationResult {
   dispose(): void;
 }
 
+function encodeMcpToolIdSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, (char) => {
+    const code = char.codePointAt(0);
+    return code === undefined ? '_' : `_${code.toString(16)}_`;
+  });
+}
+
 function getMcpToolId(serverName: string, toolName: string): string {
-  return `mcp:${serverName}:${toolName}`;
+  return `mcp_${encodeMcpToolIdSegment(serverName)}__${encodeMcpToolIdSegment(toolName)}`;
 }
 
 class McpClient {

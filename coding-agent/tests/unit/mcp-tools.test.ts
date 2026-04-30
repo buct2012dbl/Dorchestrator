@@ -123,10 +123,32 @@ describe('registerMcpToolsFromEnvironment', () => {
       tools.push(tool);
     });
 
-    expect(registration.toolIds).toEqual(['mcp:alpha:search', 'mcp:beta:search']);
-    expect(tools.map((tool) => tool.id)).toEqual(['mcp:alpha:search', 'mcp:beta:search']);
+    expect(registration.toolIds).toEqual(['mcp_alpha__search', 'mcp_beta__search']);
+    expect(tools.map((tool) => tool.id)).toEqual(['mcp_alpha__search', 'mcp_beta__search']);
     expect(tools[0]?.description).toContain('search description');
     expect(tools[1]?.description).toContain('search description');
+  });
+
+  it('sanitizes MCP tool ids to provider-safe names', async () => {
+    process.env.CODING_AGENT_MCP_CONFIG = '/tmp/mcp-config.json';
+    mockReadFile.mockResolvedValue(JSON.stringify({
+      mcpServers: {
+        'alpha.beta': { command: 'alpha-server' },
+      },
+    }));
+
+    mockSpawn.mockReturnValueOnce(createMockChild(['search/tool']));
+
+    const { registerMcpToolsFromEnvironment } = await import('../../src/tools/mcp-tools.js');
+    const tools: Tool[] = [];
+
+    const registration = await registerMcpToolsFromEnvironment((tool) => {
+      tools.push(tool);
+    });
+
+    expect(registration.toolIds).toEqual(['mcp_alpha_2e_beta__search_2f_tool']);
+    expect(tools[0]?.id).toBe('mcp_alpha_2e_beta__search_2f_tool');
+    expect(tools[0]?.id).toMatch(/^[a-zA-Z0-9_-]+$/);
   });
 
   it('returns a disposer that closes spawned MCP clients', async () => {
