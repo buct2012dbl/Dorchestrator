@@ -9,6 +9,12 @@ class AgentOrchestrator {
     this.histories = new Map();    // agentId -> conversation messages[]
     this.edges = [];               // { source, target }
     this.activeCalls = new Map();  // agentId -> AbortController
+    this.agentSwarmIds = new Map();// agentId -> swarmId
+    this.swarmPersistence = null;
+  }
+
+  setSwarmPersistence(handlers) {
+    this.swarmPersistence = handlers || null;
   }
 
   configure({ authToken, baseURL }) {
@@ -22,20 +28,50 @@ class AgentOrchestrator {
     return this.client !== null;
   }
 
-  syncAgents(agentConfigs) {
+  syncAgents(agentConfigs, options = {}) {
+    const swarmId = options.swarmId || null;
+    const hydratedHistories = options.histories || {};
+    const currentIds = new Set(agentConfigs.map((agent) => agent.id));
+
     for (const agent of agentConfigs) {
       this.agents.set(agent.id, agent.data);
       if (!this.histories.has(agent.id)) {
-        this.histories.set(agent.id, []);
+        const history = Array.isArray(hydratedHistories[agent.id]) ? hydratedHistories[agent.id] : [];
+        this.histories.set(agent.id, history);
+      }
+      if (swarmId) {
+        this.agentSwarmIds.set(agent.id, swarmId);
       }
     }
     // Clean up removed agents
     for (const id of this.agents.keys()) {
-      if (!agentConfigs.find((a) => a.id === id)) {
+      if (!currentIds.has(id)) {
         this.agents.delete(id);
         this.histories.delete(id);
+        this.agentSwarmIds.delete(id);
       }
     }
+
+    if (swarmId) {
+      for (const [agentId, boundSwarmId] of [...this.agentSwarmIds.entries()]) {
+        if (boundSwarmId === swarmId && !currentIds.has(agentId)) {
+          this.agentSwarmIds.delete(agentId);
+        }
+      }
+    }
+  }
+
+  persistAgentHistory(agentId) {
+    if (!this.swarmPersistence?.saveAgentHistory) {
+      return;
+    }
+
+    const swarmId = this.agentSwarmIds.get(agentId);
+    if (!swarmId) {
+      return;
+    }
+
+    this.swarmPersistence.saveAgentHistory(swarmId, agentId, this.histories.get(agentId) || []);
   }
 
   syncEdges(edges) {
@@ -111,6 +147,7 @@ class AgentOrchestrator {
 
     history.push({ role: 'assistant', content: finalMessage.content });
     this.histories.set(agentId, history);
+    this.persistAgentHistory(agentId);
 
     if (toolUses.length === 0) {
       console.log('[Orchestrator] No tool calls, emitting agent-done for', agentId);
@@ -156,6 +193,7 @@ class AgentOrchestrator {
         });
       }
       this.histories.set(agentId, history);
+      this.persistAgentHistory(agentId);
 
       this.emit('agent-stream', { agentId, text: '\n' });
       console.log('[Orchestrator] Calling continueAgent for', agentId);
@@ -196,6 +234,7 @@ class AgentOrchestrator {
     const history = this.histories.get(agentId) || [];
     history.push({ role: 'user', content });
     this.histories.set(agentId, history);
+    this.persistAgentHistory(agentId);
 
     // Notify status
     this.emit('agent-status', { agentId, status: 'running' });
@@ -278,6 +317,7 @@ class AgentOrchestrator {
 
       history.push({ role: 'assistant', content: finalMessage.content });
       this.histories.set(agentId, history);
+      this.persistAgentHistory(agentId);
 
       this.emit('agent-status', { agentId, status: 'idle' });
       this.emit('agent-done', { agentId });
@@ -327,11 +367,28 @@ class AgentOrchestrator {
 
   clearHistory(agentId) {
     this.histories.set(agentId, []);
+    if (this.swarmPersistence?.clearAgentHistory) {
+      const swarmId = this.agentSwarmIds.get(agentId);
+      if (swarmId) {
+        this.swarmPersistence.clearAgentHistory(swarmId, agentId);
+      }
+    }
   }
 
   clearAllHistory() {
+    const clearedSwarmIds = new Set();
     for (const id of this.histories.keys()) {
       this.histories.set(id, []);
+      const swarmId = this.agentSwarmIds.get(id);
+      if (swarmId) {
+        clearedSwarmIds.add(swarmId);
+      }
+    }
+
+    if (this.swarmPersistence?.clearSwarmHistory) {
+      for (const swarmId of clearedSwarmIds) {
+        this.swarmPersistence.clearSwarmHistory(swarmId);
+      }
     }
   }
 

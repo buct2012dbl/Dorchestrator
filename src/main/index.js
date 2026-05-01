@@ -2466,6 +2466,19 @@ function createWindow() {
   });
 
   orchestrator = new AgentOrchestrator(mainWindow);
+  orchestrator.setSwarmPersistence({
+    saveAgentHistory(swarmId, agentId, history) {
+      const histories = swarmManager.loadSwarmMemory(swarmId);
+      histories[agentId] = history;
+      swarmManager.saveSwarmMemory(swarmId, histories);
+    },
+    clearAgentHistory(swarmId, agentId) {
+      swarmManager.clearSwarmMemory(swarmId, agentId);
+    },
+    clearSwarmHistory(swarmId) {
+      swarmManager.clearSwarmMemory(swarmId);
+    },
+  });
 
   // Auto-load config from env
   if (process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY) {
@@ -2730,7 +2743,11 @@ ipcMain.handle('set-mux-ui-state', async (event, state) => {
 
 
 // Sync agent configs and edges from renderer
-ipcMain.handle('sync-agents', async (event, { agents, edges }) => {
+ipcMain.handle('sync-agents', async (event, { agents, edges, swarmId = null }) => {
+  const syncMetadata = swarmId
+    ? { swarmId, histories: swarmManager.loadSwarmMemory(swarmId) }
+    : undefined;
+
   agentGraph = syncAgentsAndRespawn({
     agentGraph,
     agents,
@@ -2740,6 +2757,7 @@ ipcMain.handle('sync-agents', async (event, { agents, edges }) => {
     ptys,
     ptyDims,
     spawnPty,
+    syncMetadata,
   });
   return { success: true };
 });

@@ -11,7 +11,7 @@ test('syncAgentsAndRespawn only respawns tracked PTYs when edges change', () => 
   const orchestrator = {
     syncAgentsCalls: [],
     syncEdgesCalls: [],
-    syncAgents(agents) { this.syncAgentsCalls.push(agents); },
+    syncAgents(agents, options) { this.syncAgentsCalls.push({ agents, options }); },
     syncEdges(edges) { this.syncEdgesCalls.push(edges); },
   };
   const graphConfigManager = {
@@ -26,7 +26,7 @@ test('syncAgentsAndRespawn only respawns tracked PTYs when edges change', () => 
   ];
 
   const nextGraph = syncAgentsAndRespawn({
-    agentGraph: { agents: [], edges: [{ source: 'a1', target: 'a2' }] },
+    agentGraph: { agents: [{ id: 'a1', data: { name: 'Tracked' } }], edges: [] },
     agents,
     edges: [{ source: 'a2', target: 'a1' }],
     orchestrator,
@@ -34,12 +34,13 @@ test('syncAgentsAndRespawn only respawns tracked PTYs when edges change', () => 
     ptys,
     ptyDims,
     spawnPty: (...args) => spawnCalls.push(args),
+    syncMetadata: { swarmId: 'swarm-1' },
   });
 
   assert.deepEqual(nextGraph, { agents, edges: [{ source: 'a2', target: 'a1' }] });
   assert.equal(spawnCalls.length, 1);
   assert.deepEqual(spawnCalls[0], ['a1', { name: 'Tracked' }, 120, 40]);
-  assert.deepEqual(orchestrator.syncAgentsCalls, [agents]);
+  assert.deepEqual(orchestrator.syncAgentsCalls, [{ agents, options: { swarmId: 'swarm-1' } }]);
   assert.deepEqual(orchestrator.syncEdgesCalls, [[{ source: 'a2', target: 'a1' }]]);
   assert.equal(graphConfigManager.saved.length, 1);
 });

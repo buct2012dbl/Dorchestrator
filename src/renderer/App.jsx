@@ -418,7 +418,7 @@ function App() {
     }
 
     persistSwarmGraph(graphSwarmId, agents, edges);
-    window.electronAPI.syncAgents({ agents, edges });
+    window.electronAPI.syncAgents({ agents, edges, swarmId: graphSwarmId });
   }, [agents, edges, persistSwarmGraph, swarmLoading]);
 
   useEffect(() => {

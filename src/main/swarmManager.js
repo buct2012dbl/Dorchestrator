@@ -24,6 +24,7 @@ class SwarmManager {
     this.configDir = null;
     this.configPath = null;
     this.selectedPath = null;
+    this.memoryDir = null;
   }
 
   setWorkspace(workspacePath) {
@@ -31,16 +32,30 @@ class SwarmManager {
       this.configDir = null;
       this.configPath = null;
       this.selectedPath = null;
+      this.memoryDir = null;
       return;
     }
 
     this.configDir = path.join(workspacePath, '.dorchestrator');
     this.configPath = path.join(this.configDir, 'swarms.json');
     this.selectedPath = path.join(this.configDir, 'selected-swarm.json');
+    this.memoryDir = path.join(this.configDir, 'swarm-memories');
 
     if (!fs.existsSync(this.configDir)) {
       fs.mkdirSync(this.configDir, { recursive: true });
     }
+
+    if (!fs.existsSync(this.memoryDir)) {
+      fs.mkdirSync(this.memoryDir, { recursive: true });
+    }
+  }
+
+  getMemoryPath(id) {
+    if (!this.memoryDir || !id) {
+      return null;
+    }
+
+    return path.join(this.memoryDir, `${id}.json`);
   }
 
   readRawSwarms() {
@@ -173,6 +188,91 @@ class SwarmManager {
     return this.writeRawSwarms(swarms);
   }
 
+  loadSwarmMemory(id) {
+    const memoryPath = this.getMemoryPath(id);
+    if (!memoryPath || !fs.existsSync(memoryPath)) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(memoryPath, 'utf8'));
+      const agents = parsed?.agents;
+      if (!agents || typeof agents !== 'object' || Array.isArray(agents)) {
+        return {};
+      }
+
+      const normalized = {};
+      for (const [agentId, history] of Object.entries(agents)) {
+        if (Array.isArray(history)) {
+          normalized[agentId] = clone(history);
+        }
+      }
+      return normalized;
+    } catch (err) {
+      console.error('[SwarmManager] Failed to read swarm memory:', err);
+      return {};
+    }
+  }
+
+  saveSwarmMemory(id, histories) {
+    const memoryPath = this.getMemoryPath(id);
+    if (!memoryPath) {
+      return false;
+    }
+
+    const agents = {};
+    for (const [agentId, history] of Object.entries(histories || {})) {
+      if (Array.isArray(history) && history.length > 0) {
+        agents[agentId] = clone(history);
+      }
+    }
+
+    try {
+      fs.writeFileSync(memoryPath, JSON.stringify({
+        swarmId: id,
+        updatedAt: new Date().toISOString(),
+        agents,
+      }, null, 2));
+      return true;
+    } catch (err) {
+      console.error('[SwarmManager] Failed to write swarm memory:', err);
+      return false;
+    }
+  }
+
+  clearSwarmMemory(id, agentId = null) {
+    if (!id) {
+      return false;
+    }
+
+    if (!agentId) {
+      return this.deleteSwarmMemory(id);
+    }
+
+    const histories = this.loadSwarmMemory(id);
+    if (!histories[agentId]) {
+      return true;
+    }
+
+    delete histories[agentId];
+    return this.saveSwarmMemory(id, histories);
+  }
+
+  deleteSwarmMemory(id) {
+    const memoryPath = this.getMemoryPath(id);
+    if (!memoryPath || !fs.existsSync(memoryPath)) {
+      return true;
+    }
+
+    try {
+      fs.unlinkSync(memoryPath);
+      return true;
+    } catch (err) {
+      console.error('[SwarmManager] Failed to delete swarm memory:', err);
+      return false;
+    }
+  }
+
   deleteSwarm(id) {
     if (!id) {
       return false;
@@ -180,10 +280,18 @@ class SwarmManager {
 
     const swarms = this.readRawSwarms().filter((swarm) => swarm.id !== id);
     const saved = this.writeRawSwarms(swarms);
-    if (saved && this.getSelectedSwarmId() === id) {
+    if (!saved) {
+      return false;
+    }
+
+    if (!this.deleteSwarmMemory(id)) {
+      return false;
+    }
+
+    if (this.getSelectedSwarmId() === id) {
       this.setSelectedSwarmId(swarms[0]?.id || null);
     }
-    return saved;
+    return true;
   }
 }
 

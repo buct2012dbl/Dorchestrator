@@ -29,13 +29,14 @@ function syncAgentsAndRespawn({
   ptys,
   ptyDims,
   spawnPty,
+  syncMetadata,
 }) {
   const prevConnectionMap = buildConnectionMap(agentGraph.edges);
   const nextConnectionMap = buildConnectionMap(edges);
   const previousAgentIds = new Set((agentGraph.agents || []).map((agent) => agent.id));
   const nextGraph = { agents, edges };
 
-  orchestrator.syncAgents(agents);
+  orchestrator.syncAgents(agents, syncMetadata);
   orchestrator.syncEdges(edges);
   graphConfigManager.saveGraphConfig(agents, edges);
 
