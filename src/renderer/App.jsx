@@ -343,6 +343,7 @@ function App() {
       return;
     }
 
+    setTerminalKey((key) => key + 1);
     hydratingSwarmIdRef.current = activeSwarm.id;
     graphStateSwarmIdRef.current = activeSwarm.id;
     setGraphStateSwarmId(activeSwarm.id);
