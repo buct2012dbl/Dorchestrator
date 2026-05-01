@@ -243,6 +243,7 @@ const activeKanbanTasks = new Map();
 const scheduledKanbanTimers = new Map();
 const runningScheduledTasks = new Set();
 let activeSwarmAgentIds = new Map();
+const hiddenBootstrapAgents = new Map();
 
 function hasRunningScheduledTask(state, scheduleId) {
   if (runningScheduledTasks.has(scheduleId)) {
@@ -303,6 +304,21 @@ function getPersistedSwarmMemoryPrompt(agentId) {
 
   const histories = swarmManager.loadSwarmMemory(swarmId);
   return buildMemoryPrompt(agentId, histories);
+}
+
+function buildSessionBootstrapMessage(agentId) {
+  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
+  if (!memoryPrompt) {
+    return '';
+  }
+
+  return [
+    'Load the following persisted swarm memory into this session.',
+    'This is real prior conversation history for you in this workspace.',
+    'Acknowledge internally and do not mention receiving a bootstrap message unless explicitly asked.',
+    '',
+    memoryPrompt,
+  ].join('\n');
 }
 
 function persistSwarmBridgeExchange({
@@ -608,6 +624,15 @@ function spawnTrackedPty({
 }
 
 function forwardAgentPtyData(agentId, data) {
+  const hiddenState = hiddenBootstrapAgents.get(agentId);
+  if (hiddenState) {
+    hiddenState.charsRemaining -= data.length;
+    if (hiddenState.charsRemaining <= 0) {
+      hiddenBootstrapAgents.delete(agentId);
+    }
+    return;
+  }
+
   const { cleanText, events } = extractCliTimelineEvents(data);
 
   events.forEach((event) => {
@@ -2883,7 +2908,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
-    spawnTrackedPty({
+    const ptyProcess = spawnTrackedPty({
       ptyId: agentId,
       command,
       args,
@@ -2898,9 +2923,22 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
       logPrefix: '[PTY]',
       onData: (data) => forwardAgentPtyData(agentId, data),
       onExit: (exitCode, { isCurrent }) => {
+        hiddenBootstrapAgents.delete(agentId);
         if (isCurrent) cleanupMcp();
       },
     });
+    const bootstrapMessage = buildSessionBootstrapMessage(agentId);
+    if (bootstrapMessage && terminalType !== 'coding-agent') {
+      const bootstrapPayload = `${bootstrapMessage}\r`;
+      hiddenBootstrapAgents.set(agentId, { charsRemaining: bootstrapPayload.length * 4 });
+      setTimeout(() => {
+        try {
+          ptyProcess.write(bootstrapPayload);
+        } catch {
+          hiddenBootstrapAgents.delete(agentId);
+        }
+      }, 1200);
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty-started', { agentId });
     }
