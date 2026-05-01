@@ -47,6 +47,7 @@ const {
   killTrackedPtyById,
 } = require('./ptyLifecycle');
 const { buildBridgeDeliveryMessage, formatBridgePromptForTerminal } = require('./bridgePrompt');
+const { appendBridgeExchange, buildMemoryPrompt } = require('./swarmMemory');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -241,6 +242,7 @@ const taskAgentIndex = new Map();
 const activeKanbanTasks = new Map();
 const scheduledKanbanTimers = new Map();
 const runningScheduledTasks = new Set();
+let activeSwarmAgentIds = new Map();
 
 function hasRunningScheduledTask(state, scheduleId) {
   if (runningScheduledTasks.has(scheduleId)) {
@@ -279,6 +281,54 @@ function getConnectedAgents(agentId) {
   return agents
     .filter((a) => connected.has(a.id))
     .map((a) => ({ id: a.id, role: a.data?.role || '', name: a.data?.name || '' }));
+}
+
+function resolveSwarmIdForAgent(agentId) {
+  const activeSwarmId = activeSwarmAgentIds.get(agentId);
+  if (activeSwarmId) {
+    return activeSwarmId;
+  }
+
+  const matchingSwarm = swarmManager.loadSwarms().find((swarm) => (
+    (swarm.agents || []).some((agent) => agent.id === agentId)
+  ));
+  return matchingSwarm?.id || null;
+}
+
+function getPersistedSwarmMemoryPrompt(agentId) {
+  const swarmId = resolveSwarmIdForAgent(agentId);
+  if (!swarmId) {
+    return '';
+  }
+
+  const histories = swarmManager.loadSwarmMemory(swarmId);
+  return buildMemoryPrompt(agentId, histories);
+}
+
+function persistSwarmBridgeExchange({
+  fromAgentId,
+  fromName,
+  targetAgentId,
+  targetName,
+  message,
+  kind,
+}) {
+  const fromSwarmId = resolveSwarmIdForAgent(fromAgentId);
+  const targetSwarmId = resolveSwarmIdForAgent(targetAgentId);
+  if (!fromSwarmId || fromSwarmId !== targetSwarmId) {
+    return false;
+  }
+
+  const histories = swarmManager.loadSwarmMemory(fromSwarmId);
+  appendBridgeExchange(histories, {
+    fromAgentId,
+    fromName,
+    targetAgentId,
+    targetName,
+    message,
+    kind,
+  });
+  return swarmManager.saveSwarmMemory(fromSwarmId, histories);
 }
 
 function buildPtyEnvironment() {
@@ -717,6 +767,14 @@ function startBridgeServer() {
         if (kind === 'response') {
           markKanbanTaskAgentCompletedById(fromAgentId);
         }
+        persistSwarmBridgeExchange({
+          fromAgentId,
+          fromName,
+          targetAgentId: normalizedTargetAgentId,
+          targetName,
+          message,
+          kind,
+        });
 
         // Auto-start the target PTY on demand so bridge tools work even if the panel
         // has not been opened yet in the renderer.
@@ -2744,6 +2802,10 @@ ipcMain.handle('set-mux-ui-state', async (event, state) => {
 
 // Sync agent configs and edges from renderer
 ipcMain.handle('sync-agents', async (event, { agents, edges, swarmId = null }) => {
+  activeSwarmAgentIds = swarmId
+    ? new Map((agents || []).map((agent) => [agent.id, swarmId]))
+    : new Map();
+
   const syncMetadata = swarmId
     ? { swarmId, histories: swarmManager.loadSwarmMemory(swarmId) }
     : undefined;
@@ -2772,8 +2834,16 @@ ipcMain.handle('send-message', async (event, { agentId, message }) => {
 ipcMain.handle('clear-history', async (event, { agentId }) => {
   if (agentId) {
     orchestrator.clearHistory(agentId);
+    const swarmId = resolveSwarmIdForAgent(agentId);
+    if (swarmId) {
+      swarmManager.clearSwarmMemory(swarmId, agentId);
+    }
   } else {
     orchestrator.clearAllHistory();
+    const swarmIds = new Set(activeSwarmAgentIds.values());
+    for (const swarmId of swarmIds) {
+      swarmManager.clearSwarmMemory(swarmId);
+    }
   }
   return { success: true };
 });
@@ -2786,10 +2856,19 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   killTrackedPty(ptys, ptyDims, agentId);
 
   const env = buildPtyEnvironment();
+  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
+  const effectiveAgentData = memoryPrompt
+    ? {
+        ...agentData,
+        systemPrompt: agentData?.systemPrompt
+          ? `${agentData.systemPrompt}\n\n${memoryPrompt}`
+          : memoryPrompt,
+      }
+    : agentData;
 
-  const { terminalType, command, args } = buildTerminalCommand(agentData, {
+  const { terminalType, command, args } = buildTerminalCommand(effectiveAgentData, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
-    codingAgentAgentId: agentData?.id,
+    codingAgentAgentId: effectiveAgentData?.id,
     logPrefix: '[PTY]',
     logId: agentId,
   });
