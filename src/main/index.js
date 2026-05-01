@@ -305,6 +305,20 @@ function getPersistedSwarmMemoryPrompt(agentId) {
   return buildMemoryPrompt(agentId, histories);
 }
 
+function buildSpawnMemoryBootstrap(agentId) {
+  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
+  if (!memoryPrompt) {
+    return '';
+  }
+
+  return [
+    'Read this persistent swarm memory and keep it in context for this session.',
+    'Do not answer this message.',
+    '',
+    memoryPrompt,
+  ].join('\n');
+}
+
 function persistSwarmBridgeExchange({
   fromAgentId,
   fromName,
@@ -985,9 +999,11 @@ function getAgentResponse(agentId, message, options = {}) {
       const codexPath = process.env.CODEX_PATH || CODEX_PATH;
       const codexOutputPath = path.join(os.tmpdir(), `ao-codex-last-message-${agentId}-${Date.now()}.txt`);
       const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check', '--json', '--output-last-message', codexOutputPath];
+      const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
       if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
-      if (targetAgent?.data?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(targetAgent.data.systemPrompt)}`);
-      args.push(message);
+      const codexInstructions = [targetAgent?.data?.systemPrompt, memoryPrompt].filter(Boolean).join('\n\n');
+      if (codexInstructions) args.push('-c', `instructions=${JSON.stringify(codexInstructions)}`);
+      args.push(memoryPrompt ? `${memoryPrompt}\n\nCurrent request:\n${message}` : message);
       const codexEnv = { ...process.env };
 
       try {
@@ -2875,7 +2891,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
-    spawnTrackedPty({
+    const ptyProcess = spawnTrackedPty({
       ptyId: agentId,
       command,
       args,
@@ -2893,6 +2909,15 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         if (isCurrent) cleanupMcp();
       },
     });
+    const bootstrapPrompt = buildSpawnMemoryBootstrap(agentId);
+    if (bootstrapPrompt && terminalType !== 'coding-agent') {
+      setTimeout(() => {
+        try {
+          ptyProcess.write(bootstrapPrompt);
+          ptyProcess.write('\r');
+        } catch {}
+      }, 1200);
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty-started', { agentId });
     }
