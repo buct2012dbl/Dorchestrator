@@ -305,20 +305,6 @@ function getPersistedSwarmMemoryPrompt(agentId) {
   return buildMemoryPrompt(agentId, histories);
 }
 
-function buildSpawnMemoryBootstrap(agentId) {
-  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
-  if (!memoryPrompt) {
-    return '';
-  }
-
-  return [
-    'Read this persistent swarm memory and keep it in context for this session.',
-    'Do not answer this message.',
-    '',
-    memoryPrompt,
-  ].join('\n');
-}
-
 function persistSwarmBridgeExchange({
   fromAgentId,
   fromName,
@@ -2891,7 +2877,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
-    const ptyProcess = spawnTrackedPty({
+    spawnTrackedPty({
       ptyId: agentId,
       command,
       args,
@@ -2909,15 +2895,6 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         if (isCurrent) cleanupMcp();
       },
     });
-    const bootstrapPrompt = buildSpawnMemoryBootstrap(agentId);
-    if (bootstrapPrompt && terminalType !== 'coding-agent') {
-      setTimeout(() => {
-        try {
-          ptyProcess.write(bootstrapPrompt);
-          ptyProcess.write('\r');
-        } catch {}
-      }, 1200);
-    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty-started', { agentId });
     }
