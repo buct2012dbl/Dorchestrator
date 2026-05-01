@@ -95,9 +95,11 @@ function buildMemoryPrompt(agentId, histories, options = {}) {
   }
 
   return [
-    'Swarm memory from previous conversations in this workspace:',
+    'Persistent swarm memory for this agent in this workspace:',
+    'Treat the items below as real prior conversation history for this agent, even if they do not appear in the visible terminal transcript.',
+    'When the user asks what another swarm agent previously said or did, answer from this memory before claiming the session has no record.',
     ...lines,
-    'Use this memory as prior context and stay consistent with it.',
+    'Use this memory as authoritative prior context and stay consistent with it.',
   ].join('\n');
 }
 

@@ -39,7 +39,8 @@ test('buildMemoryPrompt renders prior swarm exchanges as prompt context', () => 
     ],
   });
 
-  assert.match(prompt, /Swarm memory from previous conversations/);
+  assert.match(prompt, /Persistent swarm memory for this agent in this workspace/);
+  assert.match(prompt, /answer from this memory before claiming the session has no record/);
   assert.match(prompt, /Sent message to Programmer \(programmer\): Please implement the parser\./);
   assert.match(prompt, /Received response from Programmer \(programmer\): Parser is implemented\./);
 });
