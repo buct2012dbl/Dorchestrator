@@ -243,7 +243,6 @@ const activeKanbanTasks = new Map();
 const scheduledKanbanTimers = new Map();
 const runningScheduledTasks = new Set();
 let activeSwarmAgentIds = new Map();
-const hiddenBootstrapAgents = new Map();
 
 function hasRunningScheduledTask(state, scheduleId) {
   if (runningScheduledTasks.has(scheduleId)) {
@@ -304,21 +303,6 @@ function getPersistedSwarmMemoryPrompt(agentId) {
 
   const histories = swarmManager.loadSwarmMemory(swarmId);
   return buildMemoryPrompt(agentId, histories);
-}
-
-function buildSessionBootstrapMessage(agentId) {
-  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
-  if (!memoryPrompt) {
-    return '';
-  }
-
-  return [
-    'Load the following persisted swarm memory into this session.',
-    'This is real prior conversation history for you in this workspace.',
-    'Acknowledge internally and do not mention receiving a bootstrap message unless explicitly asked.',
-    '',
-    memoryPrompt,
-  ].join('\n');
 }
 
 function persistSwarmBridgeExchange({
@@ -624,15 +608,6 @@ function spawnTrackedPty({
 }
 
 function forwardAgentPtyData(agentId, data) {
-  const hiddenState = hiddenBootstrapAgents.get(agentId);
-  if (hiddenState) {
-    hiddenState.charsRemaining -= data.length;
-    if (hiddenState.charsRemaining <= 0) {
-      hiddenBootstrapAgents.delete(agentId);
-    }
-    return;
-  }
-
   const { cleanText, events } = extractCliTimelineEvents(data);
 
   events.forEach((event) => {
@@ -2905,10 +2880,25 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   console.log(
     `[PTY] ${agentId} launch command=${path.basename(command)} argCount=${args.length} hasPromptArg=${args.some((arg) => String(arg).includes('system-prompt') || String(arg).includes('instructions='))}`
   );
+  console.log(
+    `[PTY] ${agentId} fullLaunch ${JSON.stringify({
+      command,
+      args: args.map((arg) => {
+        const text = String(arg);
+        if (text.startsWith('instructions=')) {
+          return `instructions=<${text.length} chars>`;
+        }
+        if (text === '--append-system-prompt' || text === '--system-prompt') {
+          return text;
+        }
+        return text.length > 800 ? `${text.slice(0, 800)}...<trimmed ${text.length} chars>` : text;
+      }),
+    })}`
+  );
   const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
-    const ptyProcess = spawnTrackedPty({
+    spawnTrackedPty({
       ptyId: agentId,
       command,
       args,
@@ -2923,22 +2913,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
       logPrefix: '[PTY]',
       onData: (data) => forwardAgentPtyData(agentId, data),
       onExit: (exitCode, { isCurrent }) => {
-        hiddenBootstrapAgents.delete(agentId);
         if (isCurrent) cleanupMcp();
       },
     });
-    const bootstrapMessage = buildSessionBootstrapMessage(agentId);
-    if (bootstrapMessage && terminalType !== 'coding-agent') {
-      const bootstrapPayload = `${bootstrapMessage}\r`;
-      hiddenBootstrapAgents.set(agentId, { charsRemaining: bootstrapPayload.length * 4 });
-      setTimeout(() => {
-        try {
-          ptyProcess.write(bootstrapPayload);
-        } catch {
-          hiddenBootstrapAgents.delete(agentId);
-        }
-      }, 1200);
-    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty-started', { agentId });
     }
