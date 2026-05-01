@@ -2867,6 +2867,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
           : memoryPrompt,
       }
     : agentData;
+  console.log(
+    `[PTY] ${agentId} memoryPrompt=${memoryPrompt ? 'present' : 'missing'} memoryChars=${memoryPrompt.length} systemPromptChars=${String(effectiveAgentData?.systemPrompt || '').length}`
+  );
 
   const { terminalType, command, args } = buildTerminalCommand(effectiveAgentData, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
@@ -2874,6 +2877,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
     logPrefix: '[PTY]',
     logId: agentId,
   });
+  console.log(
+    `[PTY] ${agentId} launch command=${path.basename(command)} argCount=${args.length} hasPromptArg=${args.some((arg) => String(arg).includes('system-prompt') || String(arg).includes('instructions='))}`
+  );
   const cleanupMcp = prepareAgentMcpSession(agentId, terminalType, command, args, env, '[PTY]');
 
   try {
