@@ -988,11 +988,9 @@ function getAgentResponse(agentId, message, options = {}) {
       const codexPath = process.env.CODEX_PATH || CODEX_PATH;
       const codexOutputPath = path.join(os.tmpdir(), `ao-codex-last-message-${agentId}-${Date.now()}.txt`);
       const args = ['exec', ...getCodexAutoApproveArgs(), '--skip-git-repo-check', '--json', '--output-last-message', codexOutputPath];
-      const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
       if (targetAgent?.data?.model) args.push('--model', targetAgent.data.model);
-      const codexInstructions = [targetAgent?.data?.systemPrompt, memoryPrompt].filter(Boolean).join('\n\n');
-      if (codexInstructions) args.push('-c', `instructions=${JSON.stringify(codexInstructions)}`);
-      args.push(memoryPrompt ? `${memoryPrompt}\n\nCurrent request:\n${message}` : message);
+      if (targetAgent?.data?.systemPrompt) args.push('-c', `instructions=${JSON.stringify(targetAgent.data.systemPrompt)}`);
+      args.push(message);
       const codexEnv = { ...process.env };
 
       try {
@@ -2865,22 +2863,13 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const replayPrompt = swarmId
     ? buildSessionReplayPrompt(agentId, swarmManager.loadSwarmMemory(swarmId))
     : '';
-  const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
-  const effectiveAgentData = memoryPrompt
-    ? {
-        ...agentData,
-        systemPrompt: agentData?.systemPrompt
-          ? `${agentData.systemPrompt}\n\n${memoryPrompt}`
-          : memoryPrompt,
-      }
-    : agentData;
   console.log(
-    `[PTY] ${agentId} memoryPrompt=${memoryPrompt ? 'present' : 'missing'} memoryChars=${memoryPrompt.length} systemPromptChars=${String(effectiveAgentData?.systemPrompt || '').length}`
+    `[PTY] ${agentId} replayPrompt=${replayPrompt ? 'present' : 'missing'} replayChars=${replayPrompt.length} systemPromptChars=${String(agentData?.systemPrompt || '').length}`
   );
 
-  const { terminalType, command, args } = buildTerminalCommand(effectiveAgentData, {
+  const { terminalType, command, args } = buildTerminalCommand(agentData, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
-    codingAgentAgentId: effectiveAgentData?.id,
+    codingAgentAgentId: agentData?.id,
     initialPrompt: replayPrompt,
     logPrefix: '[PTY]',
     logId: agentId,
