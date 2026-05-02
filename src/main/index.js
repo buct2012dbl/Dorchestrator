@@ -48,6 +48,7 @@ const {
 } = require('./ptyLifecycle');
 const { buildBridgeDeliveryMessage, formatBridgePromptForTerminal } = require('./bridgePrompt');
 const { appendBridgeExchange, buildMemoryPrompt } = require('./swarmMemory');
+const { buildSessionReplayPrompt } = require('./swarmSessionMemory');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -187,6 +188,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     allowShell = false,
     codingAgentConfigPath,
     codingAgentAgentId,
+    initialPrompt = '',
     logPrefix = '[PTY]',
     logId,
   } = options;
@@ -203,6 +205,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     args = getCodexAutoApproveArgs();
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
+    if (initialPrompt) args.push(initialPrompt);
     if (config.name) {
       console.log(`${logPrefix} Codex agent name: ${config.name}`);
     }
@@ -2858,6 +2861,10 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   killTrackedPty(ptys, ptyDims, agentId);
 
   const env = buildPtyEnvironment();
+  const swarmId = resolveSwarmIdForAgent(agentId);
+  const replayPrompt = swarmId
+    ? buildSessionReplayPrompt(agentId, swarmManager.loadSwarmMemory(swarmId))
+    : '';
   const memoryPrompt = getPersistedSwarmMemoryPrompt(agentId);
   const effectiveAgentData = memoryPrompt
     ? {
@@ -2874,11 +2881,12 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const { terminalType, command, args } = buildTerminalCommand(effectiveAgentData, {
     codingAgentConfigPath: path.join(os.homedir(), '.dorchestrator', 'coding-agent', 'config', 'agents.json'),
     codingAgentAgentId: effectiveAgentData?.id,
+    initialPrompt: replayPrompt,
     logPrefix: '[PTY]',
     logId: agentId,
   });
   console.log(
-    `[PTY] ${agentId} launch command=${path.basename(command)} argCount=${args.length} hasPromptArg=${args.some((arg) => String(arg).includes('system-prompt') || String(arg).includes('instructions='))}`
+    `[PTY] ${agentId} launch command=${path.basename(command)} argCount=${args.length} hasPromptArg=${args.some((arg) => String(arg).includes('system-prompt') || String(arg).includes('instructions='))} hasReplayPrompt=${replayPrompt ? 'yes' : 'no'}`
   );
   console.log(
     `[PTY] ${agentId} fullLaunch ${JSON.stringify({
@@ -2887,6 +2895,9 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
         const text = String(arg);
         if (text.startsWith('instructions=')) {
           return `instructions=<${text.length} chars>`;
+        }
+        if (replayPrompt && text === replayPrompt) {
+          return `initialPrompt=<${text.length} chars>`;
         }
         if (text === '--append-system-prompt' || text === '--system-prompt') {
           return text;
