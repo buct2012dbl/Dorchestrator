@@ -51,6 +51,8 @@ export interface Session {
 export declare class SessionManager {
     private sessions;
     private storage;
+    private persistencePath;
+    configurePersistence(filePath?: string | null): void;
     create(agentId: string, parentId?: string): Session;
     get(id: string): Session | undefined;
     current(): Session;
@@ -63,12 +65,14 @@ export declare class SessionManager {
     getChildren(parentId: string): Session[];
     clear(): void;
     getAll(): Session[];
+    findLatestByAgent(agentId: string): Session | undefined;
     getStats(): {
         total: number;
         active: number;
         byAgent: Record<string, number>;
     };
     private groupByAgent;
+    private persist;
 }
 export declare const sessionManager: SessionManager;
 //# sourceMappingURL=session.d.ts.map

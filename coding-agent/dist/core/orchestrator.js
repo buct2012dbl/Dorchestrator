@@ -3,12 +3,16 @@ import { agentRegistry } from './agent-registry.js';
 import { messageBus } from './message-bus.js';
 import { emitCliTimelineEvent } from '../cli/timeline-events.js';
 export class Orchestrator {
+    config;
     initialized = false;
     activeSessions = new Map(); // agentId -> sessionId
-    constructor(_config) { }
+    constructor(config) {
+        this.config = config;
+    }
     async initialize() {
         if (this.initialized)
             return;
+        sessionManager.configurePersistence(this.config.sessionPersistencePath);
         // Set up event listeners
         this.setupEventListeners();
         this.initialized = true;
@@ -32,6 +36,12 @@ export class Orchestrator {
         // Get or create session for this agent
         let sessionId = this.activeSessions.get(agentId);
         let session = sessionId ? sessionManager.get(sessionId) : undefined;
+        if (!session) {
+            session = sessionManager.findLatestByAgent(agentId);
+            if (session) {
+                this.activeSessions.set(agentId, session.id);
+            }
+        }
         if (!session) {
             session = sessionManager.create(agentId);
             this.activeSessions.set(agentId, session.id);

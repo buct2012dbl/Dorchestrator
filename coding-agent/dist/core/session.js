@@ -1,8 +1,40 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 export class SessionManager {
     sessions = new Map();
     storage = new AsyncLocalStorage();
+    persistencePath = null;
+    configurePersistence(filePath) {
+        this.persistencePath = filePath || null;
+        this.sessions.clear();
+        if (!this.persistencePath || !existsSync(this.persistencePath)) {
+            return;
+        }
+        try {
+            const parsed = JSON.parse(readFileSync(this.persistencePath, 'utf8'));
+            const records = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+            for (const record of records) {
+                if (!record?.id || !record?.agentId)
+                    continue;
+                this.sessions.set(record.id, {
+                    id: record.id,
+                    parentId: record.parentId,
+                    agentId: record.agentId,
+                    messages: Array.isArray(record.messages) ? record.messages : [],
+                    context: record.context || {},
+                    metadata: record.metadata || {},
+                    abort: new AbortController(),
+                    createdAt: record.createdAt || Date.now(),
+                    updatedAt: record.updatedAt || Date.now(),
+                });
+            }
+        }
+        catch (error) {
+            console.warn(`Failed to load persisted sessions from ${this.persistencePath}:`, error);
+        }
+    }
     create(agentId, parentId) {
         const session = {
             id: randomUUID(),
@@ -16,6 +48,7 @@ export class SessionManager {
             updatedAt: Date.now()
         };
         this.sessions.set(session.id, session);
+        this.persist();
         return session;
     }
     get(id) {
@@ -43,6 +76,7 @@ export class SessionManager {
             throw new Error(`Session ${id} not found`);
         }
         Object.assign(session, updates, { updatedAt: Date.now() });
+        this.persist();
     }
     addMessage(id, message) {
         const session = this.sessions.get(id);
@@ -51,12 +85,14 @@ export class SessionManager {
         }
         session.messages.push(message);
         session.updatedAt = Date.now();
+        this.persist();
     }
     delete(id) {
         const session = this.sessions.get(id);
         if (session) {
             session.abort.abort();
             this.sessions.delete(id);
+            this.persist();
         }
     }
     getChildren(parentId) {
@@ -67,9 +103,16 @@ export class SessionManager {
             session.abort.abort();
         }
         this.sessions.clear();
+        this.persist();
     }
     getAll() {
         return Array.from(this.sessions.values());
+    }
+    findLatestByAgent(agentId) {
+        const matches = Array.from(this.sessions.values())
+            .filter((session) => session.agentId === agentId && !session.abort.signal.aborted)
+            .sort((a, b) => b.updatedAt - a.updatedAt);
+        return matches[0];
     }
     getStats() {
         return {
@@ -84,6 +127,28 @@ export class SessionManager {
             groups[session.agentId] = (groups[session.agentId] || 0) + 1;
         }
         return groups;
+    }
+    persist() {
+        if (!this.persistencePath) {
+            return;
+        }
+        try {
+            mkdirSync(dirname(this.persistencePath), { recursive: true });
+            const sessions = Array.from(this.sessions.values()).map((session) => ({
+                id: session.id,
+                parentId: session.parentId,
+                agentId: session.agentId,
+                messages: session.messages,
+                context: session.context,
+                metadata: session.metadata,
+                createdAt: session.createdAt,
+                updatedAt: session.updatedAt,
+            }));
+            writeFileSync(this.persistencePath, JSON.stringify({ sessions }, null, 2));
+        }
+        catch (error) {
+            console.warn(`Failed to persist sessions to ${this.persistencePath}:`, error);
+        }
     }
 }
 export const sessionManager = new SessionManager();

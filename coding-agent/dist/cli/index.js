@@ -18,6 +18,7 @@ import { startRepl } from './repl.js';
 import chalk from 'chalk';
 import boxen from 'boxen';
 import { writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 const program = new Command();
 function renderLaunchScreen(agentId, model, agentCount, toolCount) {
     const title = [
@@ -95,11 +96,14 @@ async function createConfiguredOrchestrator(options) {
     }
     addToolsToAgents(config.agents, mcpToolIds);
     registerAgentFactories();
+    const sessionPersistencePath = resolve(process.cwd(), '.dorchestrator', 'coding-agent', 'sessions.json');
+    await mkdir(resolve(process.cwd(), '.dorchestrator', 'coding-agent'), { recursive: true });
     const orchestrator = new Orchestrator({
         workingDirectory: process.cwd(),
         maxConcurrentAgents: 5,
         defaultModel: config.defaults.model,
-        defaultTemperature: 0.7
+        defaultTemperature: 0.7,
+        sessionPersistencePath,
     });
     await orchestrator.initialize();
     for (const agentConfig of config.agents) {

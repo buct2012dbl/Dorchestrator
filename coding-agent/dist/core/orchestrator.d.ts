@@ -5,11 +5,13 @@ export interface OrchestratorConfig {
     maxConcurrentAgents: number;
     defaultModel: string;
     defaultTemperature: number;
+    sessionPersistencePath?: string;
 }
 export declare class Orchestrator {
+    private config;
     private initialized;
     private activeSessions;
-    constructor(_config: OrchestratorConfig);
+    constructor(config: OrchestratorConfig);
     initialize(): Promise<void>;
     private setupEventListeners;
     createAgent(config: AgentConfig): BaseAgent;
