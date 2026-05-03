@@ -19,6 +19,8 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import { writeFile } from 'node:fs/promises';
 import { mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { sessionManager } from '../core/session.js';
 const program = new Command();
 function renderLaunchScreen(agentId, model, agentCount, toolCount) {
     const title = [
@@ -53,6 +55,35 @@ function addToolsToAgents(agentConfigs, toolIds) {
         }
     }
 }
+function seedStartupPrompt(agentId, prompt) {
+    const content = String(prompt || '').trim();
+    if (!content) {
+        return;
+    }
+    let session = sessionManager.findLatestByAgent(agentId);
+    if (!session) {
+        session = sessionManager.create(agentId);
+    }
+    const alreadySeeded = session.messages.some((message) => message.role === 'system'
+        && message.metadata?.hiddenBootstrap === true
+        && message.content === content);
+    if (alreadySeeded) {
+        return;
+    }
+    sessionManager.addMessage(session.id, {
+        id: randomUUID(),
+        role: 'system',
+        content,
+        timestamp: Date.now(),
+        metadata: {
+            hiddenBootstrap: true,
+            source: 'startup-prompt',
+        },
+    });
+}
+export const __testHooks = {
+    seedStartupPrompt,
+};
 export function registerAgentFactories() {
     agentRegistry.registerFactory('coding', (config) => new CodingAgent(config));
     agentRegistry.registerFactory('explorer', (config) => new CodingAgent(config));
@@ -163,6 +194,7 @@ program
     .option('-a, --agent <id>', 'Agent ID to use', 'main-coder')
     .option('-m, --model <name>', 'Model to use (overrides config)')
     .option('-s, --system-prompt <text>', 'System prompt to append')
+    .option('--startup-prompt <text>', 'Hidden startup prompt to seed into the session before REPL')
     .action(async (options) => {
     let dispose = () => { };
     try {
@@ -175,6 +207,7 @@ program
         const { config, orchestrator } = configured;
         dispose = configured.dispose;
         const activeAgent = orchestrator.getAgent(options.agent);
+        seedStartupPrompt(options.agent, options.startupPrompt);
         renderLaunchScreen(options.agent, activeAgent?.config.model || options.model || config.defaults.model, config.agents.length, toolRegistry.getAll().length);
         // Start REPL
         await startRepl(orchestrator, options.agent);

@@ -220,6 +220,7 @@ function buildTerminalCommand(config = {}, options = {}) {
     if (config.model) args.push('--model', config.model);
     if (codingAgentAgentId) args.push('--agent', codingAgentAgentId);
     if (config.systemPrompt) args.push('--system-prompt', config.systemPrompt);
+    if (initialPrompt) args.push('--startup-prompt', initialPrompt);
     if (config.name) {
       console.log(`${logPrefix} Coding agent name: ${config.name}`);
     }
