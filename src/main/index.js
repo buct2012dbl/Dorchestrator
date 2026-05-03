@@ -49,7 +49,6 @@ const {
 const { buildBridgeDeliveryMessage, formatBridgePromptForTerminal } = require('./bridgePrompt');
 const { appendBridgeExchange, buildMemoryPrompt } = require('./swarmMemory');
 const { buildSessionReplayPrompt } = require('./swarmSessionMemory');
-const { getCodexAgentHome, hasPersistedCodexSession } = require('./codexSessionState');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -203,17 +202,13 @@ function buildTerminalCommand(config = {}, options = {}) {
     args = [];
   } else if (terminalType === 'codex') {
     command = process.env.CODEX_PATH || CODEX_PATH;
-    const hasSession = logId ? hasPersistedCodexSession(logId, workspace) : false;
-    args = hasSession
-      ? ['resume', '--last', ...getCodexAutoApproveArgs()]
-      : getCodexAutoApproveArgs();
+    args = getCodexAutoApproveArgs();
     if (config.model) args.push('--model', config.model);
     if (config.systemPrompt) args.push('-c', `instructions=${JSON.stringify(config.systemPrompt)}`);
     if (initialPrompt) args.push(initialPrompt);
     if (config.name) {
       console.log(`${logPrefix} Codex agent name: ${config.name}`);
     }
-    console.log(`${logPrefix} Codex startup mode for ${logId || config.name || 'unknown'}: ${hasSession ? 'resume-last' : 'new-session'}`);
   } else if (terminalType === 'coding-agent') {
     command = NODE_PATH;
     const codingAgentPath = getCodingAgentCliPath();
@@ -398,6 +393,10 @@ function getCodexBridgeServerName(agentId) {
   return `agent-bridge-${agentId}`;
 }
 
+function getCodexAgentHome(agentId) {
+  return path.join(os.tmpdir(), 'ao-codex-home', agentId);
+}
+
 function stripCodexMcpSections(content) {
   const lines = content.split('\n');
   const kept = [];
@@ -448,7 +447,7 @@ function ensureCodexMcpToolApprovals(content, mcpServerName) {
 }
 
 function prepareIsolatedCodexHome(agentId, env, logPrefix, bridgeInfo = null) {
-  const agentHome = getCodexAgentHome(agentId, workspace);
+  const agentHome = getCodexAgentHome(agentId);
   const configPath = path.join(agentHome, 'config.toml');
   const authPath = getCodexAuthPath();
   const globalConfigPath = getCodexConfigPath();
@@ -479,7 +478,7 @@ function prepareIsolatedCodexHome(agentId, env, logPrefix, bridgeInfo = null) {
 
   fs.writeFileSync(configPath, configContent);
   env.CODEX_HOME = agentHome;
-  console.log(`${formatAgentLogLabel(agentId, logPrefix)} prepared dedicated Codex home at ${agentHome}`);
+  console.log(`${formatAgentLogLabel(agentId, logPrefix)} prepared isolated Codex home`);
 
   return agentHome;
 }
