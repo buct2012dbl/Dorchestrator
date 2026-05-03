@@ -124,6 +124,21 @@ test('syncAgents hydrates swarm histories and persists updates for swarm agents'
   ]);
 });
 
+test('syncAgents can hydrate built-in agent histories from persisted session messages after reload', () => {
+  const orchestrator = new AgentOrchestrator(null);
+  const savedHistory = [
+    { role: 'user', content: '[Message from Programmer (Programmer)]: hello from before reload' },
+    { role: 'assistant', content: [{ type: 'text', text: 'I heard Programmer earlier.' }] },
+  ];
+
+  orchestrator.syncAgents(
+    [{ id: 'ceo', data: { role: 'CEO', name: 'Chief' } }],
+    { swarmId: 'swarm-1', histories: { ceo: savedHistory } }
+  );
+
+  assert.deepEqual(orchestrator.histories.get('ceo'), savedHistory);
+});
+
 test('clearHistory and clearAllHistory invoke swarm persistence cleanup', () => {
   const clearedAgents = [];
   const clearedSwarms = [];

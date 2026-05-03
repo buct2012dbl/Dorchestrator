@@ -2529,15 +2529,15 @@ function createWindow() {
   orchestrator = new AgentOrchestrator(mainWindow);
   orchestrator.setSwarmPersistence({
     saveAgentHistory(swarmId, agentId, history) {
-      const histories = swarmManager.loadSwarmMemory(swarmId);
+      const histories = swarmManager.loadSwarmSessionHistories(swarmId);
       histories[agentId] = history;
-      swarmManager.saveSwarmMemory(swarmId, histories);
+      swarmManager.saveSwarmSessionHistories(swarmId, histories);
     },
     clearAgentHistory(swarmId, agentId) {
-      swarmManager.clearSwarmMemory(swarmId, agentId);
+      swarmManager.clearSwarmSessionHistories(swarmId, agentId);
     },
     clearSwarmHistory(swarmId) {
-      swarmManager.clearSwarmMemory(swarmId);
+      swarmManager.clearSwarmSessionHistories(swarmId);
     },
   });
 
@@ -2810,7 +2810,7 @@ ipcMain.handle('sync-agents', async (event, { agents, edges, swarmId = null }) =
     : new Map();
 
   const syncMetadata = swarmId
-    ? { swarmId, histories: swarmManager.loadSwarmMemory(swarmId) }
+    ? { swarmId, histories: swarmManager.loadSwarmSessionHistories(swarmId) }
     : undefined;
 
   agentGraph = syncAgentsAndRespawn({
@@ -2840,12 +2840,14 @@ ipcMain.handle('clear-history', async (event, { agentId }) => {
     const swarmId = resolveSwarmIdForAgent(agentId);
     if (swarmId) {
       swarmManager.clearSwarmMemory(swarmId, agentId);
+      swarmManager.clearSwarmSessionHistories(swarmId, agentId);
     }
   } else {
     orchestrator.clearAllHistory();
     const swarmIds = new Set(activeSwarmAgentIds.values());
     for (const swarmId of swarmIds) {
       swarmManager.clearSwarmMemory(swarmId);
+      swarmManager.clearSwarmSessionHistories(swarmId);
     }
   }
   return { success: true };

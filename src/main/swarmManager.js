@@ -25,6 +25,7 @@ class SwarmManager {
     this.configPath = null;
     this.selectedPath = null;
     this.memoryDir = null;
+    this.sessionHistoryDir = null;
   }
 
   setWorkspace(workspacePath) {
@@ -33,6 +34,7 @@ class SwarmManager {
       this.configPath = null;
       this.selectedPath = null;
       this.memoryDir = null;
+      this.sessionHistoryDir = null;
       return;
     }
 
@@ -40,6 +42,7 @@ class SwarmManager {
     this.configPath = path.join(this.configDir, 'swarms.json');
     this.selectedPath = path.join(this.configDir, 'selected-swarm.json');
     this.memoryDir = path.join(this.configDir, 'swarm-memories');
+    this.sessionHistoryDir = path.join(this.configDir, 'swarm-session-histories');
 
     if (!fs.existsSync(this.configDir)) {
       fs.mkdirSync(this.configDir, { recursive: true });
@@ -47,6 +50,10 @@ class SwarmManager {
 
     if (!fs.existsSync(this.memoryDir)) {
       fs.mkdirSync(this.memoryDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(this.sessionHistoryDir)) {
+      fs.mkdirSync(this.sessionHistoryDir, { recursive: true });
     }
   }
 
@@ -56,6 +63,14 @@ class SwarmManager {
     }
 
     return path.join(this.memoryDir, `${id}.json`);
+  }
+
+  getSessionHistoryPath(id) {
+    if (!this.sessionHistoryDir || !id) {
+      return null;
+    }
+
+    return path.join(this.sessionHistoryDir, `${id}.json`);
   }
 
   readRawSwarms() {
@@ -256,6 +271,90 @@ class SwarmManager {
 
     delete histories[agentId];
     return this.saveSwarmMemory(id, histories);
+  }
+
+  loadSwarmSessionHistories(id) {
+    const sessionPath = this.getSessionHistoryPath(id);
+    if (!sessionPath || !fs.existsSync(sessionPath)) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+      const agents = parsed?.agents;
+      if (!agents || typeof agents !== 'object' || Array.isArray(agents)) {
+        return {};
+      }
+
+      const normalized = {};
+      for (const [agentId, history] of Object.entries(agents)) {
+        if (Array.isArray(history)) {
+          normalized[agentId] = clone(history);
+        }
+      }
+      return normalized;
+    } catch (err) {
+      console.error('[SwarmManager] Failed to read swarm session histories:', err);
+      return {};
+    }
+  }
+
+  saveSwarmSessionHistories(id, histories) {
+    const sessionPath = this.getSessionHistoryPath(id);
+    if (!sessionPath) {
+      return false;
+    }
+
+    const agents = {};
+    for (const [agentId, history] of Object.entries(histories || {})) {
+      if (Array.isArray(history) && history.length > 0) {
+        agents[agentId] = clone(history);
+      }
+    }
+
+    try {
+      fs.writeFileSync(sessionPath, JSON.stringify({
+        swarmId: id,
+        updatedAt: new Date().toISOString(),
+        agents,
+      }, null, 2));
+      return true;
+    } catch (err) {
+      console.error('[SwarmManager] Failed to write swarm session histories:', err);
+      return false;
+    }
+  }
+
+  clearSwarmSessionHistories(id, agentId = null) {
+    if (!id) {
+      return false;
+    }
+
+    const sessionPath = this.getSessionHistoryPath(id);
+    if (!sessionPath) {
+      return false;
+    }
+
+    if (!agentId) {
+      if (!fs.existsSync(sessionPath)) {
+        return true;
+      }
+      try {
+        fs.rmSync(sessionPath, { force: true });
+        return true;
+      } catch (err) {
+        console.error('[SwarmManager] Failed to delete swarm session histories:', err);
+        return false;
+      }
+    }
+
+    const histories = this.loadSwarmSessionHistories(id);
+    if (!histories[agentId]) {
+      return true;
+    }
+
+    delete histories[agentId];
+    return this.saveSwarmSessionHistories(id, histories);
   }
 
   deleteSwarmMemory(id) {
