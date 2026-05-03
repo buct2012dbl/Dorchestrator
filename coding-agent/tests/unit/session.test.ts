@@ -1,11 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { SessionManager } from '../../src/core/session.js';
 
 describe('SessionManager', () => {
   let sessionManager: SessionManager;
+  let tempDir: string;
 
   beforeEach(() => {
     sessionManager = new SessionManager();
+    tempDir = mkdtempSync(join(tmpdir(), 'coding-agent-session-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   describe('create', () => {
@@ -100,6 +109,29 @@ describe('SessionManager', () => {
       expect(stats.total).toBe(3);
       expect(stats.byAgent['agent-1']).toBe(2);
       expect(stats.byAgent['agent-2']).toBe(1);
+    });
+  });
+
+  describe('persistence', () => {
+    it('should reload persisted sessions and messages from disk', () => {
+      const persistencePath = join(tempDir, 'sessions.json');
+      sessionManager.configurePersistence(persistencePath);
+
+      const session = sessionManager.create('agent-1');
+      sessionManager.addMessage(session.id, {
+        id: 'msg-1',
+        role: 'user',
+        content: 'remember me',
+        timestamp: Date.now(),
+      });
+
+      const reloaded = new SessionManager();
+      reloaded.configurePersistence(persistencePath);
+
+      const latest = reloaded.findLatestByAgent('agent-1');
+      expect(latest).toBeDefined();
+      expect(latest?.messages).toHaveLength(1);
+      expect(latest?.messages[0]?.content).toBe('remember me');
     });
   });
 });

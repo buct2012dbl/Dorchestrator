@@ -19,6 +19,7 @@ import { startRepl } from './repl.js';
 import chalk from 'chalk';
 import boxen from 'boxen';
 import { writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 
 const program = new Command();
 
@@ -121,11 +122,15 @@ async function createConfiguredOrchestrator(options: {
 
   registerAgentFactories();
 
+  const sessionPersistencePath = resolve(process.cwd(), '.dorchestrator', 'coding-agent', 'sessions.json');
+  await mkdir(resolve(process.cwd(), '.dorchestrator', 'coding-agent'), { recursive: true });
+
   const orchestrator = new Orchestrator({
     workingDirectory: process.cwd(),
     maxConcurrentAgents: 5,
     defaultModel: config.defaults.model,
-    defaultTemperature: 0.7
+    defaultTemperature: 0.7,
+    sessionPersistencePath,
   });
 
   await orchestrator.initialize();

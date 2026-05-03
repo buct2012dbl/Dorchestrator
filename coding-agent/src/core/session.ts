@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 export interface Message {
   id: string;
@@ -52,9 +54,52 @@ export interface Session {
   updatedAt: number;
 }
 
+interface PersistedSessionRecord {
+  id: string;
+  parentId?: string;
+  agentId: string;
+  messages: Message[];
+  context: Partial<ContextWindow>;
+  metadata: Record<string, any>;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export class SessionManager {
   private sessions = new Map<string, Session>();
   private storage = new AsyncLocalStorage<Session>();
+  private persistencePath: string | null = null;
+
+  configurePersistence(filePath?: string | null): void {
+    this.persistencePath = filePath || null;
+    this.sessions.clear();
+
+    if (!this.persistencePath || !existsSync(this.persistencePath)) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(readFileSync(this.persistencePath, 'utf8'));
+      const records = Array.isArray(parsed?.sessions) ? parsed.sessions as PersistedSessionRecord[] : [];
+
+      for (const record of records) {
+        if (!record?.id || !record?.agentId) continue;
+        this.sessions.set(record.id, {
+          id: record.id,
+          parentId: record.parentId,
+          agentId: record.agentId,
+          messages: Array.isArray(record.messages) ? record.messages : [],
+          context: record.context || {},
+          metadata: record.metadata || {},
+          abort: new AbortController(),
+          createdAt: record.createdAt || Date.now(),
+          updatedAt: record.updatedAt || Date.now(),
+        });
+      }
+    } catch (error) {
+      console.warn(`Failed to load persisted sessions from ${this.persistencePath}:`, error);
+    }
+  }
 
   create(agentId: string, parentId?: string): Session {
     const session: Session = {
@@ -70,6 +115,7 @@ export class SessionManager {
     };
 
     this.sessions.set(session.id, session);
+    this.persist();
     return session;
   }
 
@@ -104,6 +150,7 @@ export class SessionManager {
     }
 
     Object.assign(session, updates, { updatedAt: Date.now() });
+    this.persist();
   }
 
   addMessage(id: string, message: Message): void {
@@ -114,6 +161,7 @@ export class SessionManager {
 
     session.messages.push(message);
     session.updatedAt = Date.now();
+    this.persist();
   }
 
   delete(id: string): void {
@@ -121,6 +169,7 @@ export class SessionManager {
     if (session) {
       session.abort.abort();
       this.sessions.delete(id);
+      this.persist();
     }
   }
 
@@ -135,10 +184,19 @@ export class SessionManager {
       session.abort.abort();
     }
     this.sessions.clear();
+    this.persist();
   }
 
   getAll(): Session[] {
     return Array.from(this.sessions.values());
+  }
+
+  findLatestByAgent(agentId: string): Session | undefined {
+    const matches = Array.from(this.sessions.values())
+      .filter((session) => session.agentId === agentId && !session.abort.signal.aborted)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+
+    return matches[0];
   }
 
   getStats() {
@@ -157,6 +215,29 @@ export class SessionManager {
       groups[session.agentId] = (groups[session.agentId] || 0) + 1;
     }
     return groups;
+  }
+
+  private persist(): void {
+    if (!this.persistencePath) {
+      return;
+    }
+
+    try {
+      mkdirSync(dirname(this.persistencePath), { recursive: true });
+      const sessions = Array.from(this.sessions.values()).map((session) => ({
+        id: session.id,
+        parentId: session.parentId,
+        agentId: session.agentId,
+        messages: session.messages,
+        context: session.context,
+        metadata: session.metadata,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }));
+      writeFileSync(this.persistencePath, JSON.stringify({ sessions }, null, 2));
+    } catch (error) {
+      console.warn(`Failed to persist sessions to ${this.persistencePath}:`, error);
+    }
   }
 }
 

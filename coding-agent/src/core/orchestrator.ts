@@ -10,16 +10,19 @@ export interface OrchestratorConfig {
   maxConcurrentAgents: number;
   defaultModel: string;
   defaultTemperature: number;
+  sessionPersistencePath?: string;
 }
 
 export class Orchestrator {
   private initialized = false;
   private activeSessions = new Map<string, string>(); // agentId -> sessionId
 
-  constructor(_config: OrchestratorConfig) {}
+  constructor(private config: OrchestratorConfig) {}
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+
+    sessionManager.configurePersistence(this.config.sessionPersistencePath);
 
     // Set up event listeners
     this.setupEventListeners();
@@ -50,6 +53,13 @@ export class Orchestrator {
     // Get or create session for this agent
     let sessionId = this.activeSessions.get(agentId);
     let session = sessionId ? sessionManager.get(sessionId) : undefined;
+
+    if (!session) {
+      session = sessionManager.findLatestByAgent(agentId);
+      if (session) {
+        this.activeSessions.set(agentId, session.id);
+      }
+    }
 
     if (!session) {
       session = sessionManager.create(agentId);
