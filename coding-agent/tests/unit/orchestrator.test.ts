@@ -18,6 +18,9 @@ vi.mock('../../src/core/agent-registry.js', () => ({
 vi.mock('../../src/core/session.js', () => ({
   sessionManager: {
     create: vi.fn(() => ({ id: 'test-session', agentId: 'test-agent', messages: [] })),
+    get: vi.fn(() => undefined),
+    findLatestByAgent: vi.fn(() => undefined),
+    configurePersistence: vi.fn(),
     provideAsync: vi.fn((session, fn) => fn()),
     getStats: vi.fn(() => ({ total: 0, active: 0 })),
     clear: vi.fn()
@@ -174,6 +177,18 @@ describe('Orchestrator', () => {
         .rejects.toThrow();
 
       expect(agentRegistry.setStatus).toHaveBeenCalledWith('test-agent', 'idle');
+    });
+
+    it('should reuse an existing persisted session before creating a new one', async () => {
+      const reusedSession = { id: 'persisted-session', agentId: 'test-agent', messages: [] } as any;
+      vi.mocked((sessionManager as any).get).mockReturnValue(undefined);
+      vi.mocked((sessionManager as any).findLatestByAgent).mockReturnValue(reusedSession);
+
+      await orchestrator.executeTask('test-agent', 'test task');
+
+      expect((sessionManager as any).findLatestByAgent).toHaveBeenCalledWith('test-agent');
+      expect(sessionManager.create).not.toHaveBeenCalled();
+      expect(messageBus.publish).not.toHaveBeenCalledWith('session:start', expect.anything());
     });
   });
 
