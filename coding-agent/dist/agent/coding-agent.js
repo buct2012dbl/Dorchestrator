@@ -4,6 +4,7 @@ import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
 import { selectProvider, executeWithFallback, formatToolsForProvider } from './provider-utils.js';
 import { emitCliTimelineEvent } from '../cli/timeline-events.js';
+import { createQueuedToolEvent } from './tool-activity.js';
 import chalk from 'chalk';
 import ora from 'ora';
 export class CodingAgent extends BaseAgent {
@@ -133,6 +134,16 @@ export class CodingAgent extends BaseAgent {
                         arguments: tc.arguments
                     }))
                 });
+                for (const toolCall of toolCalls) {
+                    let queuedArgs = {};
+                    try {
+                        queuedArgs = toolCall.arguments ? JSON.parse(toolCall.arguments) : {};
+                    }
+                    catch {
+                        queuedArgs = { rawArguments: toolCall.arguments };
+                    }
+                    emitCliTimelineEvent(createQueuedToolEvent(toolCall.name, queuedArgs));
+                }
                 // Execute each tool call and add results
                 for (const toolCall of toolCalls) {
                     const spinner = ora({

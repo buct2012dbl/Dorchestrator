@@ -20,6 +20,9 @@ test('extractCliTimelineEvents removes hidden CLI markers and returns decoded ev
     phase: 'running',
     title: 'Tool: read',
     text: '{"file_path":"README.md"}',
+    toolName: '',
+    toolState: '',
+    summary: '',
   }]);
 });
 
@@ -30,4 +33,30 @@ test('extractCliTimelineEvents ignores invalid payloads without breaking termina
 
   assert.equal(cleanText, 'hello  world');
   assert.deepEqual(events, []);
+});
+
+test('extractCliTimelineEvents preserves tool metadata for structured renderer output', () => {
+  const payload = Buffer.from(JSON.stringify({
+    kind: 'tool',
+    phase: 'completed',
+    title: 'Completed read',
+    text: 'README contents',
+    toolName: 'read',
+    toolState: 'completed',
+    summary: 'Read README.md',
+  }), 'utf8').toString('base64');
+
+  const { events } = extractCliTimelineEvents(
+    `\x1b]777;AO_KANBAN_EVENT:${payload}\x07`,
+  );
+
+  assert.deepEqual(events, [{
+    kind: 'tool',
+    phase: 'completed',
+    title: 'Completed read',
+    text: 'README contents',
+    toolName: 'read',
+    toolState: 'completed',
+    summary: 'Read README.md',
+  }]);
 });

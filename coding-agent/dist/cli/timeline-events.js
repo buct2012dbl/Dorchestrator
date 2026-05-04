@@ -18,6 +18,9 @@ export function emitCliTimelineEvent(event) {
         phase: event.phase || 'completed',
         title: event.title,
         text: compactValue(event.text || ''),
+        toolName: event.toolName || '',
+        toolState: event.toolState || '',
+        summary: compactValue(event.summary || ''),
     };
     process.stdout.write(`${OSC_EVENT_PREFIX}${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')}${OSC_EVENT_SUFFIX}`);
 }

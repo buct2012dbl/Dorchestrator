@@ -9,6 +9,9 @@ function decodeCliTimelineEvent(encodedPayload) {
       phase: parsed.phase || 'completed',
       title: String(parsed.title || 'Update'),
       text: String(parsed.text || ''),
+      toolName: String(parsed.toolName || ''),
+      toolState: String(parsed.toolState || ''),
+      summary: String(parsed.summary || ''),
     };
   } catch {
     return null;

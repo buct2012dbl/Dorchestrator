@@ -28,6 +28,15 @@
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
 }
 
+.kanban-timeline-event.kind-tool {
+  border-color: color-mix(in srgb, #7be0b8 45%, var(--border));
+}
+
+.kanban-timeline-event.kind-tool.tool-state-failed {
+  border-color: color-mix(in srgb, var(--destructive) 58%, var(--border));
+  background: linear-gradient(180deg, rgba(36, 14, 18, 0.96), rgba(18, 8, 10, 0.94));
+}
+
 .kanban-timeline-event.kind-error {
   border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
   background: linear-gradient(180deg, rgba(32, 12, 18, 0.96), rgba(18, 8, 10, 0.94));
@@ -41,12 +50,24 @@
   margin-bottom: 8px;
 }
 
+.kanban-timeline-event-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .kanban-timeline-event-title {
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--foreground);
+}
+
+.kanban-timeline-event-tool-name {
+  font-family: 'IBM Plex Mono', 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--muted-foreground) 80%, white);
 }
 
 .kanban-timeline-event-badge {
@@ -66,6 +87,31 @@
 .kanban-timeline-event-badge.kind-command {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.kanban-timeline-event-badge.kind-tool {
+  color: #8ff1c8;
+  border-color: #68cfa5;
+}
+
+.kanban-timeline-event-badge.kind-tool.tool-state-running {
+  color: #95f5d0;
+  border-color: #95f5d0;
+}
+
+.kanban-timeline-event-badge.kind-tool.tool-state-queued {
+  color: #d2e695;
+  border-color: #c0d67d;
+}
+
+.kanban-timeline-event-badge.kind-tool.tool-state-completed {
+  color: #77dfb2;
+  border-color: #5ec79a;
+}
+
+.kanban-timeline-event-badge.kind-tool.tool-state-failed {
+  color: #ffb7c8;
+  border-color: var(--destructive);
 }
 
 .kanban-timeline-event-badge.kind-error {

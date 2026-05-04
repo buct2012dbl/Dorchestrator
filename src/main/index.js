@@ -2063,6 +2063,9 @@ function appendKanbanTimelineEvent(taskId, runId, event) {
     phase: event.phase || 'completed',
     title: stripAnsiAndControl(event.title || '').trim() || 'Update',
     text: stripAnsiAndControl(event.text || '').trim(),
+    toolName: stripAnsiAndControl(event.toolName || '').trim(),
+    toolState: stripAnsiAndControl(event.toolState || '').trim(),
+    summary: stripAnsiAndControl(event.summary || '').trim(),
     exitCode: Number.isInteger(event.exitCode) ? event.exitCode : null,
     createdAt: new Date().toISOString(),
   });
@@ -2080,6 +2083,9 @@ function createKanbanTimelineEvent(event = {}) {
     phase: event.phase || 'completed',
     title: stripAnsiAndControl(event.title || '').trim() || 'Update',
     text: stripAnsiAndControl(event.text || '').trim(),
+    toolName: stripAnsiAndControl(event.toolName || '').trim(),
+    toolState: stripAnsiAndControl(event.toolState || '').trim(),
+    summary: stripAnsiAndControl(event.summary || '').trim(),
     exitCode: Number.isInteger(event.exitCode) ? event.exitCode : null,
     createdAt: new Date().toISOString(),
   };

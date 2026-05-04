@@ -6,6 +6,7 @@ import { toolRegistry } from '../../src/tools/tool-registry.js';
 import { selectProvider, executeWithFallback, formatToolsForProvider } from '../../src/agent/provider-utils.js';
 import type { AgentConfig } from '../../src/core/agent-registry.js';
 import type { LLMProvider } from '../../src/llm/provider.js';
+import * as timelineEvents from '../../src/cli/timeline-events.js';
 
 vi.mock('../../src/core/session.js', () => ({
   sessionManager: {
@@ -227,6 +228,49 @@ describe('CodingAgent', () => {
 
       expect(response).toBeDefined();
       expect(typeof response).toBe('string');
+    });
+
+    it('emits queued and lifecycle timeline events for tool calls', async () => {
+      const emitSpy = vi.spyOn(timelineEvents, 'emitCliTimelineEvent').mockImplementation(() => {});
+      vi.mocked(toolRegistry.getForAgent).mockReturnValue([
+        { id: 'read', description: 'Read file', parameters: {} }
+      ] as any);
+      vi.mocked(mockProvider.streamText).mockReturnValue((async function* () {
+        yield {
+          type: 'tool_call' as const,
+          toolCall: {
+            id: 'tool-1',
+            name: 'read',
+            arguments: '{"file_path":"README.md"}'
+          }
+        };
+        yield { type: 'text' as const, content: 'Done' };
+      })());
+      vi.mocked(toolRegistry.execute).mockResolvedValue({
+        success: true,
+        data: 'README contents'
+      } as any);
+
+      await agent.process('Inspect README');
+
+      expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'tool',
+        toolName: 'read',
+        toolState: 'queued',
+        text: 'Read README.md'
+      }));
+      expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'tool',
+        toolName: 'read',
+        toolState: 'running',
+        text: 'Read README.md'
+      }));
+      expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'tool',
+        toolName: 'read',
+        toolState: 'completed',
+        text: 'README contents'
+      }));
     });
 
     it('reformats tools for the active fallback provider', async () => {

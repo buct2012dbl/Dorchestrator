@@ -1,8 +1,11 @@
 export interface CliTimelineEvent {
-  kind: 'assistant' | 'command' | 'error';
+  kind: 'assistant' | 'command' | 'error' | 'tool';
   phase?: 'running' | 'completed';
   title: string;
   text?: string;
+  toolName?: string;
+  toolState?: 'queued' | 'running' | 'completed' | 'failed';
+  summary?: string;
 }
 
 const OSC_EVENT_PREFIX = '\u001b]777;AO_KANBAN_EVENT:';
@@ -29,6 +32,9 @@ export function emitCliTimelineEvent(event: CliTimelineEvent): void {
     phase: event.phase || 'completed',
     title: event.title,
     text: compactValue(event.text || ''),
+    toolName: event.toolName || '',
+    toolState: event.toolState || '',
+    summary: compactValue(event.summary || ''),
   };
 
   process.stdout.write(
