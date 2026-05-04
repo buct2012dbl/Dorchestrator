@@ -5,7 +5,11 @@ import { sessionManager } from '../core/session.js';
 import { messageBus } from '../core/message-bus.js';
 import { selectProvider, executeWithFallback, formatToolsForProvider } from './provider-utils.js';
 import { emitCliTimelineEvent } from '../cli/timeline-events.js';
-import { createQueuedToolEvent } from './tool-activity.js';
+import {
+  createQueuedToolEvent,
+  summarizeToolCall,
+  summarizeToolResult,
+} from './tool-activity.js';
 import chalk from 'chalk';
 import ora from 'ora';
 
@@ -129,8 +133,6 @@ export class CodingAgent extends BaseAgent {
 
       // Execute tool calls and continue loop if any were made
       if (toolCalls.length > 0) {
-        const loopInfo = chalk.dim(`[Loop ${loopCount}/${maxLoops}]`);
-        console.log(`\n${loopInfo} ${chalk.cyan(`${toolCalls.length} tool call(s) to execute`)}`);
         emitCliTimelineEvent({
           kind: 'command',
           phase: 'running',
@@ -160,12 +162,9 @@ export class CodingAgent extends BaseAgent {
             queuedArgs = { rawArguments: toolCall.arguments };
           }
           emitCliTimelineEvent(createQueuedToolEvent(toolCall.name, queuedArgs));
-        }
-
-        // Execute each tool call and add results
-        for (const toolCall of toolCalls) {
+          const toolSummary = summarizeToolCall(toolCall.name, queuedArgs);
           const spinner = ora({
-            text: chalk.dim(`Executing ${chalk.bold(toolCall.name)}...`),
+            text: chalk.dim(toolSummary),
             color: 'yellow'
           }).start();
 
@@ -187,7 +186,11 @@ export class CodingAgent extends BaseAgent {
               parsedArgs
             );
 
-            spinner.succeed(chalk.dim(`${chalk.bold(toolCall.name)} completed`));
+            const resultSummary = summarizeToolResult(result);
+            spinner.succeed(chalk.dim(toolSummary));
+            if (resultSummary) {
+              console.log(chalk.hex('#5b7088')(`  ${resultSummary}`));
+            }
 
             // Add tool result message
             sessionManager.addMessage(session.id, {
@@ -198,7 +201,14 @@ export class CodingAgent extends BaseAgent {
               toolCallId: toolCall.id
             });
           } catch (error) {
-            spinner.fail(chalk.red(`${chalk.bold(toolCall.name)} failed: ${error}`));
+            const errorSummary = summarizeToolResult({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            spinner.fail(chalk.red(toolSummary));
+            if (errorSummary) {
+              console.log(chalk.red(`  ${errorSummary}`));
+            }
             // Add error as tool result
             sessionManager.addMessage(session.id, {
               id: randomUUID(),
@@ -208,17 +218,6 @@ export class CodingAgent extends BaseAgent {
               toolCallId: toolCall.id
             });
           }
-        }
-
-        // Show thinking indicator for next loop
-        if (continueLoop && loopCount < maxLoops) {
-          const thinkSpinner = ora({
-            text: chalk.dim('Processing results...'),
-            color: 'cyan'
-          }).start();
-          // Small delay to show the spinner
-          await new Promise(resolve => setTimeout(resolve, 100));
-          thinkSpinner.stop();
         }
       }
     }

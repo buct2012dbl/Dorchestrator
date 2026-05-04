@@ -232,6 +232,7 @@ describe('CodingAgent', () => {
 
     it('emits queued and lifecycle timeline events for tool calls', async () => {
       const emitSpy = vi.spyOn(timelineEvents, 'emitCliTimelineEvent').mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       vi.mocked(toolRegistry.getForAgent).mockReturnValue([
         { id: 'read', description: 'Read file', parameters: {} }
       ] as any);
@@ -271,6 +272,8 @@ describe('CodingAgent', () => {
         toolState: 'completed',
         text: 'README contents'
       }));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('README contents'));
+      expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('tool call(s) to execute'));
     });
 
     it('reformats tools for the active fallback provider', async () => {
