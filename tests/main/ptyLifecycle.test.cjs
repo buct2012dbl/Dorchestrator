@@ -34,13 +34,12 @@ test('syncAgentsAndRespawn only respawns tracked PTYs when edges change', () => 
     ptys,
     ptyDims,
     spawnPty: (...args) => spawnCalls.push(args),
-    syncMetadata: { swarmId: 'swarm-1' },
   });
 
   assert.deepEqual(nextGraph, { agents, edges: [{ source: 'a2', target: 'a1' }] });
   assert.equal(spawnCalls.length, 1);
   assert.deepEqual(spawnCalls[0], ['a1', { name: 'Tracked' }, 120, 40]);
-  assert.deepEqual(orchestrator.syncAgentsCalls, [{ agents, options: { swarmId: 'swarm-1' } }]);
+  assert.deepEqual(orchestrator.syncAgentsCalls, [{ agents, options: undefined }]);
   assert.deepEqual(orchestrator.syncEdgesCalls, [[{ source: 'a2', target: 'a1' }]]);
   assert.equal(graphConfigManager.saved.length, 1);
 });

@@ -48,7 +48,6 @@ const {
 } = require('./ptyLifecycle');
 const { buildBridgeDeliveryMessage, formatBridgePromptForTerminal } = require('./bridgePrompt');
 const { appendBridgeExchange, buildMemoryPrompt } = require('./swarmMemory');
-const { buildSessionReplayPrompt } = require('./swarmSessionMemory');
 
 // Setup logging to file in production
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -2534,20 +2533,6 @@ function createWindow() {
   });
 
   orchestrator = new AgentOrchestrator(mainWindow);
-  orchestrator.setSwarmPersistence({
-    saveAgentHistory(swarmId, agentId, history) {
-      const histories = swarmManager.loadSwarmSessionHistories(swarmId);
-      histories[agentId] = history;
-      swarmManager.saveSwarmSessionHistories(swarmId, histories);
-    },
-    clearAgentHistory(swarmId, agentId) {
-      swarmManager.clearSwarmSessionHistories(swarmId, agentId);
-    },
-    clearSwarmHistory(swarmId) {
-      swarmManager.clearSwarmSessionHistories(swarmId);
-    },
-  });
-
   // Auto-load config from env
   if (process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY) {
     orchestrator.configure({
@@ -2816,10 +2801,6 @@ ipcMain.handle('sync-agents', async (event, { agents, edges, swarmId = null }) =
     ? new Map((agents || []).map((agent) => [agent.id, swarmId]))
     : new Map();
 
-  const syncMetadata = swarmId
-    ? { swarmId, histories: swarmManager.loadSwarmSessionHistories(swarmId) }
-    : undefined;
-
   agentGraph = syncAgentsAndRespawn({
     agentGraph,
     agents,
@@ -2829,7 +2810,6 @@ ipcMain.handle('sync-agents', async (event, { agents, edges, swarmId = null }) =
     ptys,
     ptyDims,
     spawnPty,
-    syncMetadata,
   });
   return { success: true };
 });
@@ -2847,14 +2827,12 @@ ipcMain.handle('clear-history', async (event, { agentId }) => {
     const swarmId = resolveSwarmIdForAgent(agentId);
     if (swarmId) {
       swarmManager.clearSwarmMemory(swarmId, agentId);
-      swarmManager.clearSwarmSessionHistories(swarmId, agentId);
     }
   } else {
     orchestrator.clearAllHistory();
     const swarmIds = new Set(activeSwarmAgentIds.values());
     for (const swarmId of swarmIds) {
       swarmManager.clearSwarmMemory(swarmId);
-      swarmManager.clearSwarmSessionHistories(swarmId);
     }
   }
   return { success: true };
@@ -2870,7 +2848,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const env = buildPtyEnvironment();
   const swarmId = resolveSwarmIdForAgent(agentId);
   const replayPrompt = swarmId
-    ? buildSessionReplayPrompt(agentId, swarmManager.loadSwarmMemory(swarmId))
+    ? buildMemoryPrompt(agentId, swarmManager.loadSwarmMemory(swarmId))
     : '';
   console.log(
     `[PTY] ${agentId} replayPrompt=${replayPrompt ? 'present' : 'missing'} replayChars=${replayPrompt.length} systemPromptChars=${String(agentData?.systemPrompt || '').length}`
