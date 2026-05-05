@@ -2870,7 +2870,7 @@ function spawnPty(agentId, agentData, cols = 80, rows = 24) {
   const env = buildPtyEnvironment();
   const swarmId = resolveSwarmIdForAgent(agentId);
   const replayPrompt = swarmId
-    ? buildSessionReplayPrompt(agentId, swarmManager.loadSwarmSessionHistories(swarmId))
+    ? buildSessionReplayPrompt(agentId, swarmManager.loadSwarmMemory(swarmId))
     : '';
   console.log(
     `[PTY] ${agentId} replayPrompt=${replayPrompt ? 'present' : 'missing'} replayChars=${replayPrompt.length} systemPromptChars=${String(agentData?.systemPrompt || '').length}`
