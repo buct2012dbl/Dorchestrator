@@ -30,17 +30,25 @@ test('buildMemoryPrompt renders prior swarm exchanges as prompt context', () => 
     ceo: [
       {
         timestamp: '2026-05-01T12:00:00.000Z',
-        summary: 'Sent message to Programmer (programmer): Please implement the parser.',
+        direction: 'sent',
+        kind: 'message',
+        counterpartAgentId: 'programmer',
+        counterpartName: 'Programmer',
+        message: 'Please implement the parser.',
       },
       {
         timestamp: '2026-05-01T12:05:00.000Z',
-        summary: 'Received response from Programmer (programmer): Parser is implemented.',
+        direction: 'received',
+        kind: 'response',
+        counterpartAgentId: 'programmer',
+        counterpartName: 'Programmer',
+        message: 'Parser is implemented.',
       },
     ],
   });
 
-  assert.match(prompt, /Persistent swarm memory for this agent in this workspace/);
-  assert.match(prompt, /answer from this memory before claiming the session has no record/);
-  assert.match(prompt, /Sent message to Programmer \(programmer\): Please implement the parser\./);
-  assert.match(prompt, /Received response from Programmer \(programmer\): Parser is implemented\./);
+  assert.match(prompt, /Restore this prior swarm conversation history into the current session context/);
+  assert.match(prompt, /\[2026-05-01T12:00:00.000Z\] You sent Programmer a message: Please implement the parser\./);
+  assert.match(prompt, /\[2026-05-01T12:05:00.000Z\] Programmer sent you a response: Parser is implemented\./);
+  assert.match(prompt, /Do not mention this restoration step unless the user explicitly asks about it/);
 });

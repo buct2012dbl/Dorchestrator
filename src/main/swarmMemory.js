@@ -84,9 +84,19 @@ function buildMemoryPrompt(agentId, histories, options = {}) {
   const maxEntries = options.maxEntries || DEFAULT_PROMPT_ENTRY_LIMIT;
   const lines = trimEntries(entries, maxEntries)
     .map((entry) => {
+      if (!entry?.message) {
+        return null;
+      }
+
       const timestamp = entry?.timestamp ? `[${entry.timestamp}] ` : '';
-      const summary = entry?.summary || entry?.message;
-      return summary ? `- ${timestamp}${summary}` : null;
+      const counterpartName = entry.counterpartName || entry.counterpartAgentId || 'another agent';
+      const action = entry.kind === 'response' ? 'response' : 'message';
+
+      if (entry.direction === 'received') {
+        return `- ${timestamp}${counterpartName} sent you a ${action}: ${entry.message}`;
+      }
+
+      return `- ${timestamp}You sent ${counterpartName} a ${action}: ${entry.message}`;
     })
     .filter(Boolean);
 
@@ -95,11 +105,11 @@ function buildMemoryPrompt(agentId, histories, options = {}) {
   }
 
   return [
-    'Persistent swarm memory for this agent in this workspace:',
-    'Treat the items below as real prior conversation history for this agent, even if they do not appear in the visible terminal transcript.',
-    'When the user asks what another swarm agent previously said or did, answer from this memory before claiming the session has no record.',
+    'Restore this prior swarm conversation history into the current session context.',
+    'These are genuine earlier exchanges involving you in this workspace.',
+    'Use them as existing thread memory when answering future questions.',
     ...lines,
-    'Use this memory as authoritative prior context and stay consistent with it.',
+    'Do not mention this restoration step unless the user explicitly asks about it.',
   ].join('\n');
 }
 
