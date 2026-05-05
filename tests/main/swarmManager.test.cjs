@@ -59,6 +59,40 @@ test('swarmManager persists, clears, and deletes swarm memory files', () => {
   }
 });
 
+test('swarmManager deleteSwarm also removes persisted swarm session histories', () => {
+  const workspacePath = createTempWorkspace();
+  const managerPath = require.resolve('../../src/main/swarmManager');
+  delete require.cache[managerPath];
+  const swarmManager = require('../../src/main/swarmManager');
+
+  try {
+    swarmManager.setWorkspace(workspacePath);
+
+    const savedSwarm = swarmManager.saveSwarm({
+      id: 'swarm-1',
+      name: 'Swarm 1',
+      agents: [],
+      edges: [],
+    });
+    assert.equal(savedSwarm, true);
+
+    const savedSessionHistories = swarmManager.saveSwarmSessionHistories('swarm-1', {
+      'agent-a': [{ role: 'user', content: 'remember this' }],
+    });
+    assert.equal(savedSessionHistories, true);
+
+    const sessionPath = path.join(workspacePath, '.dorchestrator', 'swarm-session-histories', 'swarm-1.json');
+    assert.equal(fs.existsSync(sessionPath), true);
+
+    const deleted = swarmManager.deleteSwarm('swarm-1');
+    assert.equal(deleted, true);
+    assert.equal(fs.existsSync(sessionPath), false);
+  } finally {
+    cleanupWorkspace(workspacePath);
+    delete require.cache[managerPath];
+  }
+});
+
 test('swarmManager persists and clears swarm session histories separately from swarm memory', () => {
   const workspacePath = createTempWorkspace();
   const managerPath = require.resolve('../../src/main/swarmManager');

@@ -387,6 +387,10 @@ class SwarmManager {
       return false;
     }
 
+    if (!this.clearSwarmSessionHistories(id)) {
+      return false;
+    }
+
     if (this.getSelectedSwarmId() === id) {
       this.setSelectedSwarmId(swarms[0]?.id || null);
     }
