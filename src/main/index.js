@@ -41,6 +41,7 @@ const {
   isKanbanTaskBarrierSatisfied,
 } = require('./kanbanTaskBarrier');
 const templateManager = require('./templateManager');
+const secureAuthSettings = require('./secureAuthSettings');
 const {
   syncAgentsAndRespawn,
   resizeTrackedPty,
@@ -1530,55 +1531,12 @@ function validateWorkspacePath(value) {
   return normalized;
 }
 
-function encryptSetting(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return null;
-  return safeStorage.encryptString(value).toString('base64');
-}
-
-function decryptSetting(value) {
-  if (!value || !safeStorage.isEncryptionAvailable()) return null;
-  try {
-    return safeStorage.decryptString(Buffer.from(value, 'base64'));
-  } catch (error) {
-    log('Failed to decrypt secure setting:', error.message);
-    return null;
-  }
-}
-
 function writeSecureAuthSettings(nextSettings, authToken, baseURL) {
-  delete nextSettings.authToken;
-  delete nextSettings.baseURL;
-
-  const encryptedAuthToken = encryptSetting(authToken);
-  const encryptedBaseURL = encryptSetting(baseURL);
-
-  if (encryptedAuthToken) nextSettings.secureAuthToken = encryptedAuthToken;
-  else delete nextSettings.secureAuthToken;
-
-  if (encryptedBaseURL) nextSettings.secureBaseURL = encryptedBaseURL;
-  else delete nextSettings.secureBaseURL;
+  secureAuthSettings.writeSecureAuthSettings(nextSettings, authToken, baseURL, { safeStorage });
 }
 
 function readSecureAuthSettings(savedSettings) {
-  const secureAuthToken = decryptSetting(savedSettings.secureAuthToken);
-  const secureBaseURL = decryptSetting(savedSettings.secureBaseURL);
-  const legacyAuthToken = typeof savedSettings.authToken === 'string' ? savedSettings.authToken : null;
-  const legacyBaseURL = typeof savedSettings.baseURL === 'string' ? savedSettings.baseURL : null;
-  const shouldMigrateLegacy = Boolean(legacyAuthToken || legacyBaseURL);
-
-  if (secureAuthToken || secureBaseURL) {
-    return {
-      authToken: secureAuthToken,
-      baseURL: secureBaseURL,
-      shouldMigrateLegacy,
-    };
-  }
-
-  return {
-    authToken: legacyAuthToken,
-    baseURL: legacyBaseURL,
-    shouldMigrateLegacy,
-  };
+  return secureAuthSettings.readSecureAuthSettings(savedSettings, { safeStorage, log });
 }
 
 let settings = {};
