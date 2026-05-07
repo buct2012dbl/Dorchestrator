@@ -369,6 +369,7 @@ program
     console.log('  - gpt-5.2');
     console.log('  - gpt-5.3');
     console.log('  - gpt-5.4');
+    console.log('  - gpt-5.5');
 
     console.log(chalk.bold('\nOllama (local):'));
     console.log('  - codellama:13b');

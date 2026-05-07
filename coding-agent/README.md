@@ -144,6 +144,7 @@ Edit `config/agents.json` to customize agents:
 - gpt-5.2
 - gpt-5.3
 - gpt-5.4
+- gpt-5.5
 
 **Ollama (local):**
 - codellama:13b
