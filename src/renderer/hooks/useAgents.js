@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { AGENT_TEMPLATES, NODE_STATUS, generateId } from '../store/agentStore';
+import { appendAgent } from './agentActions.mjs';
 
 export function createDefaultSwarmGraph(swarmId = 'swarm-default') {
   const agentIds = {
@@ -54,46 +55,43 @@ export function createDefaultSwarmGraph(swarmId = 'swarm-default') {
 
 export function useAgents() {
   const defaultGraph = createDefaultSwarmGraph();
-  const [agents, setAgents] = useState(defaultGraph.agents);
+  const [agents, setAgentsState] = useState(defaultGraph.agents);
   const [edges, setEdges] = useState(defaultGraph.edges);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const agentsRef = useRef(defaultGraph.agents);
   const terminalLogs = useRef({});
+
+  const setAgents = useCallback((nextAgentsOrUpdater) => {
+    const nextAgents = typeof nextAgentsOrUpdater === 'function'
+      ? nextAgentsOrUpdater(agentsRef.current)
+      : nextAgentsOrUpdater;
+    agentsRef.current = nextAgents;
+    setAgentsState(nextAgents);
+  }, []);
+
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
 
   const addAgent = useCallback((templateOrDefinition, position) => {
     const isDefinition = typeof templateOrDefinition === 'object' && templateOrDefinition !== null;
     const tmpl = isDefinition
       ? templateOrDefinition
       : (AGENT_TEMPLATES[templateOrDefinition] || AGENT_TEMPLATES.custom);
-    let newId = null;
-    setAgents((prev) => {
-      const id = generateId(new Set(prev.map((agent) => agent.id)));
-      newId = id;
-      return [
-        ...prev,
-        {
-          id,
-          type: 'agentNode',
-          position: position || { x: 300, y: 300 },
-          data: {
-            ...tmpl,
-            id,
-            status: NODE_STATUS.IDLE,
-            name: tmpl.name || tmpl.role,
-            unreadCount: 0,
-            latestNotification: null,
-            gitBranch: null,
-          },
-        },
-      ];
+    const result = appendAgent(agentsRef.current, tmpl, {
+      generateId,
+      position,
+      idleStatus: NODE_STATUS.IDLE,
     });
-    return newId;
-  }, []);
+    setAgents(result.agents);
+    return result.id;
+  }, [setAgents]);
 
   const removeAgent = useCallback((id) => {
     setAgents((prev) => prev.filter((a) => a.id !== id));
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
     if (selectedAgent === id) setSelectedAgent(null);
-  }, [selectedAgent]);
+  }, [selectedAgent, setAgents]);
 
   const updateAgent = useCallback((id, updates) => {
     setAgents((prev) =>
@@ -103,7 +101,7 @@ export function useAgents() {
           : a
       )
     );
-  }, []);
+  }, [setAgents]);
 
   const updateAgentStatus = useCallback((id, status) => {
     updateAgent(id, { status });
@@ -124,7 +122,7 @@ export function useAgents() {
           : a
       )
     );
-  }, []);
+  }, [setAgents]);
 
   const clearNotifications = useCallback((id) => {
     updateAgent(id, { unreadCount: 0, latestNotification: null });
