@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MuxSidebar from './MuxSidebar';
 import MuxTerminalView from './MuxTerminalView';
 import TemplateEditorModal from './TemplateEditorModal';
-import { normalizeMuxTemplate } from './templateConfig.mjs';
+import { prepareMuxWorkspaceState } from './muxWorkspaceState.mjs';
 import { DEFAULT_TEMPLATES } from '../../store/defaultTemplates';
 import './MuxWorkspace.css';
 
@@ -30,23 +30,22 @@ function MuxWorkspace({ onActiveTerminalChange }) {
         return;
       }
 
-      let finalTemplates;
-      if (loadedTemplates.length === 0) {
-        finalTemplates = DEFAULT_TEMPLATES;
-        DEFAULT_TEMPLATES.forEach((t) => window.electronAPI.saveMuxTemplate(t));
-      } else {
-        finalTemplates = loadedTemplates.map(normalizeMuxTemplate);
-        loadedTemplates.forEach((template, index) => {
-          const normalizedTemplate = finalTemplates[index];
-          if (JSON.stringify(template) !== JSON.stringify(normalizedTemplate)) {
-            window.electronAPI.saveMuxTemplate(normalizedTemplate);
-          }
-        });
-      }
+      const {
+        finalTemplates,
+        nextSelectedTemplate,
+        templatesToSave,
+        shouldPersistSelectedTemplate,
+        selectedTemplateToPersist,
+      } = prepareMuxWorkspaceState({
+        loadedTemplates,
+        savedId,
+        defaultTemplates: DEFAULT_TEMPLATES,
+      });
 
-      const nextSelectedTemplate = savedId && finalTemplates.find((t) => t.id === savedId)
-        ? savedId
-        : finalTemplates[0]?.id || null;
+      templatesToSave.forEach((template) => window.electronAPI.saveMuxTemplate(template));
+      if (shouldPersistSelectedTemplate) {
+        window.electronAPI.setSelectedMuxTemplate(selectedTemplateToPersist);
+      }
 
       setTemplates(finalTemplates);
       setSelectedTemplate(nextSelectedTemplate);
