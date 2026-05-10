@@ -42,6 +42,10 @@ class TemplateManager {
     try {
       const data = fs.readFileSync(this.configPath, 'utf8');
       const templates = JSON.parse(data);
+      if (!Array.isArray(templates)) {
+        console.error('[TemplateManager] Invalid template config shape, expected an array');
+        return [];
+      }
       console.log(`[TemplateManager] Loaded ${templates.length} templates from ${this.configPath}`);
       return templates;
     } catch (err) {

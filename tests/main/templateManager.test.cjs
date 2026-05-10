@@ -23,6 +23,33 @@ function readSelectedTemplateFile(workspacePath) {
   return JSON.parse(fs.readFileSync(selectedPath, 'utf8'));
 }
 
+function writeRawTemplatesFile(workspacePath, value) {
+  const configDir = path.join(workspacePath, '.dorchestrator');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'mux-templates.json'), JSON.stringify(value, null, 2));
+}
+
+test('loadTemplates returns an empty array when the persisted template file is not an array', () => {
+  const workspacePath = createWorkspace();
+
+  templateManager.setWorkspace(workspacePath);
+  writeRawTemplatesFile(workspacePath, { id: 'bad-template', layout: null });
+
+  assert.deepEqual(templateManager.loadTemplates(), []);
+  assert.equal(templateManager.saveTemplate({
+    id: 'template-a',
+    name: 'A',
+    layout: { rows: 1, cols: 1, terminals: [] },
+  }), true);
+  assert.deepEqual(
+    templateManager.loadTemplates().map((template) => template.id),
+    ['template-a'],
+  );
+
+  templateManager.setWorkspace(null);
+  fs.rmSync(workspacePath, { recursive: true, force: true });
+});
+
 test('deleteTemplate switches persisted selection to the first remaining template when the selected template is removed', () => {
   const workspacePath = createWorkspace();
 
