@@ -3,6 +3,7 @@ dist/
 doc/
 !/coding-agent/dist
 build/
+landingpage/
 .DS_Store
 *.log
 .env
